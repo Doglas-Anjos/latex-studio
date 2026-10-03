@@ -6,12 +6,14 @@ import {
   QUEUE_CONNECTION,
   type QueueConnection,
   QueueModule,
+  TOOLS_QUEUE,
 } from '@latex-studio/core';
 import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { CompileProcessor } from './compile/compile.processor';
 import { LatexmkRunner } from './compile/latexmk-runner';
 import { AutocommitProcessor } from './maintenance/autocommit.processor';
+import { ToolsProcessor } from './tools/tools.processor';
 
 @Module({
   imports: [
@@ -23,8 +25,12 @@ import { AutocommitProcessor } from './maintenance/autocommit.processor';
       inject: [QUEUE_CONNECTION],
       useFactory: (connection: QueueConnection) => ({ connection }),
     }),
-    BullModule.registerQueue({ name: COMPILE_QUEUE }, { name: MAINTENANCE_QUEUE }),
+    BullModule.registerQueue(
+      { name: COMPILE_QUEUE },
+      { name: MAINTENANCE_QUEUE },
+      { name: TOOLS_QUEUE },
+    ),
   ],
-  providers: [LatexmkRunner, CompileProcessor, AutocommitProcessor],
+  providers: [LatexmkRunner, CompileProcessor, AutocommitProcessor, ToolsProcessor],
 })
 export class AppModule {}

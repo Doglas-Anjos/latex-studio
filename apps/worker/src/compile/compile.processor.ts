@@ -1,7 +1,6 @@
 import { createReadStream, createWriteStream } from 'node:fs';
-import { access, copyFile, cp, lstat, mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { basename, extname, join, relative } from 'node:path';
+import { access, copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { basename, extname, join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import {
   APP_CONFIG,
@@ -22,7 +21,7 @@ import { parseLatexLog } from '@latex-studio/latex-tools';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import type { Job } from 'bullmq';
-
+import { snapshotProject } from '../snapshot';
 import { LatexmkRunner } from './latexmk-runner';
 import { toBuildStatus } from './log-to-build';
 
@@ -78,19 +77,11 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
       .returning();
     if (!build) return;
 
-    const tmp = await mkdtemp(join(tmpdir(), 'ls-build-'));
+    let tmp: string | undefined;
     try {
       const repoDir = this.repos.resolve(projectId);
       const outDir = this.buildsDir.resolve(`${projectId}/${buildId}`);
-      // ponytail: snapshot by copying the working tree, O(project size) per build. Upgrade path:
-      // `git archive` of a commit (needs a commit per compile) or a copy-on-write filesystem.
-      await cp(repoDir, tmp, {
-        recursive: true,
-        // No top-level dot-entries (.git hooks, .texmf-*, .config, .cache) and no symlinks
-        // (they could point outside the project).
-        filter: async (src) =>
-          !relative(repoDir, src).startsWith('.') && !(await lstat(src)).isSymbolicLink(),
-      });
+      tmp = await snapshotProject(this.config.REPOS_DIR, projectId);
       const commitSha =
         (
           await GitRepository.open(repoDir)
@@ -140,7 +131,7 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
         errors: [{ message: 'The compiler could not be run' }],
       });
     } finally {
-      await rm(tmp, { recursive: true, force: true });
+      if (tmp) await rm(tmp, { recursive: true, force: true });
       await this.prune(projectId);
     }
   }

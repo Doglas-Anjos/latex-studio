@@ -52,17 +52,31 @@ export class ProjectsService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  /** The repository is written and committed before the row exists, so no row lacks a repo. */
-  async create(owner: User, name: string): Promise<Project> {
+  create(owner: User, name: string): Promise<Project> {
+    return this.createWith(owner, name, async (files) => {
+      await files.repo.writeFile('main.tex', MAIN_TEMPLATE);
+      await files.repo.writeFile(MANIFEST, '[]\n');
+      await files.repo.writeFile('latex-packages.tex', renderPackagesTex([]));
+      return 'Initial commit';
+    });
+  }
+
+  /**
+   * The repository is written and committed before the row exists, so no row lacks a repo.
+   * `seed` fills the working tree and returns the commit message.
+   */
+  async createWith(
+    owner: User,
+    name: string,
+    seed: (files: ProjectFiles) => Promise<string>,
+    mainFile?: string,
+  ): Promise<Project> {
     await this.assertProjectCap(owner);
     const id = randomUUID();
     try {
       const files = await this.storage.init(id);
-      await files.repo.writeFile('main.tex', MAIN_TEMPLATE);
-      await files.repo.writeFile(MANIFEST, '[]\n');
-      await files.repo.writeFile('latex-packages.tex', renderPackagesTex([]));
-      await files.repo.commitAll('Initial commit', author(owner));
-      return await this.projects.create({ id, name }, owner.id);
+      await files.repo.commitAll(await seed(files), author(owner));
+      return await this.projects.create({ id, name, ...(mainFile && { mainFile }) }, owner.id);
     } catch (e) {
       await this.storage.remove(id);
       throw e;

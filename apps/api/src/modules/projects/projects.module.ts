@@ -16,6 +16,6 @@ import { ProjectsController } from './presentation/projects.controller';
     { provide: PROJECT_STORAGE, useClass: FsProjectStorage },
   ],
   // ProjectRoleGuard needs PROJECT_REPOSITORY wherever it is used.
-  exports: [PROJECT_REPOSITORY, PROJECT_STORAGE, ProjectLock],
+  exports: [ProjectsService, PROJECT_REPOSITORY, PROJECT_STORAGE, ProjectLock],
 })
 export class ProjectsModule {}

@@ -6,6 +6,7 @@ import { PassThrough } from 'node:stream';
 import type { AppConfig } from '@latex-studio/core';
 import { ConflictException, ForbiddenException, PayloadTooLargeException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
 import { FilesService } from '../../files/application/files.service';
 import type { User } from '../../users/domain/user';
 import { FsProjectStorage } from '../infrastructure/fs-project-storage';
@@ -43,7 +44,7 @@ describe('ProjectsService', () => {
     projects = new FakeProjects();
     storage = new FsProjectStorage(config);
     service = new ProjectsService(projects, storage, lock, config);
-    filesService = new FilesService(storage, lock, config);
+    filesService = new FilesService(storage, lock, config, new FakeDocumentSync());
   });
 
   afterEach(() => rm(dir, { recursive: true, force: true }));

@@ -33,6 +33,11 @@ export function ProjectsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
   });
 
+  const copy = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => projects.copy(id, name),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
+  });
+
   return (
     <>
       <div className="page-head">
@@ -50,6 +55,7 @@ export function ProjectsPage() {
       {isPending && <p className="status-note">Carregando…</p>}
       {error && <p className="form-error">Não foi possível carregar os projetos.</p>}
       {remove.error && <p className="form-error">{remove.error.message}</p>}
+      {copy.error && <p className="form-error">{copy.error.message}</p>}
       {data?.length === 0 && (
         <div className="card empty">
           <p>Nenhum projeto ainda</p>
@@ -65,6 +71,16 @@ export function ProjectsPage() {
                   {roleLabel[p.role]} · atualizado em {dateFmt.format(new Date(p.updatedAt))}
                 </span>
               </button>
+              <Button
+                variant="secondary"
+                disabled={copy.isPending}
+                onClick={() => {
+                  const name = prompt('Nome da cópia', `Cópia de ${p.name}`)?.trim();
+                  if (name) copy.mutate({ id: p.id, name });
+                }}
+              >
+                Fazer uma cópia
+              </Button>
               {p.role === 'owner' && (
                 <Button
                   variant="danger"
