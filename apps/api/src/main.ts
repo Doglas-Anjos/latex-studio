@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { join } from 'node:path';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
@@ -17,6 +18,11 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import { WebSocketServer } from 'ws';
 import { AppModule } from './app.module';
 import { HOCUSPOCUS } from './modules/collab/infrastructure/hocuspocus.server';
+
+// Local development reads the repo's .env; containers get their environment from compose.
+try {
+  process.loadEnvFile(join(__dirname, '..', '..', '..', '.env'));
+} catch {}
 
 async function bootstrap() {
   // Exactly one trusted hop (Caddy), so request.ip is the real client for rate limiting.
