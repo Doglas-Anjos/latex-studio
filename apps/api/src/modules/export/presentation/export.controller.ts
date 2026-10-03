@@ -47,6 +47,17 @@ export class ExportController {
   }
 
   @RouteConfig(RATE_LIMIT)
+  @Get('export/source-with-history.zip')
+  @RequireProjectRole('viewer')
+  @Header('X-Content-Type-Options', 'nosniff')
+  async sourceWithHistory(@CurrentProject() project: Project): Promise<StreamableFile> {
+    return new StreamableFile(await this.exporter.sourceZip(project, true), {
+      type: 'application/zip',
+      disposition: `attachment; filename="${slugify(project.name)}-git.zip"`,
+    });
+  }
+
+  @RouteConfig(RATE_LIMIT)
   @Post('copy')
   @RequireProjectRole('viewer')
   copy(

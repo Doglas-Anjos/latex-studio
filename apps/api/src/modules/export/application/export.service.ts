@@ -1,3 +1,5 @@
+import { readdir } from 'node:fs/promises';
+import { join, relative, sep } from 'node:path';
 import type { Readable } from 'node:stream';
 import {
   APP_CONFIG,
@@ -45,11 +47,20 @@ export class ExportService {
     this.builds = new SafePath(config.BUILDS_DIR);
   }
 
-  async sourceZip(project: Project): Promise<Readable> {
+  /** Working tree as a zip; with `withHistory` the `.git` directory comes along, so it clones. */
+  async sourceZip(project: Project, withHistory = false): Promise<Readable> {
     const files = this.storage.open(project.id);
     const zip = new ZipFile();
     for (const { path } of await files.repo.listFiles()) {
       zip.addFile(files.safe.resolve(path), path);
+    }
+    if (withHistory) {
+      const gitDir = join(files.safe.resolve('main.tex'), '..', '.git');
+      const entries = await readdir(gitDir, { recursive: true, withFileTypes: true });
+      for (const e of entries.filter((e) => e.isFile())) {
+        const abs = join(e.parentPath, e.name);
+        zip.addFile(abs, `.git/${relative(gitDir, abs).replaceAll(sep, '/')}`);
+      }
     }
     zip.end();
     return zip.outputStream as unknown as Readable; // yazl types it as a web ReadableStream

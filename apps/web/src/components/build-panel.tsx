@@ -92,6 +92,9 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
           <a href={projects.sourceZipUrl(projectId)} download>
             Fonte (.zip)
           </a>
+          <a href={projects.sourceZipUrl(projectId, true)} download>
+            Fonte com histórico git (.zip)
+          </a>
           {exportLabels.map(([format, label]) => (
             <button
               key={format}

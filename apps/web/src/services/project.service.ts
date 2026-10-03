@@ -26,7 +26,7 @@ export interface ProjectService {
   remove(id: string): Promise<void>;
   import(input: ImportInput): Promise<Project>;
   copy(projectId: string, name?: string): Promise<Project>;
-  sourceZipUrl(projectId: string): string;
+  sourceZipUrl(projectId: string, withHistory?: boolean): string;
 }
 
 export const ProjectServiceToken = createToken<ProjectService>('ProjectService');
@@ -62,7 +62,7 @@ export class HttpProjectService implements ProjectService {
     return this.api.post<Project>(`/projects/${projectId}/copy`, name ? { name } : {});
   }
 
-  sourceZipUrl(projectId: string) {
-    return `/api/projects/${projectId}/export/source.zip`;
+  sourceZipUrl(projectId: string, withHistory = false) {
+    return `/api/projects/${projectId}/export/${withHistory ? 'source-with-history' : 'source'}.zip`;
   }
 }

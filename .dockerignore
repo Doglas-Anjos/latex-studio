@@ -1,7 +1,10 @@
-node_modules
-dist
+**/node_modules
+**/dist
+**/*.tsbuildinfo
 .git
 .env
+.env.*
 data
 .claude
 docs
+backups
