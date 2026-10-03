@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppConfig } from '@latex-studio/core';
+import { AUTOSAVE_AUTHOR, AUTOSAVE_MESSAGE } from '@latex-studio/git-store';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
@@ -59,5 +60,27 @@ describe('HistoryService', () => {
     expect(sync.texts.get('a.tex')).toBe('one');
     expect(text(await service.fileAt(project, sha, 'a.tex'))).toBe('one');
     expect(await service.log(project)).toHaveLength(3);
+  });
+
+  it('reports status against the last named commit and blames uncommitted lines', async () => {
+    const files = storage.open(project.id);
+    await files.write('a.tex', 'one\n');
+    await service.commit(project, ana, 'v1');
+    const v1 = (await service.log(project))[0]?.sha;
+    await files.write('a.tex', 'one\ntwo\n');
+    await files.repo.commitAll(AUTOSAVE_MESSAGE, AUTOSAVE_AUTHOR);
+    await files.write('a.tex', 'one\ntwo\nthree\n');
+
+    const status = await service.status(project);
+    expect(status.baseline?.sha).toBe(v1);
+    expect(status.changes).toEqual([{ path: 'a.tex', type: 'modify' }]);
+
+    const { lines } = await service.blame(project, 'a.tex');
+    expect(lines.map((l) => [l.from, l.to, l.sha === null])).toEqual([
+      [1, 1, false],
+      [2, 2, false],
+      [3, 3, true],
+    ]);
+    await expect(service.blame(project, '')).rejects.toBeInstanceOf(BadRequestException);
   });
 });

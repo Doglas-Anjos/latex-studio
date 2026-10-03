@@ -4,6 +4,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  PayloadTooLargeException,
 } from '@nestjs/common';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import { author, checkPath } from '../../projects/application/project-files';
@@ -43,6 +44,30 @@ export class HistoryService {
     const content = await files.repo.readFileAt(sha, path);
     if (!content) throw new NotFoundException('File not found in that commit');
     return content;
+  }
+
+  async status(project: Project) {
+    const repo = this.storage.open(project.id).repo;
+    const base = await repo.baseline();
+    const changes = await repo.workingChanges(base?.sha ?? null);
+    return {
+      baseline: base && { sha: base.sha, message: base.message, date: base.date },
+      changes,
+    };
+  }
+
+  // ponytail: recomputed per request; cache by HEAD sha + content hash if it shows up in profiles.
+  async blame(project: Project, path: string) {
+    const files = this.storage.open(project.id);
+    if (!path) throw new BadRequestException('Missing path');
+    checkPath(files, path);
+    try {
+      return await files.repo.blame(path);
+    } catch (e) {
+      if ((e as Error).message === 'File too large to blame') throw new PayloadTooLargeException();
+      if ((e as { code?: string }).code === 'ENOENT') throw new NotFoundException('File not found');
+      throw e;
+    }
   }
 
   /** Named commit ("Salvar versão"). */

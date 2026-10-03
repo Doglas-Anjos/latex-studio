@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "diff": "^9.0.0",
     "isomorphic-git": "^1.42.6"
   }
 }

@@ -42,6 +42,18 @@ export class HistoryController {
     return this.history.changes(project, from, to);
   }
 
+  @Get('status')
+  @RequireProjectRole('viewer')
+  status(@CurrentProject() project: Project) {
+    return this.history.status(project);
+  }
+
+  @Get('blame')
+  @RequireProjectRole('viewer')
+  blame(@CurrentProject() project: Project, @Query('path') path = '') {
+    return this.history.blame(project, path);
+  }
+
   @Get('file')
   @RequireProjectRole('viewer')
   @Header('X-Content-Type-Options', 'nosniff')

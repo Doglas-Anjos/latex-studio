@@ -11,12 +11,11 @@ import {
   type WorkerConfig,
 } from '@latex-studio/core';
 import { projects } from '@latex-studio/core/schema';
-import { GitRepository } from '@latex-studio/git-store';
+import { AUTOSAVE_AUTHOR, AUTOSAVE_MESSAGE, GitRepository } from '@latex-studio/git-store';
 import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger, type OnModuleInit } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 
-const AUTHOR = { name: 'LaTeX Studio', email: 'autosave@latex-studio.local' };
 const EVERY_MS = 5 * 60 * 1000;
 
 /** Every 5 minutes, commits the working tree of projects marked dirty by collaborative edits. */
@@ -53,7 +52,10 @@ export class AutocommitProcessor extends WorkerHost implements OnModuleInit {
       try {
         // ponytail: no lock shared with the api's in-process ProjectLock, so a commit here can
         // interleave with an api commit on the same repo. Upgrade path: a Redis lock per project.
-        await GitRepository.open(this.repos.resolve(id)).commitAll('Autosave', AUTHOR);
+        await GitRepository.open(this.repos.resolve(id)).commitAll(
+          AUTOSAVE_MESSAGE,
+          AUTOSAVE_AUTHOR,
+        );
         // A project marked dirty again while committing stays dirty for the next run.
         await this.db
           .update(projects)

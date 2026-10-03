@@ -13,11 +13,32 @@ export interface FileChange {
   type: 'add' | 'modify' | 'remove';
 }
 
+export interface HistoryStatus {
+  baseline: { sha: string; message: string; date: string } | null;
+  changes: FileChange[];
+}
+
+export interface BlameRun {
+  from: number;
+  to: number;
+  sha: string | null;
+}
+
+export interface Blame {
+  commits: Record<
+    string,
+    { author: { name: string; email: string }; date: string; message: string }
+  >;
+  lines: BlameRun[];
+}
+
 export interface HistoryService {
   log(projectId: string, limit?: number): Promise<HistoryEntry[]>;
   changes(projectId: string, from: string, to: string): Promise<FileChange[]>;
   /** File content at a commit, as text. */
   file(projectId: string, sha: string, path: string): Promise<string>;
+  status(projectId: string): Promise<HistoryStatus>;
+  blame(projectId: string, path: string): Promise<Blame>;
   commit(projectId: string, message: string): Promise<{ sha: string }>;
   restore(projectId: string, sha: string, path: string): Promise<{ sha: string }>;
 }
@@ -40,6 +61,16 @@ export class HttpHistoryService implements HistoryService {
     const q = new URLSearchParams({ sha, path });
     const res = await this.api.getRaw(`/projects/${projectId}/history/file?${q}`);
     return res.text();
+  }
+
+  status(projectId: string) {
+    return this.api.get<HistoryStatus>(`/projects/${projectId}/history/status`);
+  }
+
+  blame(projectId: string, path: string) {
+    return this.api.get<Blame>(
+      `/projects/${projectId}/history/blame?path=${encodeURIComponent(path)}`,
+    );
   }
 
   commit(projectId: string, message: string) {

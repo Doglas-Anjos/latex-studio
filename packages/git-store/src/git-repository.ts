@@ -1,8 +1,26 @@
 import fs from 'node:fs';
 import { dirname, join } from 'node:path';
-import git, { TREE } from 'isomorphic-git';
+import { diffLines } from 'diff';
+import git, { TREE, WORKDIR } from 'isomorphic-git';
 
 export type Author = { name: string; email: string };
+export type FileChange = { path: string; type: 'add' | 'modify' | 'remove' };
+export type BlameRun = { from: number; to: number; sha: string | null };
+export type Blame = {
+  commits: Record<string, { author: Author; date: Date; message: string }>;
+  lines: BlameRun[];
+};
+
+export const AUTOSAVE_MESSAGE = 'Autosave';
+export const AUTOSAVE_AUTHOR: Author = {
+  name: 'LaTeX Studio',
+  email: 'autosave@latex-studio.local',
+};
+const MAX_BLAME_CHARS = 1024 * 1024;
+const SYMLINK_MODE = 0o120000;
+
+const dec = new TextDecoder();
+const countLines = (s: string) => s.split('\n').length - (s === '' || s.endsWith('\n') ? 1 : 0);
 
 export class GitRepository {
   private constructor(private readonly dir: string) {}
@@ -74,7 +92,11 @@ export class GitRepository {
   async log(
     limit = 50,
   ): Promise<Array<{ sha: string; message: string; author: Author; date: Date }>> {
-    const commits = await git.log({ fs, dir: this.dir, depth: limit });
+    // Empty repo: HEAD does not resolve yet.
+    const commits = await git.log({ fs, dir: this.dir, depth: limit }).catch((e) => {
+      if ((e as { code?: string }).code === 'NotFoundError') return [];
+      throw e;
+    });
     return commits.map(({ oid, commit }) => ({
       sha: oid,
       message: commit.message.trim(),
@@ -110,6 +132,123 @@ export class GitRepository {
       },
     });
     return result;
+  }
+
+  /** Newest non-autosave commit; the oldest fetched one if all are autosaves. */
+  async baseline(limit = 200) {
+    const commits = await this.log(limit);
+    // ponytail: only `limit` commits are scanned; more consecutive autosaves than that yields the oldest of them.
+    return commits.find((c) => c.message !== AUTOSAVE_MESSAGE) ?? commits.at(-1) ?? null;
+  }
+
+  /** Files that differ between commit `fromSha` (empty tree when null) and the working tree. */
+  async workingChanges(fromSha: string | null): Promise<FileChange[]> {
+    const result: FileChange[] = [];
+    await git.walk({
+      fs,
+      dir: this.dir,
+      trees: fromSha ? [TREE({ ref: fromSha }), WORKDIR()] : [WORKDIR()],
+      map: async (filepath, entries) => {
+        if (filepath === '.git' || filepath.startsWith('.git/')) return null;
+        const [a, b] = fromSha ? entries : [null, entries[0]];
+        const types = await Promise.all([a?.type(), b?.type()]);
+        if (types.includes('tree')) return true;
+        if (types.includes('special') || (b && (await b.mode()) === SYMLINK_MODE)) return null;
+        if ((await a?.oid()) !== (await b?.oid())) {
+          result.push({ path: filepath, type: !a ? 'add' : !b ? 'remove' : 'modify' });
+        }
+        return true;
+      },
+    });
+    return result;
+  }
+
+  /**
+   * Per-line owner of the working-tree text: walks commits newest to oldest, pushing each
+   * still-unattributed line back through the diffs. null = uncommitted.
+   * ponytail: O(commits x lines) diffs per request, capped at `maxCommits` and 1 MB.
+   */
+  async blame(path: string, maxCommits = 100): Promise<Blame> {
+    const current = dec.decode(await this.readFile(path));
+    if (current.length > MAX_BLAME_CHARS) throw new Error('File too large to blame');
+    const commits = await git.log({
+      fs,
+      dir: this.dir,
+      filepath: path,
+      force: true,
+      depth: maxCommits,
+    });
+    const texts = await Promise.all(
+      commits.map(async (c) => {
+        const blob = await this.readFileAt(c.oid, path);
+        return blob ? dec.decode(blob) : '';
+      }),
+    );
+    const owner: Array<string | null> = Array(countLines(current)).fill(null);
+    // Walks diffLines(before, after) with a line counter per side.
+    const walk = (
+      before: string,
+      after: string,
+      onAdded: (iAfter: number) => void,
+      onSame: (iBefore: number, iAfter: number) => void,
+    ) => {
+      let b = 0;
+      let a = 0;
+      for (const part of diffLines(before, after)) {
+        const n = countLines(part.value);
+        for (let k = 0; k < n; k++) {
+          if (part.added) onAdded(a + k);
+          else if (!part.removed) onSame(b + k, a + k);
+        }
+        if (!part.added) b += n;
+        if (!part.removed) a += n;
+      }
+    };
+    // pending: line index in the text being compared -> index in `current`.
+    let pending = new Map<number, number>();
+    if (commits.length > 0)
+      walk(
+        texts[0] ?? '',
+        current,
+        () => {},
+        (ib, ia) => pending.set(ib, ia),
+      );
+    for (let i = 0; i < commits.length && pending.size > 0; i++) {
+      const sha = (commits[i] as { oid: string }).oid;
+      const next = new Map<number, number>();
+      walk(
+        texts[i + 1] ?? '',
+        texts[i] ?? '',
+        (ic) => {
+          const cur = pending.get(ic);
+          if (cur !== undefined) owner[cur] = sha;
+        },
+        (ip, ic) => {
+          const cur = pending.get(ic);
+          if (cur !== undefined) next.set(ip, cur);
+        },
+      );
+      pending = next;
+    }
+    const lines: BlameRun[] = [];
+    for (const [i, sha] of owner.entries()) {
+      const last = lines.at(-1);
+      if (last && last.sha === sha) last.to = i + 1;
+      else lines.push({ from: i + 1, to: i + 1, sha });
+    }
+    const byOid = new Map(commits.map((c) => [c.oid, c.commit]));
+    const used: Blame['commits'] = {};
+    for (const { sha } of lines) {
+      const c = sha && byOid.get(sha);
+      if (c) {
+        used[sha] = {
+          author: { name: c.author.name, email: c.author.email },
+          date: new Date(c.author.timestamp * 1000),
+          message: c.message.trim(),
+        };
+      }
+    }
+    return { commits: used, lines };
   }
 
   async isDirty(): Promise<boolean> {

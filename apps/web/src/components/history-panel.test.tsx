@@ -26,6 +26,8 @@ describe('HistoryPanel', () => {
       file: vi.fn(),
       commit: vi.fn().mockResolvedValue({ sha: 'c' }),
       restore: vi.fn(),
+      status: vi.fn(),
+      blame: vi.fn(),
     };
     vi.stubGlobal('prompt', vi.fn().mockReturnValue('Minha versão'));
     renderWithApp(
