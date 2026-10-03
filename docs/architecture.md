@@ -221,7 +221,7 @@ Desvios do plano original, por revisão de segurança:
 - O worker fica na rede interna com Postgres e Redis (precisa deles), não em `network_mode: none`; o TeX roda com o mesmo uid do worker.
 - Cadastro responde sempre 202 para não revelar e-mails existentes.
 
-Pendente: 2FA, remoto GitHub (push/pull) e importação por URL git, track changes, links de leitura, verificação de e-mail. A imagem `docker/texlive` não foi construída localmente.
+Imagens `docker/api` e `docker/web` construídas e a da API testada em modo produção contra Postgres e Redis. Pendente: 2FA, remoto GitHub (push/pull) e importação por URL git, track changes, links de leitura, verificação de e-mail, construção e teste da imagem `docker/texlive` (pandoc só existe nela).
 
 ## Fases de implementação
 
