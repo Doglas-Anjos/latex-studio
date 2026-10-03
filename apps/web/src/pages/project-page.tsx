@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router';
 import { BuildPanel } from '../components/build-panel';
 import { Editor } from '../components/editor';
 import { FileTree } from '../components/file-tree';
+import { PackagesPanel } from '../components/packages-panel';
 import { PdfViewer } from '../components/pdf-viewer';
 import { useService } from '../di/service-provider';
 import { ProjectServiceToken } from '../services/project.service';
@@ -45,6 +46,10 @@ export function ProjectPage() {
       </section>
       <section className="pane pane-output">
         <BuildPanel projectId={project.id} canCompile={canEdit} />
+        <details className="packages-details">
+          <summary>Bibliotecas</summary>
+          <PackagesPanel projectId={project.id} canEdit={canEdit} />
+        </details>
         <PdfViewer projectId={project.id} />
       </section>
     </div>

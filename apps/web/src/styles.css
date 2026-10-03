@@ -482,3 +482,67 @@ a {
     height: auto;
   }
 }
+
+.menu {
+  position: relative;
+}
+.menu summary {
+  cursor: pointer;
+}
+.menu[open] > a {
+  display: block;
+  padding: 0.25rem 0.5rem;
+}
+
+.packages-details {
+  border-bottom: 1px solid var(--line);
+}
+.packages-details > summary {
+  cursor: pointer;
+  padding: 0.4rem 0.75rem;
+  font-family: var(--font-display);
+}
+.packages-panel {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+  max-height: 16rem;
+  overflow: auto;
+  font-size: 0.85rem;
+}
+.package-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.package-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.15rem 0;
+}
+.package-name {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: ui-monospace, monospace;
+}
+.package-options {
+  width: 7rem;
+}
+.package-actions {
+  display: flex;
+}
+.package-add {
+  display: flex;
+  gap: 0.5rem;
+}
+.package-add input {
+  flex: 1;
+  min-width: 0;
+}
+.package-note {
+  margin: 0;
+  color: var(--warn);
+}

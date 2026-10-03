@@ -10,6 +10,7 @@ import { ApiClient } from './services/api-client';
 import { AuthServiceToken, HttpAuthService } from './services/auth.service';
 import { CompileServiceToken, HttpCompileService } from './services/compile.service';
 import { FileServiceToken, HttpFileService } from './services/file.service';
+import { HttpPackageService, PackageServiceToken } from './services/package.service';
 import { HttpProjectService, ProjectServiceToken } from './services/project.service';
 import './styles.css';
 
@@ -19,7 +20,8 @@ const container = new Container()
   .register(AdminServiceToken, new HttpAdminService(api))
   .register(ProjectServiceToken, new HttpProjectService(api))
   .register(FileServiceToken, new HttpFileService(api))
-  .register(CompileServiceToken, new HttpCompileService(api));
+  .register(CompileServiceToken, new HttpCompileService(api))
+  .register(PackageServiceToken, new HttpPackageService(api));
 const queryClient = new QueryClient();
 
 const root = document.getElementById('root');
