@@ -12,7 +12,9 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  Optional,
 } from '@nestjs/common';
+import { AuditService } from '../../audit/audit.service';
 import type { User } from '../../users/domain/user';
 import { type Project, type ProjectWithRole, parseProjectName } from '../domain/project';
 import { PROJECT_REPOSITORY, type ProjectRepository } from '../domain/project.repository';
