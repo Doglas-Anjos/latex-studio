@@ -20,7 +20,7 @@ export interface ToolsService {
   wordCount(projectId: string): Promise<{ jobId: string }>;
   requestExport(projectId: string, format: ExportFormat): Promise<{ jobId: string }>;
   jobStatus<T = unknown>(projectId: string, jobId: string): Promise<JobStatus<T>>;
-  jobFileUrl(projectId: string, jobId: string): string;
+  downloadJobFile(projectId: string, jobId: string, filename: string): Promise<void>;
 }
 
 export const ToolsServiceToken = createToken<ToolsService>('ToolsService');
@@ -40,7 +40,7 @@ export class HttpToolsService implements ToolsService {
     return this.api.get<JobStatus<T>>(`/projects/${projectId}/jobs/${jobId}`);
   }
 
-  jobFileUrl(projectId: string, jobId: string) {
-    return `/api/projects/${projectId}/jobs/${jobId}/file`;
+  downloadJobFile(projectId: string, jobId: string, filename: string) {
+    return this.api.download(`/projects/${projectId}/jobs/${jobId}/file`, filename);
   }
 }

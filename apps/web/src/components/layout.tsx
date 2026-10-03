@@ -1,21 +1,11 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link, Outlet, useNavigate } from 'react-router';
+import { Link, Outlet } from 'react-router';
 import { useService } from '../di/service-provider';
-import { AuthServiceToken, type User } from '../services/auth.service';
+import type { User } from '../services/auth.service';
+import { IdentityToken } from '../services/identity';
 import { Button } from './button';
 
 export function Layout({ user }: { user: User }) {
-  const auth = useService(AuthServiceToken);
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const logout = useMutation({
-    mutationFn: () => auth.logout(),
-    onSettled: () => {
-      queryClient.clear();
-      navigate('/login');
-    },
-  });
-
+  const identity = useService(IdentityToken);
   return (
     <>
       <header className="app-header">
@@ -23,11 +13,12 @@ export function Layout({ user }: { user: User }) {
           LaTeX Studio
         </Link>
         <nav>
-          {user.role === 'admin' && <Link to="/admin/users">Admin</Link>}
-          <span className="user-email">{user.email}</span>
-          <Button variant="ghost" onClick={() => logout.mutate()} disabled={logout.isPending}>
-            Sair
-          </Button>
+          <span className="user-email">{user.name || user.email}</span>
+          {identity.enabled && (
+            <Button variant="ghost" onClick={() => identity.signOut()}>
+              Sair
+            </Button>
+          )}
         </nav>
       </header>
       <main className="app-main">

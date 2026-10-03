@@ -10,7 +10,8 @@ import { buildTree, FileTree } from './file-tree';
 
 const fake = (): FileService => ({
   list: vi.fn().mockResolvedValue([{ path: 'main.tex' }, { path: 'chapters/intro.tex' }]),
-  url: vi.fn(),
+  download: vi.fn(),
+  blob: vi.fn(),
   create: vi.fn(),
   createFolder: vi.fn(),
   remove: vi.fn(),

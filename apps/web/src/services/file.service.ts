@@ -8,8 +8,8 @@ export interface ProjectFile {
 
 export interface FileService {
   list(projectId: string): Promise<ProjectFile[]>;
-  /** URL of the raw file (image preview, download). */
-  url(projectId: string, path: string): string;
+  download(projectId: string, path: string): Promise<void>;
+  blob(projectId: string, path: string): Promise<Blob>;
   create(projectId: string, path: string): Promise<void>;
   createFolder(projectId: string, path: string): Promise<void>;
   remove(projectId: string, path: string): Promise<void>;
@@ -28,8 +28,16 @@ export class HttpFileService implements FileService {
     return this.api.get<ProjectFile[]>(`/projects/${projectId}/files`);
   }
 
-  url(projectId: string, path: string) {
-    return `/api/projects/${projectId}/files/${encodePath(path)}`;
+  download(projectId: string, path: string) {
+    return this.api.download(
+      `/projects/${projectId}/files/${encodePath(path)}`,
+      path.split('/').pop(),
+    );
+  }
+
+  async blob(projectId: string, path: string) {
+    const res = await this.api.getRaw(`/projects/${projectId}/files/${encodePath(path)}`);
+    return res.blob();
   }
 
   async create(projectId: string, path: string) {

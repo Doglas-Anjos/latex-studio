@@ -134,21 +134,6 @@ a {
   font-size: 0.9rem;
 }
 
-.auth-page {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-}
-.auth-card {
-  width: min(100%, 24rem);
-}
-.auth-alt {
-  margin: 1.25rem 0 0;
-  font-size: 0.9rem;
-  color: var(--muted);
-}
-
 .app-header {
   display: flex;
   align-items: center;

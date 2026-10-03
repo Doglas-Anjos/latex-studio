@@ -1,3 +1,5 @@
+import type { FasorxIdentity } from './identity';
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -9,7 +11,10 @@ export class ApiError extends Error {
 }
 
 export class ApiClient {
-  constructor(private readonly base = '/api') {}
+  constructor(
+    private readonly identity: FasorxIdentity,
+    private readonly base = '/api',
+  ) {}
 
   get<T>(path: string): Promise<T> {
     return this.request<T>('GET', path);
@@ -38,13 +43,13 @@ export class ApiClient {
 
   /** GET for non-JSON bodies (text, binary). */
   async getRaw(path: string): Promise<Response> {
-    const res = await fetch(this.base + path, { credentials: 'same-origin' });
+    const res = await this.send(path, { headers: await this.authHeaders() });
     if (!res.ok) throw await toError(res);
     return res;
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const headers: Record<string, string> = {};
+    const headers = await this.authHeaders();
     if (method !== 'GET') headers['X-Requested-With'] = 'fetch';
     const init: RequestInit = { method, headers, credentials: 'same-origin' };
     if (body instanceof FormData) {
@@ -53,10 +58,47 @@ export class ApiClient {
       headers['Content-Type'] = 'application/json';
       init.body = JSON.stringify(body);
     }
-    const res = await fetch(this.base + path, init);
+    const res = await this.send(path, init);
     if (!res.ok) throw await toError(res);
     if (res.status === 204) return undefined as T;
     return (await res.json()) as T;
+  }
+
+  /** Authenticated download: saves as `filename`, or opens in a new tab when omitted. */
+  async download(path: string, filename?: string): Promise<void> {
+    const tab = filename ? null : window.open('', '_blank');
+    try {
+      const url = URL.createObjectURL(await (await this.getRaw(path)).blob());
+      if (tab) {
+        tab.location.href = url;
+      } else {
+        const a = Object.assign(document.createElement('a'), {
+          href: url,
+          download: filename ?? '',
+        });
+        a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      tab?.close();
+      throw e;
+    }
+  }
+
+  private async authHeaders(): Promise<Record<string, string>> {
+    const token = await this.identity.token();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  private async send(path: string, init: RequestInit): Promise<Response> {
+    const res = await fetch(this.base + path, init);
+    if (res.status === 401 && this.identity.enabled && !this.identity.goToLoginGuarded()) {
+      throw new ApiError(
+        401,
+        'Sua sessão no FasorX está ativa, mas esta aplicação não conseguiu confirmá-la. Tente de novo em instantes.',
+      );
+    }
+    return res;
   }
 }
 

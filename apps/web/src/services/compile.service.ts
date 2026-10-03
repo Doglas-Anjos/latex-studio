@@ -31,8 +31,8 @@ export interface CompileService {
   /** Most recent first. */
   builds(projectId: string, limit?: number): Promise<Build[]>;
   pdf(projectId: string, buildId: string): Promise<ArrayBuffer>;
-  logUrl(projectId: string, buildId: string): string;
-  pdfUrl(projectId: string, buildId: string): string;
+  openLog(projectId: string, buildId: string): Promise<void>;
+  downloadPdf(projectId: string, buildId: string): Promise<void>;
 }
 
 export const CompileServiceToken = createToken<CompileService>('CompileService');
@@ -53,11 +53,11 @@ export class HttpCompileService implements CompileService {
     return res.arrayBuffer();
   }
 
-  logUrl(projectId: string, buildId: string) {
-    return `/api/projects/${projectId}/builds/${buildId}/log`;
+  openLog(projectId: string, buildId: string) {
+    return this.api.download(`/projects/${projectId}/builds/${buildId}/log`);
   }
 
-  pdfUrl(projectId: string, buildId: string) {
-    return `/api/projects/${projectId}/builds/${buildId}/pdf`;
+  downloadPdf(projectId: string, buildId: string) {
+    return this.api.download(`/projects/${projectId}/builds/${buildId}/pdf`, 'output.pdf');
   }
 }

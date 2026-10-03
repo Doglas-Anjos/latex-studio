@@ -53,7 +53,7 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
     mutationFn: async (format: ExportFormat) => {
       const { jobId } = await tools.requestExport(projectId, format);
       await waitFor(jobId);
-      window.location.assign(tools.jobFileUrl(projectId, jobId));
+      await tools.downloadJobFile(projectId, jobId, `project.${format}`);
     },
   });
   const count = useMutation({
@@ -83,18 +83,18 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
           </span>
         )}
         {build && (
-          <a href={compile.logUrl(projectId, build.id)} target="_blank" rel="noreferrer">
+          <Button variant="ghost" onClick={() => compile.openLog(projectId, build.id)}>
             ver log
-          </a>
+          </Button>
         )}
         <details className="menu">
           <summary>Baixar</summary>
-          <a href={projects.sourceZipUrl(projectId)} download>
+          <button type="button" onClick={() => projects.downloadSource(projectId)}>
             Fonte (.zip)
-          </a>
-          <a href={projects.sourceZipUrl(projectId, true)} download>
+          </button>
+          <button type="button" onClick={() => projects.downloadSource(projectId, true)}>
             Fonte com histórico git (.zip)
-          </a>
+          </button>
           {exportLabels.map(([format, label]) => (
             <button
               key={format}
@@ -109,9 +109,9 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             Contar palavras
           </button>
           {build?.status === 'succeeded' && (
-            <a href={compile.pdfUrl(projectId, build.id)} download>
+            <button type="button" onClick={() => compile.downloadPdf(projectId, build.id)}>
               PDF
-            </a>
+            </button>
           )}
         </details>
       </div>

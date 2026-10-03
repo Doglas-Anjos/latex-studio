@@ -10,6 +10,7 @@ import * as Y from 'yjs';
 import { useService } from '../di/service-provider';
 import { type Comment, CommentServiceToken } from '../services/comment.service';
 import { FileServiceToken } from '../services/file.service';
+import { IdentityToken } from '../services/identity';
 import type { Role } from '../services/project.service';
 import { useWorkspaceStore } from '../workspace-store';
 
@@ -96,18 +97,40 @@ const statusLabel: Record<Status, string> = {
 export function Editor({ projectId, path, role }: { projectId: string; path: string; role: Role }) {
   const files = useService(FileServiceToken);
   if (COLLAB_EXT.test(path)) return <CollabEditor projectId={projectId} path={path} role={role} />;
-  const url = files.url(projectId, path);
   return (
     <div className="preview">
       {IMAGE_EXT.test(path) ? (
-        <img src={url} alt={path} />
+        <AuthImage projectId={projectId} path={path} />
       ) : (
-        <a href={url} download>
+        <button type="button" onClick={() => files.download(projectId, path)}>
           Baixar {path}
-        </a>
+        </button>
       )}
     </div>
   );
+}
+
+/** Images need the Authorization header, so they load through fetch into a blob URL. */
+function AuthImage({ projectId, path }: { projectId: string; path: string }) {
+  const files = useService(FileServiceToken);
+  const [src, setSrc] = useState<string>();
+  useEffect(() => {
+    let url: string | undefined;
+    let cancelled = false;
+    files
+      .blob(projectId, path)
+      .then((b) => {
+        url = URL.createObjectURL(b);
+        if (cancelled) URL.revokeObjectURL(url);
+        else setSrc(url);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [files, projectId, path]);
+  return src ? <img src={src} alt={path} /> : null;
 }
 
 function revealLine(view: EditorView) {
@@ -127,6 +150,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const [status, setStatus] = useState<Status>('connecting');
   const readOnly = role === 'viewer' || role === 'reviewer';
   const comments = useService(CommentServiceToken);
+  const identity = useService(IdentityToken);
   const viewRef = useRef<EditorView | null>(null);
   const { data } = useQuery({
     queryKey: ['comments', projectId, path, false],
@@ -144,6 +168,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/collab`,
       name: `${projectId}/${path}`,
       document: doc,
+      token: async () => (await identity.token()) ?? '',
       onStatus: ({ status: s }) => setStatus(s as Status),
     });
     const ytext = doc.getText('content');
@@ -201,7 +226,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       provider.destroy();
       doc.destroy();
     };
-  }, [projectId, path, readOnly]);
+  }, [projectId, path, readOnly, identity.token]);
 
   // Rebuild highlights when comments change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `data` is the trigger; highlights read it via commentsRef

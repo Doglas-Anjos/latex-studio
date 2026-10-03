@@ -5,23 +5,27 @@ import { RouterProvider } from 'react-router';
 import { Container } from './di/container';
 import { ServiceProvider } from './di/service-provider';
 import { router } from './routes';
-import { AdminServiceToken, HttpAdminService } from './services/admin.service';
 import { ApiClient } from './services/api-client';
 import { AuthServiceToken, HttpAuthService } from './services/auth.service';
 import { CommentServiceToken, HttpCommentService } from './services/comment.service';
 import { CompileServiceToken, HttpCompileService } from './services/compile.service';
 import { FileServiceToken, HttpFileService } from './services/file.service';
 import { HistoryServiceToken, HttpHistoryService } from './services/history.service';
+import { FasorxIdentity, IdentityToken } from './services/identity';
 import { HttpMemberService, MemberServiceToken } from './services/member.service';
 import { HttpPackageService, PackageServiceToken } from './services/package.service';
 import { HttpProjectService, ProjectServiceToken } from './services/project.service';
 import { HttpToolsService, ToolsServiceToken } from './services/tools.service';
 import './styles.css';
 
-const api = new ApiClient();
+const identity = new FasorxIdentity({
+  url: import.meta.env.VITE_FASORX_URL ?? '',
+  app: import.meta.env.VITE_FASORX_APP ?? 'latex',
+});
+const api = new ApiClient(identity);
 const container = new Container()
   .register(AuthServiceToken, new HttpAuthService(api))
-  .register(AdminServiceToken, new HttpAdminService(api))
+  .register(IdentityToken, identity)
   .register(ProjectServiceToken, new HttpProjectService(api))
   .register(FileServiceToken, new HttpFileService(api))
   .register(CompileServiceToken, new HttpCompileService(api))
