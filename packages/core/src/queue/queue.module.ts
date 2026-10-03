@@ -4,8 +4,14 @@ import { APP_CONFIG } from '../config/config.schema';
 
 export const COMPILE_QUEUE = 'compile';
 export const MAINTENANCE_QUEUE = 'maintenance';
+export const TOOLS_QUEUE = 'tools';
 
 export type CompileJobData = { buildId: string; projectId: string };
+
+export type ExportFormat = 'docx' | 'md' | 'html';
+export type ToolJobData =
+  | { projectId: string; kind: 'wordcount' }
+  | { projectId: string; kind: 'export'; format: ExportFormat };
 
 /** BullMQ `ConnectionOptions`; core does not depend on bullmq, so the shape is spelled out. */
 export type QueueConnection = {

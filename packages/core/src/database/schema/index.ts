@@ -1,3 +1,4 @@
+export * from './audit';
 export * from './builds';
 export * from './collab';
 export * from './comments';
