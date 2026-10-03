@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppConfig } from '@latex-studio/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
 import { FsProjectStorage } from '../../projects/infrastructure/fs-project-storage';
@@ -25,6 +26,7 @@ describe('PackagesService', () => {
   let dir: string;
   let storage: FsProjectStorage;
   let service: PackagesService;
+  let sync: FakeDocumentSync;
   const project = { id: 'p1', mainFile: 'main.tex' } as Project;
 
   beforeEach(async () => {
@@ -36,7 +38,8 @@ describe('PackagesService', () => {
     const files = await storage.init(project.id);
     await files.repo.writeFile('main.tex', MAIN);
     await files.repo.commitAll('Initial commit', { name: 'Ana', email: 'ana@example.com' });
-    service = new PackagesService(storage, new ProjectLock());
+    sync = new FakeDocumentSync();
+    service = new PackagesService(storage, new ProjectLock(), sync);
   });
 
   afterEach(() => rm(dir, { recursive: true, force: true }));
@@ -71,6 +74,12 @@ describe('PackagesService', () => {
     expect(main).not.toContain('\\usepackage');
     expect(await text('latex-packages.tex')).toContain('\\usepackage[utf8]{inputenc}');
     expect(await lastMessage()).toBe('Move 2 packages to the manifest');
+    expect(sync.calls).toEqual([
+      'replace main.tex',
+      'replace latex-packages.json',
+      'replace latex-packages.tex',
+    ]);
+    expect(sync.texts.get('main.tex')).toBe(main);
 
     expect(await service.migrate(project, user)).toEqual({ moved: 0 });
     expect(await service.get(project)).toHaveLength(2);

@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import { author, checkPath } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
@@ -22,6 +23,7 @@ export class HistoryService {
   constructor(
     @Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage,
     @Inject(ProjectLock) private readonly lock: ProjectLock,
+    @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
   ) {}
 
   log(project: Project, limit = 50) {
@@ -55,11 +57,7 @@ export class HistoryService {
     });
   }
 
-  /**
-   * Writes the file as it was at `sha` and commits it.
-   * ponytail: an open Y.Doc for this file is not synced (that wiring does not exist yet), so the
-   * editor's next Yjs flush would overwrite the restored content. Upgrade: reset the doc here.
-   */
+  /** Writes the file as it was at `sha`, commits it and patches its open Y.Doc as a diff. */
   async restore(project: Project, user: User, sha: string, path: string): Promise<{ sha: string }> {
     const content = await this.fileAt(project, sha, path);
     return this.lock.run(project.id, async () => {
@@ -70,6 +68,8 @@ export class HistoryService {
         author(user),
       );
       if (!created) throw new ConflictException('File already matches that version');
+      // Binary files have no doc; replaceText then only drops a missing yjs_docs row.
+      await this.sync.replaceText(project.id, path, Buffer.from(content).toString('utf8'));
       return { sha: created };
     });
   }

@@ -6,6 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import {
   assertQuota,
   author,
@@ -17,8 +18,19 @@ import {
 } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
-import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/project-storage';
+import {
+  PROJECT_STORAGE,
+  type ProjectFiles,
+  type ProjectStorage,
+} from '../../projects/domain/project-storage';
 import type { User } from '../../users/domain/user';
+
+/** The file at `path`, or every file under the folder `path`. */
+async function filesUnder(files: ProjectFiles, path: string) {
+  return (await files.repo.listFiles()).filter(
+    (f) => f.path === path || f.path.startsWith(`${path}/`),
+  );
+}
 
 /** Every mutation runs under the project lock: git index, quota and exists-checks stay consistent. */
 @Injectable()
@@ -27,6 +39,7 @@ export class FilesService {
     @Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage,
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
   ) {}
 
   private get quota() {
@@ -66,6 +79,7 @@ export class FilesService {
       await assertQuota(files, this.quota, Buffer.byteLength(content), path);
       await files.write(path, content);
       await files.repo.commitAll(`Update ${path}`, author(user));
+      await this.sync.replaceText(project.id, path, content);
     });
   }
 
@@ -74,9 +88,7 @@ export class FilesService {
     return this.lock.run(project.id, async () => {
       const files = this.storage.open(project.id);
       checkPath(files, path);
-      const targets = (await files.repo.listFiles()).filter(
-        (f) => f.path === path || f.path.startsWith(`${path}/`),
-      );
+      const targets = await filesUnder(files, path);
       if (targets.length === 0) throw new NotFoundException('File not found');
       // ponytail: emptied folders stay on disk; listFiles and git ignore them.
       for (const f of targets) {
@@ -87,6 +99,7 @@ export class FilesService {
         await files.repo.deleteFile(f.path);
       }
       await files.repo.commitAll(`Delete ${path}`, author(user));
+      for (const f of targets) await this.sync.forget(project.id, f.path);
     });
   }
 
@@ -98,8 +111,11 @@ export class FilesService {
       if (to.startsWith(`${from}/`)) {
         throw new BadRequestException('Cannot move a folder into itself');
       }
+      const moved = await filesUnder(files, from);
       await files.rename(from, to);
       await files.repo.commitAll(`Rename ${from} → ${to}`, author(user));
+      // The new path loads from disk on first open.
+      for (const f of moved) await this.sync.forget(project.id, f.path);
     });
   }
 

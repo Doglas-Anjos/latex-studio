@@ -5,4 +5,5 @@ export interface YjsDocRepository {
   load(projectId: string, path: string): Promise<Uint8Array | null>;
   /** Insert or replace. */
   save(projectId: string, path: string, state: Uint8Array): Promise<void>;
+  deleteForPath(projectId: string, path: string): Promise<void>;
 }

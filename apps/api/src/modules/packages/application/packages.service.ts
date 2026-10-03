@@ -6,6 +6,7 @@ import {
   renderPackagesTex,
 } from '@latex-studio/latex-tools';
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import { author } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
@@ -47,6 +48,7 @@ export class PackagesService {
   constructor(
     @Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage,
     @Inject(ProjectLock) private readonly lock: ProjectLock,
+    @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
   ) {}
 
   async get(project: Project): Promise<PackageManifest> {
@@ -59,6 +61,7 @@ export class PackagesService {
       const next = normalize(manifest);
       await writeManifest(files, next);
       await files.repo.commitAll('Update packages', author(user));
+      await this.syncDocs(project.id, files, [MANIFEST, TEX]);
       return next;
     });
   }
@@ -83,8 +86,17 @@ export class PackagesService {
       const next = normalize(manifest);
       await writeManifest(files, next);
       await files.repo.commitAll(`Move ${packages.length} packages to the manifest`, author(user));
+      await this.syncDocs(project.id, files, [project.mainFile, MANIFEST, TEX]);
       return { moved: packages.length, manifest: next };
     });
+  }
+
+  /** Pushes the freshly written files into their open docs (caller holds the lock). */
+  private async syncDocs(projectId: string, files: ProjectFiles, paths: string[]) {
+    for (const path of paths) {
+      const text = Buffer.from(await files.repo.readFile(path)).toString('utf8');
+      await this.sync.replaceText(projectId, path, text);
+    }
   }
 
   private async read(files: ProjectFiles): Promise<PackageManifest> {

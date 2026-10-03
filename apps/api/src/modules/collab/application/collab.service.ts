@@ -49,9 +49,6 @@ export interface CollabSession {
 /**
  * Backs the Hocuspocus hooks. WebSocket upgrades bypass Nest guards, so `authenticate` checks
  * the Origin, the signed session cookie and the project role itself.
- * ponytail: renaming or deleting a file that is open in the editor is not handled; the next
- * store rewrites the old path and its `yjs_docs` row lingers. Close the doc and delete the
- * row from the files service when that lands.
  */
 @Injectable()
 export class CollabService {

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import type { AppConfig } from '@latex-studio/core';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
 import { FsProjectStorage } from '../../projects/infrastructure/fs-project-storage';
@@ -25,6 +26,7 @@ describe('HistoryService', () => {
   let dir: string;
   let storage: FsProjectStorage;
   let service: HistoryService;
+  let sync: FakeDocumentSync;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'history-'));
@@ -32,7 +34,8 @@ describe('HistoryService', () => {
       REPOS_DIR: dir,
       BUILDS_DIR: join(dir, 'builds'),
     } as AppConfig);
-    service = new HistoryService(storage, new ProjectLock());
+    sync = new FakeDocumentSync();
+    service = new HistoryService(storage, new ProjectLock(), sync);
     await storage.init(project.id);
   });
 
@@ -55,6 +58,7 @@ describe('HistoryService', () => {
 
     const { sha } = await service.restore(project, ana, first, 'a.tex');
     expect(text(await files.repo.readFile('a.tex'))).toBe('one');
+    expect(sync.texts.get('a.tex')).toBe('one');
     expect(text(await service.fileAt(project, sha, 'a.tex'))).toBe('one');
     expect(await service.log(project)).toHaveLength(3);
   });

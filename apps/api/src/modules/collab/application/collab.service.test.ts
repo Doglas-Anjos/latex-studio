@@ -32,6 +32,7 @@ class FakeDocs implements YjsDocRepository {
   rows = new Map<string, Uint8Array>();
   load = async (p: string, path: string) => this.rows.get(`${p}/${path}`) ?? null;
   save = async (p: string, path: string, s: Uint8Array) => void this.rows.set(`${p}/${path}`, s);
+  deleteForPath = async (p: string, path: string) => void this.rows.delete(`${p}/${path}`);
 }
 
 describe('CollabService', () => {

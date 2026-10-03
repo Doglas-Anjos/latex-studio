@@ -139,12 +139,7 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
           </Button>
         </>
       )}
-      {moved !== null && (
-        <p className="package-note">
-          {moved} pacotes movidos.{' '}
-          {moved > 0 && 'Recarregue o arquivo principal para ver a mudança.'}
-        </p>
-      )}
+      {moved !== null && <p className="package-note">{moved} pacotes movidos.</p>}
       {error && <p className="form-error">{error.message}</p>}
     </section>
   );

@@ -25,4 +25,10 @@ export class DrizzleYjsDocRepository implements YjsDocRepository {
         set: { state, updatedAt: new Date() },
       });
   }
+
+  async deleteForPath(projectId: string, path: string): Promise<void> {
+    await this.db
+      .delete(yjsDocs)
+      .where(and(eq(yjsDocs.projectId, projectId), eq(yjsDocs.path, path)));
+  }
 }
