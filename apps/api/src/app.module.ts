@@ -1,3 +1,4 @@
+import { ConfigModule, DatabaseModule } from '@latex-studio/core';
 import { Controller, Get, Module } from '@nestjs/common';
 
 @Controller('health')
@@ -8,5 +9,8 @@ class HealthController {
   }
 }
 
-@Module({ controllers: [HealthController] })
+@Module({
+  imports: [ConfigModule.forRoot(), DatabaseModule],
+  controllers: [HealthController],
+})
 export class AppModule {}

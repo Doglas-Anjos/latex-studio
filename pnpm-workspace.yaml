@@ -1,5 +1,6 @@
 packages:
   - apps/*
+  - packages/*
 
 # Supply-chain policy: refuse versions published less than 24h ago
 minimumReleaseAge: 1440
