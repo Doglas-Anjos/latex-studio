@@ -6,6 +6,7 @@ import { PdfViewer } from '../components/pdf-viewer';
 import { ThemeToggle } from '../components/theme-toggle';
 import { ActivityBar } from '../components/workspace/activity-bar';
 import { BottomPanel } from '../components/workspace/bottom-panel';
+import { DiffTab } from '../components/workspace/diff-tab';
 import { Sidebar } from '../components/workspace/sidebar';
 import { Splitter } from '../components/workspace/splitter';
 import { StatusBar } from '../components/workspace/status-bar';
@@ -74,7 +75,13 @@ export function ProjectPage() {
           <TabBar />
           <section className="pane-editor" aria-label={`Editor: ${path}`}>
             {activeTab?.kind === 'diff' ? (
-              <p className="status-note">Diff em breve</p>
+              <DiffTab
+                key={activeTab.id}
+                projectId={project.id}
+                path={activeTab.path}
+                from={activeTab.from}
+                to={activeTab.to}
+              />
             ) : (
               <Editor
                 key={`${project.id}/${path}`}

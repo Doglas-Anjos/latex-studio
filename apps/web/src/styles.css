@@ -1266,3 +1266,106 @@ button.change-path:hover {
     flex: none;
   }
 }
+
+/* Appearance & presence */
+.dialog:has(.appearance-dialog) {
+  width: min(100% - 2rem, 34rem);
+}
+.appearance-dialog {
+  display: grid;
+  gap: 0.75rem;
+}
+.appearance-dialog h3 {
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+.appearance-dialog .field {
+  display: grid;
+  gap: 0.25rem;
+}
+.appearance-dialog .check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.appearance-dialog .color-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem 1rem;
+}
+.appearance-dialog .actions {
+  flex-wrap: wrap;
+}
+.member-item .online {
+  color: var(--ok);
+  margin-left: 0.35rem;
+  font-size: 0.7rem;
+}
+.cm-ySelectionInfo {
+  padding: 1px 4px;
+  border-radius: 3px 3px 3px 0;
+  font-size: 0.65rem;
+  font-family: var(--font-body, inherit);
+  color: #fff;
+  opacity: 1;
+}
+.cm-ySelectionCaret {
+  border-left-width: 2px;
+  border-right-width: 0;
+  margin-left: -1px;
+  margin-right: -1px;
+}
+:root[data-theme="dark"] .cm-ySelectionInfo {
+  color: #14171f;
+}
+
+/* Changes & diff */
+.diff-tab-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.diff-tab {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.diff-tab .cm-mergeView {
+  height: 100%;
+}
+.diff-tab .cm-mergeViewEditors {
+  height: 100%;
+}
+.diff-tab .cm-merge-a,
+.diff-tab .cm-merge-b {
+  overflow: auto;
+}
+.cm-changes-gutter {
+  width: 4px;
+}
+.cm-changes-gutter .cm-gutterElement {
+  padding: 0;
+}
+.cm-changes-gutter .cm-line-added {
+  background: var(--ok);
+}
+.cm-changes-gutter .cm-line-modified {
+  background: var(--warn);
+}
+.cm-changes-gutter .cm-line-deleted {
+  border-bottom: 2px solid var(--danger);
+}
+.cm-changedLine {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+}
+.cm-merge-a .cm-changedLine,
+.cm-deletedChunk {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+.cm-merge-b .cm-changedLine {
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.cm-changedText {
+  background: color-mix(in srgb, var(--warn) 35%, transparent);
+}

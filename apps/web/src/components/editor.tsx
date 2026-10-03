@@ -1,5 +1,12 @@
 import { indentSelection } from '@codemirror/commands';
-import { EditorState, type Extension, StateEffect, StateField } from '@codemirror/state';
+import { syntaxHighlighting } from '@codemirror/language';
+import {
+  Compartment,
+  EditorState,
+  type Extension,
+  StateEffect,
+  StateField,
+} from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView } from '@codemirror/view';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { useQuery } from '@tanstack/react-query';
@@ -8,26 +15,22 @@ import { latex } from 'codemirror-lang-latex';
 import { useEffect, useRef, useState } from 'react';
 import { yCollab } from 'y-codemirror.next';
 import * as Y from 'yjs';
+import { useMe } from '../auth-hooks';
 import { useService } from '../di/service-provider';
 import { type Comment, CommentServiceToken } from '../services/comment.service';
 import { FileServiceToken } from '../services/file.service';
+import { HistoryServiceToken } from '../services/history.service';
 import { IdentityToken } from '../services/identity';
 import type { Role } from '../services/project.service';
+import { useSettingsStore } from '../settings-store';
 import { type Connection, useWorkspaceStore } from '../workspace-store';
+import { changeGutter, setChangeBase } from './editor-changes';
+import { editorTheme, latexHighlight } from './editor-theme';
+import { peerColor } from './presence';
 import { approxWords } from './word-count';
 
 const COLLAB_EXT = /\.(tex|bib|sty|cls|txt|md|json)$/i;
 const IMAGE_EXT = /\.(png|jpe?g|gif|svg|webp)$/i;
-
-const theme = EditorView.theme({
-  '&': { height: '100%', color: 'var(--ink)', backgroundColor: 'var(--surface)' },
-  '.cm-scroller': { fontFamily: 'ui-monospace, "Cascadia Code", Consolas, monospace' },
-  '.cm-gutters': { backgroundColor: 'var(--paper)', color: 'var(--muted)', border: 'none' },
-  '.cm-activeLine, .cm-activeLineGutter': {
-    backgroundColor: 'color-mix(in srgb, var(--line) 40%, transparent)',
-  },
-  '.cm-cursor': { borderLeftColor: 'var(--ink)' },
-});
 
 const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
 const fromBase64 = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
@@ -145,7 +148,24 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const readOnly = role === 'viewer' || role === 'reviewer';
   const comments = useService(CommentServiceToken);
   const identity = useService(IdentityToken);
+  const history = useService(HistoryServiceToken);
+  const me = useMe().data;
   const viewRef = useRef<EditorView | null>(null);
+  const providerRef = useRef<HocuspocusProvider | null>(null);
+  // Baseline text for the change gutter: the file at the last saved version ('' if new).
+  const changeBase = useRef<string | null>(null);
+  const { data: status } = useQuery({
+    queryKey: ['history', projectId, 'status'],
+    queryFn: () => history.status(projectId),
+    refetchInterval: 5000,
+  });
+  const baseSha = status ? (status.baseline?.sha ?? '') : null;
+  const { data: baseText } = useQuery({
+    queryKey: ['history', projectId, 'base', baseSha, path],
+    queryFn: () => (baseSha ? history.file(projectId, baseSha, path).catch(() => '') : ''),
+    enabled: baseSha !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
   const { data } = useQuery({
     queryKey: ['comments', projectId, path, false],
     queryFn: () => comments.list(projectId, path, false),
@@ -166,6 +186,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       onStatus: ({ status }) => useWorkspaceStore.getState().setConnection(status as Connection),
     });
     const ytext = doc.getText('content');
+    const wrap = new Compartment();
+    const wrapping = (on: boolean) => (on ? EditorView.lineWrapping : []);
     let wordTimer: ReturnType<typeof setTimeout> | undefined;
     const view = new EditorView({
       parent,
@@ -173,12 +195,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
         doc: ytext.toString(),
         extensions: [
           basicSetup,
-          theme,
-          EditorView.lineWrapping,
+          syntaxHighlighting(latexHighlight),
+          editorTheme,
+          wrap.of(wrapping(useSettingsStore.getState().lineWrapping)),
           EditorState.readOnly.of(readOnly),
           path.endsWith('.tex') ? latex() : [],
           yCollab(ytext, provider.awareness),
           commentHighlights(ytext, commentsRef),
+          changeGutter(changeBase),
           EditorView.updateListener.of((u) => {
             if (!u.docChanged) return;
             clearTimeout(wordTimer);
@@ -227,6 +251,22 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     };
     // A "go to line" request may arrive before or after the first sync.
     provider.on('synced', () => revealLine(view));
+    const unsubWrap = useSettingsStore.subscribe((s, prev) => {
+      if (s.lineWrapping !== prev.lineWrapping)
+        view.dispatch({ effects: wrap.reconfigure(wrapping(s.lineWrapping)) });
+    });
+    const awareness = provider.awareness;
+    if (!awareness) throw new Error('awareness unavailable');
+    providerRef.current = provider;
+    const onAwareness = () => {
+      const byName = new Map<string, { name: string; color: string }>();
+      for (const [id, state] of awareness.getStates()) {
+        const u = state.user as { name: string; color: string } | undefined;
+        if (id !== awareness.clientID && u) byName.set(u.name, { name: u.name, color: u.color });
+      }
+      useWorkspaceStore.getState().setPeers([...byName.values()]);
+    };
+    awareness.on('change', onAwareness);
     const unsubscribe = useWorkspaceStore.subscribe((s, prev) => {
       if (s.pendingLine !== null && s.pendingLine !== prev.pendingLine) revealLine(view);
       if (s.commentJump && s.commentJump !== prev.commentJump) revealComment(s.commentJump.id);
@@ -234,16 +274,38 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     revealLine(view);
     return () => {
       unsubscribe();
+      unsubWrap();
+      awareness.off('change', onAwareness);
+      useWorkspaceStore.getState().setPeers([]);
       clearTimeout(wordTimer);
       useWorkspaceStore.getState().setEditorCommands(null);
       useWorkspaceStore.getState().setWordCount(null);
       useWorkspaceStore.getState().setSelectionProvider(null);
       viewRef.current = null;
+      providerRef.current = null;
       view.destroy();
       provider.destroy();
       doc.destroy();
     };
   }, [projectId, path, readOnly, identity.token]);
+
+  useEffect(() => {
+    const text = baseText ?? null;
+    changeBase.current = text;
+    viewRef.current?.dispatch({ effects: setChangeBase.of(text) });
+  }, [baseText]);
+
+  // Own cursor label; separate so a late /me answer does not rebuild the editor.
+  useEffect(() => {
+    const awareness = providerRef.current?.awareness;
+    if (!awareness || !me) return;
+    const color = peerColor(me.id);
+    awareness.setLocalStateField('user', {
+      name: me.name || me.email,
+      color,
+      colorLight: `${color}33`,
+    });
+  }, [me]);
 
   // Rebuild highlights when comments change.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `data` is the trigger; highlights read it via commentsRef

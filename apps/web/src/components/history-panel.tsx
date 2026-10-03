@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { GitCompare } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
 import { HistoryServiceToken } from '../services/history.service';
+import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { Dialog } from './dialog';
 
@@ -37,6 +39,25 @@ export function HistoryPanel({ projectId, canEdit }: { projectId: string; canEdi
       service.restore(projectId, sha, path),
     onSuccess: refresh,
   });
+  const openTab = useWorkspaceStore((st) => st.openTab);
+  const [mark, setMark] = useState<string | null>(null);
+  // Opens one diff tab per changed file; the first one ends up active.
+  const compare = useMutation({
+    mutationFn: async ({ from, to }: { from: string; to: string }) => {
+      const files = await service.changes(projectId, from, to);
+      for (const c of [...files].reverse())
+        if (c.type !== 'remove') openTab({ kind: 'diff', path: c.path, from, to });
+    },
+  });
+  const toggleMark = (sha: string) => {
+    if (mark === null || mark === sha) return setMark(mark === sha ? null : sha);
+    const [newer, older] =
+      log.findIndex((x) => x.sha === mark) < log.findIndex((x) => x.sha === sha)
+        ? [mark, sha]
+        : [sha, mark];
+    setMark(null);
+    compare.mutate({ from: older, to: newer });
+  };
   const view = useMutation({
     mutationFn: async (path: string) => ({
       path,
@@ -52,7 +73,7 @@ export function HistoryPanel({ projectId, canEdit }: { projectId: string; canEdi
     const message = prompt('Mensagem da versão')?.trim();
     if (message) save.mutate(message);
   };
-  const error = save.error ?? restore.error ?? view.error;
+  const error = save.error ?? restore.error ?? view.error ?? compare.error;
 
   return (
     <section className="history-panel" aria-label="Histórico">
@@ -62,7 +83,7 @@ export function HistoryPanel({ projectId, canEdit }: { projectId: string; canEdi
         </Button>
       )}
       <ul className="history-list">
-        {log.map((e) => (
+        {log.map((e, i) => (
           <li key={e.sha}>
             <button
               type="button"
@@ -75,6 +96,22 @@ export function HistoryPanel({ projectId, canEdit }: { projectId: string; canEdi
                 {e.author.name} · {new Date(e.date).toLocaleString('pt-BR')}
               </small>
             </button>
+            <span className="history-compare">
+              <Button
+                variant="ghost"
+                disabled={!log[i + 1]}
+                onClick={() => compare.mutate({ from: log[i + 1]?.sha ?? '', to: e.sha })}
+              >
+                <GitCompare size={14} aria-hidden /> Comparar com anterior
+              </Button>
+              <Button
+                variant="ghost"
+                aria-pressed={mark === e.sha}
+                onClick={() => toggleMark(e.sha)}
+              >
+                Comparar
+              </Button>
+            </span>
             {e.sha === selected && (
               <ul className="history-changes">
                 {!parent && <li className="comment-empty">Primeira versão.</li>}

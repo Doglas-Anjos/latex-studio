@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
 import { type HistoryService, HistoryServiceToken } from '../services/history.service';
 import { renderWithApp } from '../test/render';
+import { useWorkspaceStore } from '../workspace-store';
 import { HistoryPanel } from './history-panel';
 
 const author = { name: 'Ana', email: 'ana@example.com' };
@@ -38,5 +39,26 @@ describe('HistoryPanel', () => {
     expect(screen.getByText('Primeira versão')).toBeTruthy();
     await userEvent.click(screen.getByRole('button', { name: 'Salvar versão' }));
     await waitFor(() => expect(service.commit).toHaveBeenCalledWith('p1', 'Minha versão'));
+  });
+
+  it('opens diff tabs when comparing with the previous commit', async () => {
+    const service = {
+      log: vi.fn().mockResolvedValue(log),
+      changes: vi.fn().mockResolvedValue([{ path: 'main.tex', type: 'modify' }]),
+    } as unknown as HistoryService;
+    renderWithApp(
+      <HistoryPanel projectId="p1" canEdit />,
+      new Container().register(HistoryServiceToken, service),
+    );
+    await screen.findByText('Segunda versão');
+    await userEvent.click(
+      screen.getAllByRole('button', { name: /Comparar com anterior/ })[0] as HTMLElement,
+    );
+    await waitFor(() => expect(service.changes).toHaveBeenCalledWith('p1', 'a', 'b'));
+    await waitFor(() =>
+      expect(useWorkspaceStore.getState().tabs).toContainEqual(
+        expect.objectContaining({ kind: 'diff', path: 'main.tex', from: 'a', to: 'b' }),
+      ),
+    );
   });
 });

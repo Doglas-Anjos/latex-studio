@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { FileText, Undo2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useService } from '../../di/service-provider';
 import { HistoryServiceToken } from '../../services/history.service';
@@ -11,12 +12,14 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
   const history = useService(HistoryServiceToken);
   const queryClient = useQueryClient();
   const setActivePath = useWorkspaceStore((s) => s.setActivePath);
+  const openTab = useWorkspaceStore((s) => s.openTab);
   const [message, setMessage] = useState('');
   const { data } = useQuery({
     queryKey: ['history', projectId, 'status'],
     queryFn: () => history.status(projectId),
     refetchInterval: 5000,
   });
+  const baseline = data?.baseline;
   const save = useMutation({
     mutationFn: () => history.commit(projectId, message.trim()),
     onSuccess: () => {
@@ -24,11 +27,18 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
       return queryClient.invalidateQueries({ queryKey: ['history', projectId] });
     },
   });
+  const discard = useMutation({
+    mutationFn: (path: string) => history.restore(projectId, baseline?.sha ?? '', path),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['history', projectId] }),
+        queryClient.invalidateQueries({ queryKey: ['files', projectId] }),
+      ]),
+  });
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (message.trim()) save.mutate();
   };
-  const baseline = data?.baseline;
   return (
     <div className="changes-view">
       <p className="status-note">
@@ -45,13 +55,48 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
             {c.type === 'remove' ? (
               <span className="change-path">{c.path}</span>
             ) : (
-              <button type="button" className="change-path" onClick={() => setActivePath(c.path)}>
+              <button
+                type="button"
+                className="change-path"
+                onClick={() =>
+                  openTab({
+                    kind: 'diff',
+                    path: c.path,
+                    from: baseline?.sha ?? 'empty',
+                    to: 'work',
+                  })
+                }
+              >
                 {c.path}
               </button>
+            )}
+            {c.type !== 'remove' && (
+              <Button
+                variant="ghost"
+                aria-label={`Abrir arquivo ${c.path}`}
+                title="Abrir arquivo"
+                onClick={() => setActivePath(c.path)}
+              >
+                <FileText size={14} aria-hidden />
+              </Button>
+            )}
+            {canEdit && baseline && c.type === 'modify' && (
+              <Button
+                variant="ghost"
+                aria-label={`Descartar alterações de ${c.path}`}
+                title="Descartar"
+                disabled={discard.isPending}
+                onClick={() => {
+                  if (confirm(`Descartar alterações de ${c.path}?`)) discard.mutate(c.path);
+                }}
+              >
+                <Undo2 size={14} aria-hidden />
+              </Button>
             )}
           </li>
         ))}
       </ul>
+      {discard.error && <p className="form-error">{discard.error.message}</p>}
       {canEdit && (
         <form className="change-form" onSubmit={submit}>
           <input
