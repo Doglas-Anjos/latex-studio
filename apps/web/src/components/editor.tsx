@@ -1,3 +1,4 @@
+import { indentSelection } from '@codemirror/commands';
 import { EditorState, type Extension, StateEffect, StateField } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView } from '@codemirror/view';
 import { HocuspocusProvider } from '@hocuspocus/provider';
@@ -12,7 +13,8 @@ import { type Comment, CommentServiceToken } from '../services/comment.service';
 import { FileServiceToken } from '../services/file.service';
 import { IdentityToken } from '../services/identity';
 import type { Role } from '../services/project.service';
-import { useWorkspaceStore } from '../workspace-store';
+import { type Connection, useWorkspaceStore } from '../workspace-store';
+import { approxWords } from './word-count';
 
 const COLLAB_EXT = /\.(tex|bib|sty|cls|txt|md|json)$/i;
 const IMAGE_EXT = /\.(png|jpe?g|gif|svg|webp)$/i;
@@ -87,13 +89,6 @@ function commentHighlights(ytext: Y.Text, comments: { current: Comment[] }): Ext
   ];
 }
 
-type Status = 'connecting' | 'connected' | 'disconnected';
-const statusLabel: Record<Status, string> = {
-  connecting: 'Conectando…',
-  connected: 'Conectado',
-  disconnected: 'Reconectando…',
-};
-
 export function Editor({ projectId, path, role }: { projectId: string; path: string; role: Role }) {
   const files = useService(FileServiceToken);
   if (COLLAB_EXT.test(path)) return <CollabEditor projectId={projectId} path={path} role={role} />;
@@ -147,7 +142,6 @@ function revealLine(view: EditorView) {
 
 function CollabEditor({ projectId, path, role }: { projectId: string; path: string; role: Role }) {
   const host = useRef<HTMLDivElement>(null);
-  const [status, setStatus] = useState<Status>('connecting');
   const readOnly = role === 'viewer' || role === 'reviewer';
   const comments = useService(CommentServiceToken);
   const identity = useService(IdentityToken);
@@ -169,9 +163,10 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       name: `${projectId}/${path}`,
       document: doc,
       token: async () => (await identity.token()) ?? '',
-      onStatus: ({ status: s }) => setStatus(s as Status),
+      onStatus: ({ status }) => useWorkspaceStore.getState().setConnection(status as Connection),
     });
     const ytext = doc.getText('content');
+    let wordTimer: ReturnType<typeof setTimeout> | undefined;
     const view = new EditorView({
       parent,
       state: EditorState.create({
@@ -184,11 +179,30 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           path.endsWith('.tex') ? latex() : [],
           yCollab(ytext, provider.awareness),
           commentHighlights(ytext, commentsRef),
+          EditorView.updateListener.of((u) => {
+            if (!u.docChanged) return;
+            clearTimeout(wordTimer);
+            wordTimer = setTimeout(
+              () => useWorkspaceStore.getState().setWordCount(approxWords(u.state.doc.toString())),
+              500,
+            );
+          }),
         ],
       }),
     });
     viewRef.current = view;
     const store = useWorkspaceStore.getState();
+    store.setConnection('connecting');
+    store.setWordCount(approxWords(view.state.doc.toString()));
+    store.setEditorCommands({
+      indentAll() {
+        const head = view.state.selection.main.head;
+        view.dispatch({ selection: { anchor: 0, head: view.state.doc.length } });
+        indentSelection(view);
+        const at = Math.min(head, view.state.doc.length);
+        view.dispatch({ selection: { anchor: at } });
+      },
+    });
     store.setSelectionProvider(() => {
       const { from, to } = view.state.selection.main;
       if (from === to) return null;
@@ -220,6 +234,9 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     revealLine(view);
     return () => {
       unsubscribe();
+      clearTimeout(wordTimer);
+      useWorkspaceStore.getState().setEditorCommands(null);
+      useWorkspaceStore.getState().setWordCount(null);
       useWorkspaceStore.getState().setSelectionProvider(null);
       viewRef.current = null;
       view.destroy();
@@ -237,10 +254,6 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   return (
     <div className="editor">
       <div ref={host} className="editor-host" />
-      <div className="statusbar" data-status={status} role="status">
-        <span className="dot" aria-hidden="true" /> {statusLabel[status]}
-        {readOnly && ' · somente leitura'}
-      </div>
     </div>
   );
 }
