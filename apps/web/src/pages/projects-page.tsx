@@ -1,17 +1,33 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type FormEvent, type RefObject, useRef, useState } from 'react';
+import { Copy, Download, FolderOpen, Trash2 } from 'lucide-react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/button';
-import { Dialog } from '../components/dialog';
-import { Form } from '../components/form';
+import {
+  CopyDialog,
+  CreateDialog,
+  ImportDialog,
+  type ImportMode,
+} from '../components/dashboard/dialogs';
 import { useService } from '../di/service-provider';
-import { ProjectServiceToken } from '../services/project.service';
+import { type Project, ProjectServiceToken } from '../services/project.service';
 import { useWorkspaceStore } from '../workspace-store';
 
 const dateFmt = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
 const roleLabel = { owner: 'Dono', editor: 'Editor', reviewer: 'Revisor', viewer: 'Leitor' };
 
-type DialogRef = RefObject<HTMLDialogElement | null>;
+type Filter = 'all' | 'mine' | 'shared';
+const filters: [Filter, string][] = [
+  ['all', 'Todos os projetos'],
+  ['mine', 'Meus projetos'],
+  ['shared', 'Compartilhados comigo'],
+];
+
+const fold = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
 
 export function ProjectsPage() {
   const projects = useService(ProjectServiceToken);
@@ -23,221 +39,226 @@ export function ProjectsPage() {
   });
   const createRef = useRef<HTMLDialogElement>(null);
   const importRef = useRef<HTMLDialogElement>(null);
+  const copyRef = useRef<HTMLDialogElement>(null);
+  const [importMode, setImportMode] = useState<ImportMode>('zip');
+  const [copying, setCopying] = useState<Project | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState('');
 
   const open = (id: string) => {
     useWorkspaceStore.getState().setActivePath(null);
     navigate(`/projects/${id}`);
   };
+  const openImport = (mode: ImportMode) => {
+    setImportMode(mode);
+    importRef.current?.showModal();
+  };
   const remove = useMutation({
     mutationFn: (id: string) => projects.remove(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
   });
+  const download = useMutation({ mutationFn: (id: string) => projects.downloadSource(id) });
 
-  const copy = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => projects.copy(id, name),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
-  });
+  const q = fold(query.trim());
+  const rows = (data ?? [])
+    .filter((p) => (filter === 'all' ? true : (p.role === 'owner') === (filter === 'mine')))
+    .filter((p) => fold(p.name).includes(q))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+  const showCreate = () => createRef.current?.showModal();
 
   return (
-    <>
-      <div className="page-head">
-        <h1>Projetos</h1>
-        <div className="actions">
-          <Button variant="secondary" onClick={() => importRef.current?.showModal()}>
-            Importar
-          </Button>
-          <Button variant="primary" onClick={() => createRef.current?.showModal()}>
-            Novo projeto
-          </Button>
-        </div>
-      </div>
-
-      {isPending && <p className="status-note">Carregando…</p>}
-      {error && <p className="form-error">Não foi possível carregar os projetos.</p>}
-      {remove.error && <p className="form-error">{remove.error.message}</p>}
-      {copy.error && <p className="form-error">{copy.error.message}</p>}
-      {data?.length === 0 && (
-        <div className="card empty">
-          <p>Nenhum projeto ainda</p>
-        </div>
-      )}
-      {data && data.length > 0 && (
-        <ul className="card user-list">
-          {data.map((p) => (
-            <li key={p.id}>
-              <button type="button" className="link-row" onClick={() => open(p.id)}>
-                <strong>{p.name}</strong>
-                <span className="muted">
-                  {roleLabel[p.role]} · atualizado em {dateFmt.format(new Date(p.updatedAt))}
-                </span>
-              </button>
-              <Button
-                variant="secondary"
-                disabled={copy.isPending}
-                onClick={() => {
-                  const name = prompt('Nome da cópia', `Cópia de ${p.name}`)?.trim();
-                  if (name) copy.mutate({ id: p.id, name });
-                }}
-              >
-                Fazer uma cópia
-              </Button>
-              {p.role === 'owner' && (
-                <Button
-                  variant="danger"
-                  disabled={remove.isPending}
-                  onClick={() => {
-                    if (confirm(`Excluir o projeto "${p.name}"? Isso não pode ser desfeito.`))
-                      remove.mutate(p.id);
-                  }}
-                >
-                  Excluir
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <CreateDialog dialogRef={createRef} onDone={open} />
-      <ImportDialog dialogRef={importRef} onDone={open} />
-    </>
-  );
-}
-
-function CreateDialog({
-  dialogRef,
-  onDone,
-}: {
-  dialogRef: DialogRef;
-  onDone: (id: string) => void;
-}) {
-  const projects = useService(ProjectServiceToken);
-  const queryClient = useQueryClient();
-  const [name, setName] = useState('');
-  const create = useMutation({
-    mutationFn: () => projects.create(name.trim()),
-    onSuccess: (p) => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      dialogRef.current?.close();
-      setName('');
-      onDone(p.id);
-    },
-  });
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    create.mutate();
-  };
-  return (
-    <Dialog ref={dialogRef} title="Novo projeto">
-      <Form onSubmit={submit}>
-        <Form.Field label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
-        {create.error && <Form.Error>{errorText(create.error)}</Form.Error>}
-        <div className="actions">
-          <Button variant="ghost" onClick={() => dialogRef.current?.close()}>
-            Cancelar
-          </Button>
-          <Button variant="primary" type="submit" disabled={create.isPending}>
-            Criar
-          </Button>
-        </div>
-      </Form>
-    </Dialog>
-  );
-}
-
-function ImportDialog({
-  dialogRef,
-  onDone,
-}: {
-  dialogRef: DialogRef;
-  onDone: (id: string) => void;
-}) {
-  const projects = useService(ProjectServiceToken);
-  const queryClient = useQueryClient();
-  const [name, setName] = useState('');
-  const [mode, setMode] = useState<'zip' | 'folder'>('zip');
-  const [picked, setPicked] = useState<File[]>([]);
-  const imported = useMutation({
-    mutationFn: () => {
-      const first = picked[0];
-      if (!first) throw new Error('Escolha um arquivo .zip ou uma pasta');
-      if (mode === 'zip') return projects.import({ name: name.trim(), archive: first });
-      // webkitRelativePath is "folder/sub/file": drop the leading folder segment.
-      const files = picked.map((file) => ({
-        file,
-        path: file.webkitRelativePath.split('/').slice(1).join('/') || file.name,
-      }));
-      return projects.import({ name: name.trim(), files });
-    },
-    onSuccess: (p) => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      dialogRef.current?.close();
-      setName('');
-      setPicked([]);
-      onDone(p.id);
-    },
-  });
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    imported.mutate();
-  };
-  return (
-    <Dialog ref={dialogRef} title="Importar projeto">
-      <Form onSubmit={submit}>
-        <Form.Field label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
-        <div className="tabs" role="tablist">
-          {(['zip', 'folder'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              role="tab"
-              aria-selected={mode === m}
-              onClick={() => {
-                setMode(m);
-                setPicked([]);
-              }}
-            >
-              {m === 'zip' ? 'Arquivo .zip' : 'Pasta'}
-            </button>
-          ))}
-        </div>
-        {mode === 'zip' ? (
+    <div className="dashboard">
+      <DashboardSidebar
+        filter={filter}
+        onFilter={setFilter}
+        onCreate={showCreate}
+        onImport={openImport}
+      />
+      <section className="dashboard-main">
+        <div className="dashboard-head">
+          <h1>Projetos</h1>
           <input
-            key="zip"
-            type="file"
-            accept=".zip"
-            aria-label="Arquivo .zip"
-            onChange={(e) => setPicked(Array.from(e.target.files ?? []))}
+            type="search"
+            placeholder="Buscar projeto"
+            aria-label="Buscar projeto"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
-        ) : (
-          <input
-            key="folder"
-            type="file"
-            multiple
-            aria-label="Pasta"
-            // @ts-expect-error non-standard attribute, supported by all major browsers
-            webkitdirectory=""
-            onChange={(e) => setPicked(Array.from(e.target.files ?? []))}
+        </div>
+
+        {isPending && <p className="status-note">Carregando…</p>}
+        {error && <p className="form-error">Não foi possível carregar os projetos.</p>}
+        {remove.error && <p className="form-error">{remove.error.message}</p>}
+        {download.error && <p className="form-error">{download.error.message}</p>}
+        {data?.length === 0 && (
+          <WelcomeHero onCreate={showCreate} onImport={() => openImport('zip')} />
+        )}
+        {data && data.length > 0 && rows.length === 0 && (
+          <p className="status-note">Nenhum projeto corresponde à busca.</p>
+        )}
+        {rows.length > 0 && (
+          <ProjectTable
+            rows={rows}
+            onOpen={open}
+            onCopy={(p) => {
+              setCopying(p);
+              copyRef.current?.showModal();
+            }}
+            onDownload={(id) => download.mutate(id)}
+            onRemove={(p) => {
+              if (confirm(`Excluir o projeto "${p.name}"? Isso não pode ser desfeito.`))
+                remove.mutate(p.id);
+            }}
           />
         )}
-        {imported.error && <Form.Error>{errorText(imported.error)}</Form.Error>}
-        <div className="actions">
-          <Button variant="ghost" onClick={() => dialogRef.current?.close()}>
-            Cancelar
-          </Button>
-          <Button variant="primary" type="submit" disabled={imported.isPending}>
-            {imported.isPending ? 'Importando…' : 'Importar'}
-          </Button>
-        </div>
-      </Form>
-    </Dialog>
+      </section>
+
+      <CreateDialog dialogRef={createRef} onDone={open} />
+      <ImportDialog dialogRef={importRef} mode={importMode} setMode={setImportMode} onDone={open} />
+      <CopyDialog dialogRef={copyRef} project={copying} onDone={open} />
+    </div>
   );
 }
 
-function errorText(e: Error) {
-  const status = (e as { status?: number }).status;
-  if (status === 409) return 'Limite de projetos atingido';
-  if (status === 413) return 'Cota de armazenamento excedida';
-  if (status === 400) return `Requisição inválida: ${e.message}`;
-  return e.message;
+function DashboardSidebar({
+  filter,
+  onFilter,
+  onCreate,
+  onImport,
+}: {
+  filter: Filter;
+  onFilter: (f: Filter) => void;
+  onCreate: () => void;
+  onImport: (m: ImportMode) => void;
+}) {
+  const menu = useRef<HTMLDetailsElement>(null);
+  const pick = (action: () => void) => () => {
+    menu.current?.removeAttribute('open');
+    action();
+  };
+  return (
+    <aside className="dashboard-side">
+      <details className="menu new-menu" ref={menu}>
+        <summary className="btn btn-primary">Novo projeto</summary>
+        <div className="menu-list">
+          <button type="button" onClick={pick(onCreate)}>
+            Projeto em branco
+          </button>
+          <button type="button" onClick={pick(() => onImport('zip'))}>
+            Importar .zip
+          </button>
+          <button type="button" onClick={pick(() => onImport('folder'))}>
+            Importar pasta
+          </button>
+        </div>
+      </details>
+      <nav className="filter-list" aria-label="Filtros">
+        {filters.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={filter === key}
+            onClick={() => onFilter(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+    </aside>
+  );
+}
+
+function ProjectTable({
+  rows,
+  onOpen,
+  onCopy,
+  onDownload,
+  onRemove,
+}: {
+  rows: Project[];
+  onOpen: (id: string) => void;
+  onCopy: (p: Project) => void;
+  onDownload: (id: string) => void;
+  onRemove: (p: Project) => void;
+}) {
+  return (
+    <table className="project-table">
+      <thead>
+        <tr>
+          <th scope="col">Título</th>
+          <th scope="col" className="col-owner">
+            Dono
+          </th>
+          <th scope="col">Última modificação</th>
+          <th scope="col">
+            <span className="sr-only">Ações</span>
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((p) => (
+          <tr key={p.id}>
+            <td>
+              <button type="button" className="project-link" onClick={() => onOpen(p.id)}>
+                {p.name}
+              </button>
+              {p.role !== 'owner' && <span className="muted"> {roleLabel[p.role]}</span>}
+            </td>
+            <td className="col-owner">{p.role === 'owner' ? 'Você' : 'Compartilhado'}</td>
+            <td>{dateFmt.format(new Date(p.updatedAt))}</td>
+            <td className="row-actions">
+              <IconButton label="Abrir" onClick={() => onOpen(p.id)}>
+                <FolderOpen size={16} />
+              </IconButton>
+              <IconButton label="Fazer uma cópia" onClick={() => onCopy(p)}>
+                <Copy size={16} />
+              </IconButton>
+              <IconButton label="Baixar .zip" onClick={() => onDownload(p.id)}>
+                <Download size={16} />
+              </IconButton>
+              {p.role === 'owner' && (
+                <IconButton label="Excluir" onClick={() => onRemove(p)}>
+                  <Trash2 size={16} />
+                </IconButton>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function IconButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button type="button" className="icon-btn" aria-label={label} title={label} onClick={onClick}>
+      {children}
+    </button>
+  );
+}
+
+function WelcomeHero({ onCreate, onImport }: { onCreate: () => void; onImport: () => void }) {
+  return (
+    <div className="welcome-hero">
+      <h2>Seus projetos LaTeX, com histórico git e compilação na nuvem</h2>
+      <p>Escreva em equipe, volte a qualquer versão e gere o PDF sem instalar nada.</p>
+      <div className="actions">
+        <Button variant="primary" onClick={onCreate}>
+          Criar projeto
+        </Button>
+        <Button variant="secondary" onClick={onImport}>
+          Importar
+        </Button>
+      </div>
+    </div>
+  );
 }
