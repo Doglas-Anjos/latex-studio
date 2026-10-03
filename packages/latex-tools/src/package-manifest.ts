@@ -13,10 +13,33 @@ const HEADER =
 const usepackage = (e: PackageEntry) =>
   `\\usepackage${e.options ? `[${e.options}]` : ''}{${e.name}}`;
 
-export function renderPackagesTex(manifest: PackageManifest): string {
+export type PackageUsage = { name: string; options?: string };
+
+// Defining \ver@<name>.sty makes LaTeX skip any later \usepackage/\RequirePackage of it;
+// \opt@<name>.sty pre-seeds the options so the skipped call can't raise "Option clash".
+function bypass(e: PackageEntry, usage: PackageUsage[]): string[] {
+  const opts = [
+    ...new Set(
+      usage
+        .filter((u) => u.name === e.name)
+        .flatMap((u) => (u.options ?? '').split(','))
+        .map((o) => o.trim())
+        .filter(Boolean),
+    ),
+  ];
+  return [
+    `% disabled: ${e.name} (bypass: later \\usepackage{${e.name}} lines are skipped)`,
+    `\\expandafter\\def\\csname ver@${e.name}.sty\\endcsname{0000/00/00}`,
+    ...(opts.length
+      ? [`\\expandafter\\def\\csname opt@${e.name}.sty\\endcsname{${opts.join(',')}}`]
+      : []),
+  ];
+}
+
+export function renderPackagesTex(manifest: PackageManifest, usage: PackageUsage[] = []): string {
   const lines = [...manifest]
     .sort((a, b) => a.order - b.order)
-    .map((e) => (e.enabled ? usepackage(e) : `% disabled: ${usepackage(e)}`));
+    .flatMap((e) => (e.enabled ? [usepackage(e)] : bypass(e, usage)));
   return `${[HEADER, ...lines].join('\n')}\n`;
 }
 

@@ -1,5 +1,6 @@
 import {
   extractUsepackages,
+  findUsepackages,
   insertPackagesInput,
   type PackageManifest,
   parseManifest,
@@ -19,6 +20,9 @@ import type { User } from '../../users/domain/user';
 
 const MANIFEST = 'latex-packages.json';
 const TEX = 'latex-packages.tex';
+const MAX_SCAN_BYTES = 1024 * 1024;
+
+export type PackageUsage = { name: string; options?: string; path: string; line: number };
 
 /** Sorts by `order` and renumbers 0..n-1; throws 400 on an invalid manifest. */
 function normalize(manifest: unknown): PackageManifest {
@@ -38,9 +42,13 @@ function normalize(manifest: unknown): PackageManifest {
     }));
 }
 
-async function writeManifest(files: ProjectFiles, manifest: PackageManifest) {
+async function writeManifest(
+  files: ProjectFiles,
+  manifest: PackageManifest,
+  usage: PackageUsage[],
+) {
   await files.write(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);
-  await files.write(TEX, renderPackagesTex(manifest));
+  await files.write(TEX, renderPackagesTex(manifest, usage));
 }
 
 @Injectable()
@@ -59,9 +67,21 @@ export class PackagesService {
     return this.lock.run(project.id, async () => {
       const files = this.storage.open(project.id);
       const next = normalize(manifest);
-      await writeManifest(files, next);
+      const usage = await this.scan(files);
+      await writeManifest(files, next, usage);
+      const paths = [MANIFEST, TEX];
+      // the bypass only runs if the main file loads latex-packages.tex
+      const bypassed = next.some((e) => !e.enabled && usage.some((u) => u.name === e.name));
+      if (bypassed && (await files.isFile(project.mainFile))) {
+        const main = (await files.repo.readFile(project.mainFile)).toString();
+        const withInput = insertPackagesInput(main);
+        if (withInput !== main) {
+          await files.write(project.mainFile, withInput);
+          paths.push(project.mainFile);
+        }
+      }
       await files.repo.commitAll('Update packages', author(user));
-      await this.syncDocs(project.id, files, [MANIFEST, TEX]);
+      await this.syncDocs(project.id, files, paths);
       return next;
     });
   }
@@ -84,11 +104,30 @@ export class PackagesService {
       }
       await files.write(project.mainFile, insertPackagesInput(remaining));
       const next = normalize(manifest);
-      await writeManifest(files, next);
+      await writeManifest(files, next, await this.scan(files));
       await files.repo.commitAll(`Move ${packages.length} packages to the manifest`, author(user));
       await this.syncDocs(project.id, files, [project.mainFile, MANIFEST, TEX]);
       return { moved: packages.length, manifest: next };
     });
+  }
+
+  usage(project: Project): Promise<PackageUsage[]> {
+    return this.scan(this.storage.open(project.id));
+  }
+
+  /**
+   * \usepackage/\RequirePackage in every .tex/.sty/.cls except the generated file.
+   * ponytail: does not follow \input outside the project and misses macro-generated
+   * \usepackage; a latexmk -recorder pass would catch those.
+   */
+  private async scan(files: ProjectFiles): Promise<PackageUsage[]> {
+    const usage: PackageUsage[] = [];
+    for (const f of await files.repo.listFiles()) {
+      if (f.path === TEX || f.size > MAX_SCAN_BYTES || !/\.(tex|sty|cls)$/.test(f.path)) continue;
+      const source = Buffer.from(await files.repo.readFile(f.path)).toString('utf8');
+      for (const u of findUsepackages(source)) usage.push({ ...u, path: f.path });
+    }
+    return usage;
   }
 
   /** Pushes the freshly written files into their open docs (caller holds the lock). */

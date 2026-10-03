@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useService } from '../di/service-provider';
 import { LATEX_CATALOG } from '../latex-catalog';
-import { type PackageEntry, PackageServiceToken } from '../services/package.service';
+import {
+  type PackageEntry,
+  PackageServiceToken,
+  type PackageUsage,
+} from '../services/package.service';
 import { Button } from './button';
 
 export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {
@@ -13,6 +17,10 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
   const { data } = useQuery({
     queryKey: ['packages', projectId],
     queryFn: () => service.get(projectId),
+  });
+  const { data: usage } = useQuery({
+    queryKey: ['packages', projectId, 'usage'],
+    queryFn: () => service.usage(projectId),
   });
   const refresh = () =>
     Promise.all([
@@ -47,6 +55,17 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
     commit([...list, { name: n, enabled: true, order: list.length }]);
     setName('');
   };
+  const usedBy = (n: string) => (usage ?? []).filter((u) => u.name === n);
+  const detected = [
+    ...new Map(
+      (usage ?? []).filter((u) => !list.some((e) => e.name === u.name)).map((u) => [u.name, u]),
+    ).values(),
+  ];
+  const addDetected = (u: PackageUsage, enabled: boolean) =>
+    commit([
+      ...list,
+      { name: u.name, ...(u.options ? { options: u.options } : {}), enabled, order: list.length },
+    ]);
   const busy = save.isPending || migrate.isPending;
   const error = save.error ?? migrate.error;
 
@@ -64,6 +83,14 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
               />
               {e.name}
             </label>
+            {usedBy(e.name).length > 0 && (
+              <small className="package-usage">
+                {usedBy(e.name)
+                  .map((u) => `${u.path}:${u.line}`)
+                  .join(', ')}
+              </small>
+            )}
+            {!e.enabled && usedBy(e.name).length > 0 && <span className="badge">bypass ativo</span>}
             <input
               className="package-options"
               aria-label={`Opções de ${e.name}`}
@@ -107,6 +134,33 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
           </li>
         ))}
       </ul>
+      {detected.length > 0 && (
+        <>
+          <h3>Detectados no código</h3>
+          <ul className="detected-list">
+            {detected.map((u) => (
+              <li key={u.name} className="package-item">
+                <span className="package-name">{u.name}</span>
+                <small className="package-usage">
+                  {usedBy(u.name)
+                    .map((x) => `${x.path}:${x.line}`)
+                    .join(', ')}
+                </small>
+                {canEdit && (
+                  <span className="package-actions">
+                    <Button variant="ghost" disabled={busy} onClick={() => addDetected(u, false)}>
+                      Desligar
+                    </Button>
+                    <Button variant="ghost" disabled={busy} onClick={() => addDetected(u, true)}>
+                      Mover para o gerenciador
+                    </Button>
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {canEdit && (
         <>
           <form
@@ -139,6 +193,7 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
           </Button>
         </>
       )}
+      <p className="package-note">Desligar um pacote do qual outro depende quebra a compilação.</p>
       {moved !== null && <p className="package-note">{moved} pacotes movidos.</p>}
       {error && <p className="form-error">{error.message}</p>}
     </section>

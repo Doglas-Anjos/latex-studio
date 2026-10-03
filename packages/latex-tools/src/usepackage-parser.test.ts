@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractUsepackages, insertPackagesInput } from './usepackage-parser';
+import { extractUsepackages, findUsepackages, insertPackagesInput } from './usepackage-parser';
 
 const source = [
   '\\documentclass{article}',
@@ -46,5 +46,17 @@ describe('insertPackagesInput', () => {
       '\\input{latex-packages}',
     ]);
     expect(insertPackagesInput(once)).toBe(once);
+  });
+});
+
+describe('findUsepackages', () => {
+  it('lists packages with line and options, ignoring comments, beyond the preamble', () => {
+    const src =
+      '\\usepackage[a]{x, y}\n% \\usepackage{z}\n\\begin{document}\n\\RequirePackage{w} % \\usepackage{v}\n';
+    expect(findUsepackages(src)).toEqual([
+      { name: 'x', options: 'a', line: 1 },
+      { name: 'y', options: 'a', line: 1 },
+      { name: 'w', line: 4 },
+    ]);
   });
 });

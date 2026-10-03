@@ -57,10 +57,26 @@ describe('PackagesService', () => {
     ]);
     expect(JSON.parse(await text('latex-packages.json'))).toEqual(manifest);
     expect(await text('latex-packages.tex')).toContain(
-      '\\usepackage[x]{a}\n% disabled: \\usepackage{b}',
+      '\\usepackage[x]{a}\n% disabled: b (bypass: later \\usepackage{b} lines are skipped)\n\\expandafter\\def\\csname ver@b.sty\\endcsname{0000/00/00}',
     );
     expect(await lastMessage()).toBe('Update packages');
     expect(await service.get(project)).toEqual(manifest);
+  });
+
+  it('usage lists packages with file and line', async () => {
+    expect(await service.usage(project)).toEqual([
+      { name: 'inputenc', options: 'utf8', path: 'main.tex', line: 2 },
+      { name: 'amsmath', path: 'main.tex', line: 3 },
+    ]);
+  });
+
+  it('set bypasses a disabled package that main.tex still uses', async () => {
+    await service.set(project, user, [{ name: 'amsmath', enabled: false, order: 0 }]);
+    expect(await text('latex-packages.tex')).toContain(
+      '\\expandafter\\def\\csname ver@amsmath.sty\\endcsname{0000/00/00}',
+    );
+    expect(await text('main.tex')).toContain('\\input{latex-packages}');
+    expect(sync.calls).toContain('replace main.tex');
   });
 
   it('migrate moves the preamble packages once', async () => {

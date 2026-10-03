@@ -21,6 +21,12 @@ export class PackagesController {
     return this.packages.get(project);
   }
 
+  @Get('usage')
+  @RequireProjectRole('viewer')
+  usage(@CurrentProject() project: Project) {
+    return this.packages.usage(project);
+  }
+
   @Put()
   @RequireProjectRole('editor')
   set(

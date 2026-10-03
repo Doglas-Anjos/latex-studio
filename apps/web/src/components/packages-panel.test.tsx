@@ -20,6 +20,7 @@ describe('PackagesPanel', () => {
       get: vi.fn().mockResolvedValue(manifest),
       set: vi.fn().mockResolvedValue(manifest),
       migrate: vi.fn(),
+      usage: vi.fn().mockResolvedValue([]),
     };
     renderWithApp(
       <PackagesPanel projectId="p1" canEdit />,
@@ -33,6 +34,31 @@ describe('PackagesPanel', () => {
       expect(service.set).toHaveBeenCalledWith('p1', [
         { name: 'amsmath', enabled: false, order: 0 },
         { name: 'graphicx', options: 'draft', enabled: true, order: 1 },
+      ]),
+    );
+  });
+
+  it('lists packages found in the code and turns one off without touching the source', async () => {
+    const service: PackageService = {
+      get: vi.fn().mockResolvedValue(manifest),
+      set: vi.fn().mockResolvedValue(manifest),
+      migrate: vi.fn(),
+      usage: vi
+        .fn()
+        .mockResolvedValue([
+          { name: 'hyperref', options: 'colorlinks', path: 'main.tex', line: 4 },
+        ]),
+    };
+    renderWithApp(
+      <PackagesPanel projectId="p1" canEdit />,
+      new Container().register(PackageServiceToken, service),
+    );
+    expect(await screen.findByText('Detectados no código')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Desligar' }));
+    await waitFor(() =>
+      expect(service.set).toHaveBeenCalledWith('p1', [
+        ...manifest,
+        { name: 'hyperref', options: 'colorlinks', enabled: false, order: 2 },
       ]),
     );
   });

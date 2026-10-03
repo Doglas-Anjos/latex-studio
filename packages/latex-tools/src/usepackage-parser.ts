@@ -32,6 +32,28 @@ export function extractUsepackages(source: string): {
   return { packages, remaining: kept.join('\n') + body };
 }
 
+/** Every \usepackage/\RequirePackage in code (not comments), one entry per package name. */
+export function findUsepackages(
+  source: string,
+): Array<{ name: string; options?: string; line: number }> {
+  const found: Array<{ name: string; options?: string; line: number }> = [];
+  source.split('\n').forEach((text, i) => {
+    const cut = text.search(COMMENT_START);
+    const code = cut === -1 ? text : text.slice(0, cut);
+    for (const [, options, names] of code.matchAll(PACKAGE_CMD)) {
+      for (const name of (names ?? '')
+        .split(',')
+        .map((n) => n.trim())
+        .filter(Boolean)) {
+        found.push(
+          options?.trim() ? { name, options: options.trim(), line: i + 1 } : { name, line: i + 1 },
+        );
+      }
+    }
+  });
+  return found;
+}
+
 export function insertPackagesInput(source: string): string {
   const input = '\\input{latex-packages}';
   const lines = source.split('\n');

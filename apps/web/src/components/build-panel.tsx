@@ -1,6 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useService } from '../di/service-provider';
 import { CompileServiceToken, isActive, type LogEntry } from '../services/compile.service';
+import { PackageServiceToken } from '../services/package.service';
 import { ProjectServiceToken } from '../services/project.service';
 import {
   type ExportFormat,
@@ -34,6 +35,18 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   const tools = useService(ToolsServiceToken);
   const queryClient = useQueryClient();
   const { data: builds } = useBuilds(projectId);
+  const packages = useService(PackageServiceToken);
+  const { data: manifest } = useQuery({
+    queryKey: ['packages', projectId],
+    queryFn: () => packages.get(projectId),
+  });
+  const { data: usage } = useQuery({
+    queryKey: ['packages', projectId, 'usage'],
+    queryFn: () => packages.usage(projectId),
+  });
+  const disabledUsed = manifest?.find(
+    (e) => !e.enabled && usage?.some((u) => u.name === e.name),
+  )?.name;
   const build = builds?.[0];
   const start = useMutation({
     mutationFn: () => compile.compile(projectId),
@@ -123,7 +136,7 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
       {build && (
         <ul className="log-list">
           {build.errors.map((e) => (
-            <LogItem key={logKey('error', e)} kind="error" entry={e} />
+            <LogItem key={logKey('error', e)} kind="error" entry={e} disabledUsed={disabledUsed} />
           ))}
           {build.warnings.map((w) => (
             <LogItem key={logKey('warning', w)} kind="warning" entry={w} />
@@ -134,7 +147,15 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   );
 }
 
-function LogItem({ kind, entry }: { kind: 'error' | 'warning'; entry: LogEntry }) {
+function LogItem({
+  kind,
+  entry,
+  disabledUsed,
+}: {
+  kind: 'error' | 'warning';
+  entry: LogEntry;
+  disabledUsed?: string | undefined;
+}) {
   const goToLine = useWorkspaceStore((s) => s.goToLine);
   const setActivePath = useWorkspaceStore((s) => s.setActivePath);
   const file = entry.file?.replace(/^\.\//, '');
@@ -151,7 +172,12 @@ function LogItem({ kind, entry }: { kind: 'error' | 'warning'; entry: LogEntry }
           {entry.line ? `:${entry.line}` : ''}
         </button>
       )}
-      <span>{entry.message}</span>
+      <span>
+        {entry.message}
+        {disabledUsed && /Undefined control sequence/.test(entry.message)
+          ? ` · pacote ${disabledUsed} está desligado`
+          : ''}
+      </span>
     </li>
   );
 }
