@@ -19,4 +19,6 @@ export interface ProjectRepository {
   /** Projects owned by the user. */
   countForUser(userId: string): Promise<number>;
   delete(id: string): Promise<void>;
+  /** Flags uncommitted collaborative edits for autocommit; keeps the first timestamp. */
+  markDirty(id: string): Promise<void>;
 }

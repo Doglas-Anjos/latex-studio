@@ -21,5 +21,7 @@ import { SessionGuard } from './presentation/guards/session.guard';
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: SessionGuard },
   ],
+  // CollabModule authenticates WebSocket upgrades, which bypass the guards.
+  exports: [AuthService],
 })
 export class AuthModule {}

@@ -1,7 +1,7 @@
 import { DATABASE, type Database } from '@latex-studio/core';
 import { projectMembers, projects } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, getTableColumns } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 import type { Project, ProjectRole, ProjectWithRole } from '../domain/project';
 import type { NewProject, ProjectRepository } from '../domain/project.repository';
 
@@ -55,5 +55,12 @@ export class DrizzleProjectRepository implements ProjectRepository {
 
   async delete(id: string): Promise<void> {
     await this.db.delete(projects).where(eq(projects.id, id));
+  }
+
+  async markDirty(id: string): Promise<void> {
+    await this.db
+      .update(projects)
+      .set({ dirtySince: sql`now()` })
+      .where(and(eq(projects.id, id), isNull(projects.dirtySince)));
   }
 }

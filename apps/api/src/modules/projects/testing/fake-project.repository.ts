@@ -4,6 +4,7 @@ import type { NewProject, ProjectRepository } from '../domain/project.repository
 export class FakeProjects implements ProjectRepository {
   rows: Project[] = [];
   members: Array<{ projectId: string; userId: string; role: ProjectRole }> = [];
+  dirtySince = new Map<string, Date>();
 
   async create(project: NewProject, ownerId: string) {
     const now = new Date();
@@ -40,5 +41,8 @@ export class FakeProjects implements ProjectRepository {
   async delete(id: string) {
     this.rows = this.rows.filter((p) => p.id !== id);
     this.members = this.members.filter((m) => m.projectId !== id);
+  }
+  async markDirty(id: string) {
+    if (!this.dirtySince.has(id)) this.dirtySince.set(id, new Date());
   }
 }

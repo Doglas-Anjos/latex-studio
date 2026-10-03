@@ -3,6 +3,7 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import type { Hocuspocus } from '@hocuspocus/server';
 import {
   APP_CONFIG,
   type AppConfig,
@@ -13,7 +14,9 @@ import {
 import { HttpException, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import { WebSocketServer } from 'ws';
 import { AppModule } from './app.module';
+import { HOCUSPOCUS } from './modules/collab/infrastructure/hocuspocus.server';
 
 async function bootstrap() {
   // Exactly one trusted hop (Caddy), so request.ip is the real client for rate limiting.
@@ -57,6 +60,36 @@ async function bootstrap() {
   // Migrations must run before listen(): onApplicationBootstrap seeds the first admin.
   await runMigrations(app.get<Database>(DATABASE));
   app.setGlobalPrefix('api');
+  await app.init();
+
+  // Collaborative editing shares the HTTP server. Upgrades skip Nest guards: Hocuspocus'
+  // onAuthenticate checks the Origin, the signed sid cookie and the project role itself.
+  const hocuspocus = app.get<Hocuspocus>(HOCUSPOCUS);
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
+  app
+    .getHttpAdapter()
+    .getInstance()
+    .server.on('upgrade', (request, socket, head) => {
+      if (!request.url?.startsWith('/collab')) return socket.destroy();
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        const headers = new Headers();
+        for (let i = 0; i < request.rawHeaders.length; i += 2) {
+          headers.append(request.rawHeaders[i] as string, request.rawHeaders[i + 1] as string);
+        }
+        const connection = hocuspocus.handleConnection(
+          ws,
+          new Request(`http://localhost${request.url}`, { headers }),
+        );
+        // Default binaryType is nodebuffer: each message arrives as one Buffer.
+        ws.on('message', (data) => connection.handleMessage(new Uint8Array(data as Buffer)));
+        ws.on('close', (code, reason) =>
+          connection.handleClose({ code, reason: reason.toString() }),
+        );
+        // An unhandled 'error' event would crash the process; ws closes the socket after it.
+        ws.on('error', () => {});
+      });
+    });
+
   await app.listen(config.API_PORT, '0.0.0.0');
 }
 
