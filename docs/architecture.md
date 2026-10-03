@@ -207,6 +207,22 @@ O **conteúdo dos arquivos não fica no banco**: a árvore de trabalho do Git no
 
 ---
 
+## Estado em 3 de outubro de 2026
+
+Implementado e verificado contra Postgres, Redis e MiKTeX locais (104 testes automatizados):
+
+- Fase 1 completa: auth com aprovação por admin, projetos como repositórios git, arquivos, upload, importação zip/pasta, edição simultânea Yjs, fila de compilação com `latexmk` em sandbox, PDF, exportação de fonte e PDF.
+- Fase 2 completa: gerenciador de bibliotecas com migração de `\usepackage`, comentários ancorados com Yjs, histórico git (log, diff, commit nomeado, restaurar) sincronizado com documentos abertos, cópia de projeto, contagem de palavras, exportações DOCX/MD/HTML via pandoc (não executado localmente: só na imagem Docker), compartilhamento por convite com papéis.
+- Fase 3 parcial: rate limit em Redis, log de auditoria, backup por script, gitleaks e trivy no CI, Redis com senha, worker sem segredos da API, zip com histórico git.
+
+Desvios do plano original, por revisão de segurança:
+
+- Sem bloqueio de conta após falhas de login (permitiria trancar o admin); força bruta limitada por IP e custo do argon2.
+- O worker fica na rede interna com Postgres e Redis (precisa deles), não em `network_mode: none`; o TeX roda com o mesmo uid do worker.
+- Cadastro responde sempre 202 para não revelar e-mails existentes.
+
+Pendente: 2FA, remoto GitHub (push/pull) e importação por URL git, track changes, links de leitura, verificação de e-mail. A imagem `docker/texlive` não foi construída localmente.
+
 ## Fases de implementação
 
 **Fase 0 – Preparação**
