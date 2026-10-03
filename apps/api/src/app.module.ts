@@ -9,6 +9,7 @@ import { CompileModule } from './modules/compile/compile.module';
 import { ExportModule } from './modules/export/export.module';
 import { FilesModule } from './modules/files/files.module';
 import { HistoryModule } from './modules/history/history.module';
+import { MembersModule } from './modules/members/members.module';
 import { PackagesModule } from './modules/packages/packages.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 
@@ -34,6 +35,7 @@ class HealthController {
     ExportModule,
     HistoryModule,
     CommentsModule,
+    MembersModule,
     PackagesModule,
   ],
   controllers: [HealthController],

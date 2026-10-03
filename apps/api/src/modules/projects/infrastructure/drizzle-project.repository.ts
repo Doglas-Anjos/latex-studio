@@ -1,9 +1,9 @@
 import { DATABASE, type Database } from '@latex-studio/core';
-import { projectMembers, projects } from '@latex-studio/core/schema';
+import { projectMembers, projects, users } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 import type { Project, ProjectRole, ProjectWithRole } from '../domain/project';
-import type { NewProject, ProjectRepository } from '../domain/project.repository';
+import type { Member, NewProject, ProjectRepository } from '../domain/project.repository';
 
 @Injectable()
 export class DrizzleProjectRepository implements ProjectRepository {
@@ -19,6 +19,31 @@ export class DrizzleProjectRepository implements ProjectRepository {
       await tx.insert(projectMembers).values({ projectId: row.id, userId: ownerId, role: 'owner' });
       return row;
     });
+  }
+
+  listMembers(projectId: string): Promise<Member[]> {
+    return this.db
+      .select({ userId: users.id, name: users.name, email: users.email, role: projectMembers.role })
+      .from(projectMembers)
+      .innerJoin(users, eq(users.id, projectMembers.userId))
+      .where(eq(projectMembers.projectId, projectId))
+      .orderBy(users.name);
+  }
+
+  async setMember(projectId: string, userId: string, role: ProjectRole): Promise<void> {
+    await this.db
+      .insert(projectMembers)
+      .values({ projectId, userId, role })
+      .onConflictDoUpdate({
+        target: [projectMembers.projectId, projectMembers.userId],
+        set: { role },
+      });
+  }
+
+  async removeMember(projectId: string, userId: string): Promise<void> {
+    await this.db
+      .delete(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
   }
 
   async findById(id: string): Promise<Project | null> {

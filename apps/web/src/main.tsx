@@ -12,6 +12,7 @@ import { CommentServiceToken, HttpCommentService } from './services/comment.serv
 import { CompileServiceToken, HttpCompileService } from './services/compile.service';
 import { FileServiceToken, HttpFileService } from './services/file.service';
 import { HistoryServiceToken, HttpHistoryService } from './services/history.service';
+import { HttpMemberService, MemberServiceToken } from './services/member.service';
 import { HttpPackageService, PackageServiceToken } from './services/package.service';
 import { HttpProjectService, ProjectServiceToken } from './services/project.service';
 import { HttpToolsService, ToolsServiceToken } from './services/tools.service';
@@ -27,7 +28,8 @@ const container = new Container()
   .register(PackageServiceToken, new HttpPackageService(api))
   .register(CommentServiceToken, new HttpCommentService(api))
   .register(HistoryServiceToken, new HttpHistoryService(api))
-  .register(ToolsServiceToken, new HttpToolsService(api));
+  .register(ToolsServiceToken, new HttpToolsService(api))
+  .register(MemberServiceToken, new HttpMemberService(api));
 const queryClient = new QueryClient();
 
 const root = document.getElementById('root');

@@ -661,3 +661,25 @@ a {
   overflow: auto;
   white-space: pre;
 }
+
+/* Members */
+.member-list {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+}
+.member-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.member-item strong {
+  display: block;
+}
+.member-item select {
+  font: inherit;
+  padding: 0.15rem 0.3rem;
+}

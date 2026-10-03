@@ -9,7 +9,18 @@ export interface NewProject {
   mainFile?: string;
 }
 
+export interface Member {
+  userId: string;
+  name: string;
+  email: string;
+  role: ProjectRole;
+}
+
 export interface ProjectRepository {
+  listMembers(projectId: string): Promise<Member[]>;
+  /** Inserts or updates the membership. */
+  setMember(projectId: string, userId: string, role: ProjectRole): Promise<void>;
+  removeMember(projectId: string, userId: string): Promise<void>;
   /** Inserts the project and its owner membership in one transaction. */
   create(project: NewProject, ownerId: string): Promise<Project>;
   findById(id: string): Promise<Project | null>;

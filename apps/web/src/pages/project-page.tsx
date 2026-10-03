@@ -5,6 +5,7 @@ import { CommentsPanel } from '../components/comments-panel';
 import { Editor } from '../components/editor';
 import { FileTree } from '../components/file-tree';
 import { HistoryPanel } from '../components/history-panel';
+import { MembersPanel } from '../components/members-panel';
 import { PackagesPanel } from '../components/packages-panel';
 import { PdfViewer } from '../components/pdf-viewer';
 import { useService } from '../di/service-provider';
@@ -55,6 +56,10 @@ export function ProjectPage() {
         <details className="packages-details" open>
           <summary>Comentários</summary>
           <CommentsPanel projectId={project.id} path={path} role={project.role} />
+        </details>
+        <details className="packages-details">
+          <summary>Membros</summary>
+          <MembersPanel projectId={project.id} isOwner={project.role === 'owner'} />
         </details>
         <details className="packages-details">
           <summary>Histórico</summary>

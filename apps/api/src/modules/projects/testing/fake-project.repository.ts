@@ -20,6 +20,19 @@ export class FakeProjects implements ProjectRepository {
     this.members.push({ projectId: row.id, userId: ownerId, role: 'owner' });
     return row;
   }
+  async listMembers(projectId: string) {
+    return this.members
+      .filter((m) => m.projectId === projectId)
+      .map((m) => ({ userId: m.userId, name: m.userId, email: m.userId, role: m.role }));
+  }
+  async setMember(projectId: string, userId: string, role: ProjectRole) {
+    const existing = this.members.find((m) => m.projectId === projectId && m.userId === userId);
+    if (existing) existing.role = role;
+    else this.members.push({ projectId, userId, role });
+  }
+  async removeMember(projectId: string, userId: string) {
+    this.members = this.members.filter((m) => !(m.projectId === projectId && m.userId === userId));
+  }
   async findById(id: string) {
     return this.rows.find((p) => p.id === id) ?? null;
   }
