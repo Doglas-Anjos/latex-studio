@@ -1,5 +1,6 @@
 import { ConfigModule, DatabaseModule } from '@latex-studio/core';
 import { Controller, Get, Module } from '@nestjs/common';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { Public } from './modules/auth/presentation/decorators';
 
@@ -13,7 +14,7 @@ class HealthController {
 }
 
 @Module({
-  imports: [ConfigModule.forRoot(), DatabaseModule, AuthModule],
+  imports: [ConfigModule.forRoot(), DatabaseModule, AuthModule, AdminModule],
   controllers: [HealthController],
 })
 export class AppModule {}

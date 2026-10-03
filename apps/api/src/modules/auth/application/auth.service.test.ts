@@ -1,37 +1,12 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import type { AppConfig } from '@latex-studio/core';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { UserCredentials } from '../../users/domain/user';
-import type { NewUser, UserRepository } from '../../users/domain/user.repository';
+import { FakeUsers } from '../../users/testing/fake-user.repository';
 import type { PasswordHasher } from '../domain/password-hasher';
 import type { Session, SessionRepository } from '../domain/session.repository';
 import { AuthService } from './auth.service';
-
-class FakeUsers implements UserRepository {
-  rows: UserCredentials[] = [];
-  async findByEmail(email: string) {
-    return this.rows.find((u) => u.email === email) ?? null;
-  }
-  async findById(id: string) {
-    return this.rows.find((u) => u.id === id) ?? null;
-  }
-  async create(user: NewUser) {
-    if (this.rows.some((u) => u.email === user.email)) return null;
-    const row: UserCredentials = {
-      id: randomUUID(),
-      role: 'user',
-      status: 'pending',
-      createdAt: new Date(),
-      ...user,
-    };
-    this.rows.push(row);
-    return row;
-  }
-  async countAdmins() {
-    return this.rows.filter((u) => u.role === 'admin').length;
-  }
-}
 
 class FakeSessions implements SessionRepository {
   rows: Session[] = [];

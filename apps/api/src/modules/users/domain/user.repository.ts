@@ -16,4 +16,8 @@ export interface UserRepository {
   /** Returns null when the email is already taken. */
   create(user: NewUser): Promise<User | null>;
   countAdmins(): Promise<number>;
+  /** Newest first. */
+  list(status?: UserStatus): Promise<User[]>;
+  /** Returns null when the user does not exist. */
+  update(id: string, patch: { status?: UserStatus; role?: UserRole }): Promise<User | null>;
 }
