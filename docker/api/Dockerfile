@@ -2,8 +2,13 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 RUN corepack enable pnpm
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Every workspace package.json, so the frozen lockfile matches the workspace.
 COPY apps/api/package.json apps/api/
+COPY apps/worker/package.json apps/worker/
+COPY apps/web/package.json apps/web/
 COPY packages/core/package.json packages/core/
+COPY packages/git-store/package.json packages/git-store/
+COPY packages/latex-tools/package.json packages/latex-tools/
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm --filter @latex-studio/api... build
@@ -12,8 +17,9 @@ RUN pnpm --filter @latex-studio/api deploy --prod --legacy /out
 
 FROM node:22-alpine
 WORKDIR /app
-RUN addgroup -g 1000 app && adduser -D -u 1000 -G app app     && mkdir -p /data/repos /data/builds && chown -R app:app /data
-COPY --from=builder --chown=app:app /out .
-USER app
+# The image ships a `node` user (uid 1000); the data volumes are created owned by it.
+RUN mkdir -p /data/repos /data/builds && chown -R node:node /data
+COPY --from=builder --chown=node:node /out .
+USER node
 EXPOSE 3000
 CMD ["node", "dist/main.js"]

@@ -9,3 +9,4 @@ minimumReleaseAge: 1440
 allowBuilds:
   esbuild: true
   argon2: true
+  msgpackr-extract: false
