@@ -1,4 +1,15 @@
-import { index, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import {
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { projectEngine, projects } from './projects';
 import { users } from './users';
 
@@ -32,5 +43,9 @@ export const builds = pgTable(
     startedAt: timestamp('started_at', { withTimezone: true }),
     finishedAt: timestamp('finished_at', { withTimezone: true }),
   },
-  (t) => [index('builds_project_id_created_at_idx').on(t.projectId, t.createdAt)],
+  (t) => [
+    index('builds_project_id_created_at_idx').on(t.projectId, t.createdAt),
+    // At most one queued build per project: concurrent compile requests dedupe on insert.
+    uniqueIndex('builds_one_queued_per_project').on(t.projectId).where(sql`${t.status} = 'queued'`),
+  ],
 );

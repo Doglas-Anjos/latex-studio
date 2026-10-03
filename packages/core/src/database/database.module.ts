@@ -3,7 +3,7 @@ import { Global, Inject, Module } from '@nestjs/common';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import type { AppConfig } from '../config/config.schema';
+import type { WorkerConfig } from '../config/config.schema';
 import { APP_CONFIG } from '../config/config.schema';
 import * as schema from './schema';
 
@@ -18,7 +18,7 @@ const PG_CLIENT = Symbol('PG_CLIENT');
     {
       provide: PG_CLIENT,
       inject: [APP_CONFIG],
-      useFactory: (config: AppConfig) => postgres(config.DATABASE_URL),
+      useFactory: (config: WorkerConfig) => postgres(config.DATABASE_URL),
     },
     {
       provide: DATABASE,

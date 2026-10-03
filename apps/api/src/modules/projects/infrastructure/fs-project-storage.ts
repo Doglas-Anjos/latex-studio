@@ -13,7 +13,7 @@ import type { ProjectFiles, ProjectStorage } from '../domain/project-storage';
 export class FsProjectStorage implements ProjectStorage {
   private readonly root: SafePath;
 
-  constructor(@Inject(APP_CONFIG) config: AppConfig) {
+  constructor(@Inject(APP_CONFIG) private readonly config: AppConfig) {
     this.root = new SafePath(config.REPOS_DIR);
   }
 
@@ -27,8 +27,11 @@ export class FsProjectStorage implements ProjectStorage {
     return this.files(dir, GitRepository.open(dir));
   }
 
+  /** Deletes the repository and the project's compile outputs. */
   async remove(projectId: string): Promise<void> {
     await rm(this.root.resolve(projectId), { recursive: true, force: true });
+    const builds = new SafePath(this.config.BUILDS_DIR).resolve(projectId);
+    await rm(builds, { recursive: true, force: true });
   }
 
   private files(dir: string, repo: GitRepository): ProjectFiles {

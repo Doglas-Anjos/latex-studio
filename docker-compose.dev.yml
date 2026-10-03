@@ -18,11 +18,11 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory 64mb --maxmemory-policy noeviction --save ""
+    command: redis-server --requirepass ${REDIS_PASSWORD:-devpass} --maxmemory 64mb --maxmemory-policy noeviction --save ""
     ports:
       - "${REDIS_PORT:-6379}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-devpass}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5

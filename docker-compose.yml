@@ -19,10 +19,10 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --maxmemory 64mb --maxmemory-policy noeviction --save ""
+    command: redis-server --requirepass ${REDIS_PASSWORD} --maxmemory 64mb --maxmemory-policy noeviction --save ""
     mem_limit: 96m
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,6 +35,7 @@ services:
       context: .
       dockerfile: docker/api/Dockerfile
     env_file: .env
+    init: true
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,7 +60,18 @@ services:
     build:
       context: .
       dockerfile: docker/texlive/Dockerfile
-    env_file: .env
+    # Only what the worker needs: no session secret, no admin password (TeX runs as the same uid).
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      REPOS_DIR: /data/repos
+      BUILDS_DIR: /data/builds
+      COMPILE_CONCURRENCY: ${COMPILE_CONCURRENCY:-1}
+      COMPILE_TIMEOUT_MS: ${COMPILE_TIMEOUT_MS:-180000}
+      COMPILE_MEMORY_MB: ${COMPILE_MEMORY_MB:-1024}
+    # Reaps TeX processes orphaned by a timeout kill.
+    init: true
     depends_on:
       postgres:
         condition: service_healthy

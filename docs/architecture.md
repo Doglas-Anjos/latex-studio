@@ -170,7 +170,7 @@ O **conteúdo dos arquivos não fica no banco**: a árvore de trabalho do Git no
 - Limites: 1 job ativo por projeto, 3 na fila por usuário, 10 pedidos/min/usuário.
 - Worker copia snapshot do working tree para `/tmp/job-<id>/` (tmpfs), roda:
   `latexmk -<engine> -interaction=nonstopmode -halt-on-error -no-shell-escape -synctex=1 -output-directory=out main.tex` sob `timeout 180s`, `ulimit -v`, `openin_any=p` / `openout_any=p` no `texmf.cnf`.
-- Container do worker: `network_mode: none`, `read_only: true`, `tmpfs /tmp`, usuário sem privilégio, `cap_drop: ALL`, `security_opt: no-new-privileges`, `pids_limit: 256`, `mem_limit`. Opcional: runtime gVisor (`runsc`) na VPS.
+- Container do worker: rede `internal` sem saída para a internet (precisa de Postgres e Redis), `read_only: true`, `tmpfs /tmp`, `init: true` (reap de zumbis), usuário sem privilégio, `cap_drop: ALL`, `security_opt: no-new-privileges`, `pids_limit: 256`, `mem_limit`; recebe só as variáveis que usa (sem segredos da API); Redis com senha; `latexmk -norc`, `lualatex --safer`, `HOME`/`TEXMF*` fora do snapshot. Limitação conhecida: o TeX roda com o mesmo uid do worker; execução de código no TeX alcançaria Redis/Postgres. Opcional: runtime gVisor (`runsc`) na VPS.
 - Saída: PDF + log + synctex em `/data/builds/...`; log parseado em erros/avisos (`latex-tools`); status (`queued → running → done|failed|timeout`, posição na fila) enviado ao cliente por WebSocket.
 - PDF servido por rota autenticada com streaming; PDF.js com SyncTeX ida/volta.
 - Mesma fila atende `export` (pandoc), `wordcount` (texcount) e `autocommit`, com prioridades (compile > export > autocommit).

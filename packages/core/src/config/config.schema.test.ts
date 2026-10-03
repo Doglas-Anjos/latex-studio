@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { loadConfig } from './config.schema';
+import { loadConfig, loadWorkerConfig } from './config.schema';
 
 const valid = {
   NODE_ENV: 'test',
@@ -27,5 +27,14 @@ describe('loadConfig', () => {
   it('names the invalid field when SESSION_SECRET is missing', () => {
     const { SESSION_SECRET: _omit, ...env } = valid;
     expect(() => loadConfig(env)).toThrow(/SESSION_SECRET/);
+  });
+});
+
+describe('loadWorkerConfig', () => {
+  it('accepts an env without the API secrets', () => {
+    const { SESSION_SECRET: _s, ADMIN_PASSWORD: _p, ADMIN_EMAIL: _e, APP_URL: _u, ...env } = valid;
+    const config = loadWorkerConfig(env);
+    expect(config.COMPILE_TIMEOUT_MS).toBe(1000);
+    expect('SESSION_SECRET' in config).toBe(false);
   });
 });

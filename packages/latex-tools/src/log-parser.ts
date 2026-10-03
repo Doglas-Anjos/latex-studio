@@ -16,6 +16,13 @@ export function parseLatexLog(log: string): { errors: LogEntry[]; warnings: LogE
   for (let i = 0; i < lines.length; i++) {
     const text = lines[i] ?? '';
 
+    // `-file-line-error` format: `./chapters/intro.tex:12: Undefined control sequence.`
+    const [, locFile, locLine, locMessage] = /^(\S[^:]*?):(\d+): (.*)$/.exec(text) ?? [];
+    if (locFile && locLine && locMessage?.trim() && !locMessage.trim().startsWith('==>')) {
+      errors.push({ file: locFile, line: Number(locLine), message: locMessage.trim() });
+      continue;
+    }
+
     if (text.startsWith('! ')) {
       const entry: LogEntry = { message: text.slice(2).trim(), ...withFile() };
       for (let j = i + 1; j < Math.min(i + 10, lines.length); j++) {

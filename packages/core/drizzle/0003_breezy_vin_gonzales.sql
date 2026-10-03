@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "builds_one_queued_per_project" ON "builds" USING btree ("project_id") WHERE "builds"."status" = 'queued';

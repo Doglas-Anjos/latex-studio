@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -35,6 +35,7 @@ describe('ProjectsService', () => {
     dir = await mkdtemp(join(tmpdir(), 'projects-'));
     const config = {
       REPOS_DIR: dir,
+      BUILDS_DIR: join(dir, 'builds'),
       PROJECT_QUOTA_MB: 1,
       MAX_PROJECTS_PER_USER: 2,
     } as AppConfig;
@@ -72,9 +73,11 @@ describe('ProjectsService', () => {
     await expect(service.remove(project, bob)).rejects.toBeInstanceOf(ForbiddenException);
     expect(existsSync(join(dir, project.id))).toBe(true);
 
+    await mkdir(join(dir, 'builds', project.id, 'b1'), { recursive: true });
     await service.remove(project, ana);
     expect(projects.rows).toHaveLength(0);
     expect(existsSync(join(dir, project.id))).toBe(false);
+    expect(existsSync(join(dir, 'builds', project.id))).toBe(false);
   });
 
   it('caps the number of projects per owner with 409', async () => {

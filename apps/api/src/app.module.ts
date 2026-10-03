@@ -3,6 +3,8 @@ import { Controller, Get, Module } from '@nestjs/common';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { Public } from './modules/auth/presentation/decorators';
+import { CollabModule } from './modules/collab/collab.module';
+import { CompileModule } from './modules/compile/compile.module';
 import { FilesModule } from './modules/files/files.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 
@@ -23,6 +25,8 @@ class HealthController {
     AdminModule,
     ProjectsModule,
     FilesModule,
+    CollabModule,
+    CompileModule,
   ],
   controllers: [HealthController],
 })

@@ -37,3 +37,14 @@ it('parses errors and warnings with file and line', () => {
     },
   ]);
 });
+
+it('parses -file-line-error style errors', () => {
+  const log = [
+    't.tex:3: Undefined control sequence.',
+    String.raw`l.3 \undefinedmacro`,
+    't.tex:3:  ==> Fatal error occurred, no output PDF file produced!',
+  ].join('\n');
+  expect(parseLatexLog(log).errors).toEqual([
+    { file: 't.tex', line: 3, message: 'Undefined control sequence.' },
+  ]);
+});
