@@ -19,6 +19,7 @@ export interface JobStatus<T = unknown> {
 export interface ToolsService {
   wordCount(projectId: string): Promise<{ jobId: string }>;
   requestExport(projectId: string, format: ExportFormat): Promise<{ jobId: string }>;
+  format(projectId: string, path: string): Promise<{ jobId: string }>;
   jobStatus<T = unknown>(projectId: string, jobId: string): Promise<JobStatus<T>>;
   downloadJobFile(projectId: string, jobId: string, filename: string): Promise<void>;
 }
@@ -34,6 +35,10 @@ export class HttpToolsService implements ToolsService {
 
   requestExport(projectId: string, format: ExportFormat) {
     return this.api.post<{ jobId: string }>(`/projects/${projectId}/export/${format}`);
+  }
+
+  format(projectId: string, path: string) {
+    return this.api.post<{ jobId: string }>(`/projects/${projectId}/format`, { path });
   }
 
   jobStatus<T = unknown>(projectId: string, jobId: string) {

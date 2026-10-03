@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { type ExecFileOptionsWithStringEncoding, execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -61,6 +61,36 @@ export function parseTexcount(raw: string): WordCount | { raw: string } {
   return { words: Number(m[1]), headers: Number(m[2]), captions: Number(m[3]), raw };
 }
 
+const FORMATTABLE = /\.(tex|sty|cls|bib)$/i;
+const MAX_FORMAT_BYTES = 1024 * 1024;
+
+/**
+ * `latexindent` to stdout (no `-w`, the snapshot is never written back). No `-l`: without it
+ * latexindent ignores localSettings.yaml/.latexindent.yaml in the project (`-l=` would load them),
+ * and HOME is an empty dir, so no indentconfig.yaml either. indent.log lands next to the file.
+ */
+async function formatFile(
+  dir: string,
+  path: string,
+  options: Omit<ExecFileOptionsWithStringEncoding, 'encoding'>,
+): Promise<{ text: string }> {
+  const abs = new SafePath(dir).resolve(path);
+  if (path.split('/').some((s) => s.startsWith('-')) || !FORMATTABLE.test(path)) {
+    throw new Error(`Invalid path: ${path}`);
+  }
+  const info = await stat(abs).catch(() => undefined);
+  if (!info?.isFile()) throw new Error('File not found');
+  if (info.size > MAX_FORMAT_BYTES) throw new Error('File too large to format (max 1 MB)');
+  const args = ["-y=defaultIndent: '  '", '-g=indent.log', path];
+  const { stdout } = await run('latexindent', args, { ...options, timeout: 60_000 }).catch(
+    (e: { stderr?: string; message: string }) => {
+      const lines = (e.stderr || e.message).split('\n').slice(0, 5).join('\n');
+      throw new Error(lines.replace(/[^\t\n\x20-\x7e]/g, '').slice(0, 500));
+    },
+  );
+  return { text: stdout };
+}
+
 const fail = (e: unknown): never => {
   const err = e as { stderr?: string; message: string };
   throw new Error((err.stderr || err.message).slice(0, MAX_STDERR));
@@ -91,6 +121,7 @@ export class ToolsProcessor extends WorkerHost {
       env: { PATH: process.env.PATH, HOME: home },
     };
     try {
+      if (job.data.kind === 'format') return await formatFile(tmp, job.data.path, options);
       new SafePath(tmp).resolve(project.mainFile); // throws on `..`, absolute or odd names
       if (project.mainFile.startsWith('-')) throw new Error('Invalid main file');
       const files = await listTree(tmp);

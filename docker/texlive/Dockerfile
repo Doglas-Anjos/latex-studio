@@ -15,10 +15,13 @@ RUN pnpm --filter @latex-studio/worker... build
 # pnpm 12 deploy needs --legacy to flatten workspace packages
 RUN pnpm --filter @latex-studio/worker deploy --prod --legacy /out
 
-# Full TeX Live (latexmk, texcount included); pandoc from Debian; node copied from the official image
+# Full TeX Live (latexmk, texcount, latexindent included); pandoc and latexindent's Perl modules
+# from Debian; node copied from the official image
 FROM texlive/texlive:latest
 RUN apt-get update && apt-get install -y --no-install-recommends pandoc \
+    libyaml-tiny-perl libfile-homedir-perl liblog-log4perl-perl libunicode-linebreak-perl \
     && rm -rf /var/lib/apt/lists/*
+RUN latexindent --version
 COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
 # uid 1000 may or may not exist in the base image; the process and the volumes use the number.
 RUN (getent passwd 1000 >/dev/null || (groupadd -g 1000 worker && useradd -u 1000 -g 1000 worker)) \

@@ -94,6 +94,29 @@ describe('ExportService', () => {
     await expect(exporter.jobStatus({ id: 'p1' } as Project, '1')).rejects.toThrow('Job not found');
   });
 
+  it('enqueues a format job for a valid path only', async () => {
+    const added: unknown[] = [];
+    const queue = {
+      add: async (_: string, data: unknown) => {
+        added.push(data);
+        return { id: '7' };
+      },
+    };
+    const storage = new FsProjectStorage({ REPOS_DIR: dir, BUILDS_DIR: dir } as AppConfig);
+    const exporter = new ExportService(
+      storage,
+      {} as never,
+      queue as never,
+      {
+        BUILDS_DIR: dir,
+      } as AppConfig,
+    );
+    const project = { id: 'p1' } as Project;
+    await expect(exporter.requestFormat(project, 'chap/a.tex')).resolves.toEqual({ jobId: '7' });
+    expect(added).toEqual([{ projectId: 'p1', kind: 'format', path: 'chap/a.tex' }]);
+    expect(() => exporter.requestFormat(project, '../x.tex')).toThrow('Invalid path');
+  });
+
   it('slugifies names', () => {
     expect(slugify(' Minha Tese! ')).toBe('minha-tese');
     expect(slugify('!!!')).toBe('project');

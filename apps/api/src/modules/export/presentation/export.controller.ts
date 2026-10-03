@@ -22,6 +22,8 @@ import {
 } from '../../projects/presentation/guards/project-role.guard';
 import type { User } from '../../users/domain/user';
 import { ExportService, type JobStatus, slugify } from '../application/export.service';
+// biome-ignore lint/style/useImportType: ValidationPipe needs the DTO class in design:paramtypes
+import { FormatDto } from './export.dto';
 
 const RATE_LIMIT = { rateLimit: { max: 10, timeWindow: '1 minute' } };
 
@@ -90,6 +92,14 @@ export class ExportController {
   ): Promise<{ jobId: string }> {
     if (!Object.hasOwn(TYPES, format)) throw new BadRequestException('Unknown format');
     return this.exporter.requestExport(project, format as ExportFormat);
+  }
+
+  @RouteConfig(RATE_LIMIT)
+  @Post('format')
+  @RequireProjectRole('editor')
+  @HttpCode(202)
+  format(@CurrentProject() project: Project, @Body() dto: FormatDto): Promise<{ jobId: string }> {
+    return this.exporter.requestFormat(project, dto.path);
   }
 
   @Get('jobs/:jobId')

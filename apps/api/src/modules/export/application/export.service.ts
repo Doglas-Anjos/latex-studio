@@ -13,6 +13,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import { ZipFile } from 'yazl';
+import { checkPath } from '../../projects/application/project-files';
 import { ProjectsService } from '../../projects/application/projects.service';
 import { type Project, parseProjectName } from '../../projects/domain/project';
 import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/project-storage';
@@ -90,6 +91,11 @@ export class ExportService {
 
   requestExport(project: Project, format: ExportFormat): Promise<{ jobId: string }> {
     return this.enqueue({ projectId: project.id, kind: 'export', format });
+  }
+
+  requestFormat(project: Project, path: string): Promise<{ jobId: string }> {
+    checkPath(this.storage.open(project.id), path);
+    return this.enqueue({ projectId: project.id, kind: 'format', path });
   }
 
   async jobStatus(project: Project, jobId: string): Promise<JobStatus> {
