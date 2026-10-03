@@ -1,0 +1,245 @@
+/* LaTeX Studio: "ink on paper". Warm paper background, deep ink-blue primary,
+   vermilion (editor's red pen) reserved for destructive actions. Serif display
+   (system serif stack; no external fonts, CSP is default-src self) for headings and brand, system sans for UI. */
+:root {
+  --paper: #f7f3ea;
+  --surface: #fffdf8;
+  --ink: #1d2433;
+  --muted: #6a7080;
+  --line: #ded7c6;
+  --primary: #1f3a68;
+  --primary-ink: #fffdf8;
+  --danger: #b3321f;
+  --focus: #c9921b;
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #14171f;
+    --surface: #1c202b;
+    --ink: #ece7da;
+    --muted: #9aa0b0;
+    --line: #2d3342;
+    --primary: #8fb0ee;
+    --primary-ink: #11151f;
+    --danger: #ef7a66;
+    --focus: #e3b04b;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px / 1.5 var(--font-ui);
+}
+
+h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1.75rem;
+  margin: 0 0 1rem;
+  letter-spacing: -0.01em;
+}
+
+a {
+  color: var(--primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.brand {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--primary);
+  text-decoration: none;
+  margin: 0;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 1.5rem;
+}
+
+.btn {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--ink);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--line);
+}
+
+.form {
+  display: grid;
+  gap: 1rem;
+}
+.field {
+  display: grid;
+  gap: 0.3rem;
+}
+.field label {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.field input {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.form-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.auth-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+.auth-card {
+  width: min(100%, 24rem);
+}
+.auth-alt {
+  margin: 1.25rem 0 0;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+.app-header nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+.user-email {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.app-main {
+  max-width: 60rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.empty {
+  text-align: center;
+  color: var(--muted);
+}
+.status-note {
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+}
+.tabs button {
+  font: inherit;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 1rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tabs button[aria-selected="true"] {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  font-weight: 600;
+}
+
+.user-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.user-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.user-list li:last-child {
+  border-bottom: 0;
+}
+.user-list .muted {
+  display: block;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+@media (max-width: 36rem) {
+  .user-email {
+    display: none;
+  }
+  .user-list li {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
