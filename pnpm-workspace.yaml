@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+
+# Supply-chain policy: refuse versions published less than 24h ago
+minimumReleaseAge: 1440
+
+# Native build scripts allowed to run on install (reviewed)
+allowBuilds:
+  esbuild: true
