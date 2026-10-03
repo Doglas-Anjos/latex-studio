@@ -32,6 +32,7 @@ export interface CompileService {
   builds(projectId: string, limit?: number): Promise<Build[]>;
   pdf(projectId: string, buildId: string): Promise<ArrayBuffer>;
   logUrl(projectId: string, buildId: string): string;
+  pdfUrl(projectId: string, buildId: string): string;
 }
 
 export const CompileServiceToken = createToken<CompileService>('CompileService');
@@ -54,5 +55,9 @@ export class HttpCompileService implements CompileService {
 
   logUrl(projectId: string, buildId: string) {
     return `/api/projects/${projectId}/builds/${buildId}/log`;
+  }
+
+  pdfUrl(projectId: string, buildId: string) {
+    return `/api/projects/${projectId}/builds/${buildId}/pdf`;
   }
 }

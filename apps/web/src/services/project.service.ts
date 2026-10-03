@@ -25,6 +25,7 @@ export interface ProjectService {
   create(name: string): Promise<Project>;
   remove(id: string): Promise<void>;
   import(input: ImportInput): Promise<Project>;
+  sourceZipUrl(projectId: string): string;
 }
 
 export const ProjectServiceToken = createToken<ProjectService>('ProjectService');
@@ -54,5 +55,9 @@ export class HttpProjectService implements ProjectService {
     if ('archive' in input) form.append('archive', input.archive);
     else for (const { file, path } of input.files) form.append('files', file, path);
     return this.api.postForm<Project>('/projects/import', form);
+  }
+
+  sourceZipUrl(projectId: string) {
+    return `/api/projects/${projectId}/export/source.zip`;
   }
 }

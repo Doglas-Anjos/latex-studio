@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useService } from '../di/service-provider';
 import { CompileServiceToken, isActive, type LogEntry } from '../services/compile.service';
+import { ProjectServiceToken } from '../services/project.service';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { useBuilds } from './use-builds';
@@ -15,6 +16,7 @@ const statusText = {
 
 export function BuildPanel({ projectId, canCompile }: { projectId: string; canCompile: boolean }) {
   const compile = useService(CompileServiceToken);
+  const projects = useService(ProjectServiceToken);
   const queryClient = useQueryClient();
   const { data: builds } = useBuilds(projectId);
   const build = builds?.[0];
@@ -43,6 +45,17 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             ver log
           </a>
         )}
+        <details className="menu">
+          <summary>Baixar</summary>
+          <a href={projects.sourceZipUrl(projectId)} download>
+            Fonte (.zip)
+          </a>
+          {build?.status === 'succeeded' && (
+            <a href={compile.pdfUrl(projectId, build.id)} download>
+              PDF
+            </a>
+          )}
+        </details>
       </div>
       {start.error && <p className="form-error">{start.error.message}</p>}
       {build && (

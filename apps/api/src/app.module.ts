@@ -5,7 +5,9 @@ import { AuthModule } from './modules/auth/auth.module';
 import { Public } from './modules/auth/presentation/decorators';
 import { CollabModule } from './modules/collab/collab.module';
 import { CompileModule } from './modules/compile/compile.module';
+import { ExportModule } from './modules/export/export.module';
 import { FilesModule } from './modules/files/files.module';
+import { PackagesModule } from './modules/packages/packages.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 
 @Controller('health')
@@ -27,6 +29,8 @@ class HealthController {
     FilesModule,
     CollabModule,
     CompileModule,
+    ExportModule,
+    PackagesModule,
   ],
   controllers: [HealthController],
 })
