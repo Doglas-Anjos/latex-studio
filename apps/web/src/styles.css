@@ -13,21 +13,67 @@
   --focus: #c9921b;
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color-scheme: light dark;
+  --ok: #3f6b4a;
+  --syn-command: #1f3a68;
+  --syn-env: #5a3a7a;
+  --syn-math: #1d6a6a;
+  --syn-brace: #8a7a5a;
+  --syn-string: #4a6b3a;
+  --syn-ref: #8f6410;
+  --syn-heading: #14284a;
+  --syn-comment: #7a6f5f;
+  --syn-number: #2b5d8f;
+  --syn-verbatim: #6a5040;
+  --syn-emphasis: #7a4a5a;
+  --syn-invalid: #b3321f;
+  --peer-1: #b3321f;
+  --peer-2: #1f6fa8;
+  --peer-3: #3f7a3a;
+  --peer-4: #8a5a00;
+  --peer-5: #7a3f8f;
+  --peer-6: #0f7a7a;
+  --peer-7: #a8456f;
+  --peer-8: #5a5f6a;
+  --editor-font: ui-monospace, "Cascadia Code", Consolas, monospace;
+  --editor-font-size: 14px;
+  --sidebar-w: 260px;
+  --pdf-w: 480px;
+  --panel-h: 220px;
+  color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #14171f;
-    --surface: #1c202b;
-    --ink: #ece7da;
-    --muted: #9aa0b0;
-    --line: #2d3342;
-    --primary: #8fb0ee;
-    --primary-ink: #11151f;
-    --danger: #ef7a66;
-    --focus: #e3b04b;
-  }
+:root[data-theme="dark"] {
+  --paper: #14171f;
+  --surface: #1c202b;
+  --ink: #ece7da;
+  --muted: #9aa0b0;
+  --line: #2d3342;
+  --primary: #8fb0ee;
+  --primary-ink: #11151f;
+  --danger: #ef7a66;
+  --focus: #e3b04b;
+  --ok: #7fc08a;
+  --syn-command: #8fb0ee;
+  --syn-env: #c3a0e8;
+  --syn-math: #6fcaca;
+  --syn-brace: #a89a78;
+  --syn-string: #9fc588;
+  --syn-ref: #e3b04b;
+  --syn-heading: #b8cdf5;
+  --syn-comment: #8f8a7c;
+  --syn-number: #7fb4e8;
+  --syn-verbatim: #d0a890;
+  --syn-emphasis: #e0a0b4;
+  --syn-invalid: #ef7a66;
+  --peer-1: #ef7a66;
+  --peer-2: #6fb4ee;
+  --peer-3: #8fd08a;
+  --peer-4: #e3b04b;
+  --peer-5: #c79ae0;
+  --peer-6: #6fd0d0;
+  --peer-7: #ee8fb4;
+  --peer-8: #aab0bc;
+  color-scheme: dark;
 }
 
 * {
@@ -268,10 +314,8 @@ a {
 :root {
   --warn: #9a6a00;
 }
-@media (prefers-color-scheme: dark) {
-  :root {
-    --warn: #e3b04b;
-  }
+:root[data-theme="dark"] {
+  --warn: #e3b04b;
 }
 .app-main:has(.workspace) {
   max-width: none;
@@ -667,4 +711,13 @@ a {
 .member-item select {
   font: inherit;
   padding: 0.15rem 0.3rem;
+}
+.badge {
+  font-size: 0.7rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+.package-usage {
+  opacity: 0.7;
 }
