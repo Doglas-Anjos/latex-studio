@@ -1,0 +1,36 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+
+  - package-ecosystem: docker
+    directory: "/docker/api"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+
+  - package-ecosystem: docker
+    directory: "/docker/texlive"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+
+  - package-ecosystem: docker
+    directory: "/docker/web"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
