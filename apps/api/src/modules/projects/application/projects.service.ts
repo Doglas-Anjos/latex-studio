@@ -50,6 +50,7 @@ export class ProjectsService {
     @Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage,
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Optional() @Inject(AuditService) private readonly audit?: AuditService,
   ) {}
 
   create(owner: User, name: string): Promise<Project> {
@@ -144,6 +145,7 @@ export class ProjectsService {
     }
     await this.projects.delete(project.id);
     await this.storage.remove(project.id);
+    await this.audit?.record(user.id, 'project.delete', project.id, { name: project.name });
   }
 
   private async assertProjectCap(owner: User) {

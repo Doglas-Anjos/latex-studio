@@ -1,10 +1,20 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { AuditService } from '../../audit/audit.service';
 import type { User, UserRole, UserStatus } from '../../users/domain/user';
 import { USER_REPOSITORY, type UserRepository } from '../../users/domain/user.repository';
 
 @Injectable()
 export class AdminService {
-  constructor(@Inject(USER_REPOSITORY) private readonly users: UserRepository) {}
+  constructor(
+    @Inject(USER_REPOSITORY) private readonly users: UserRepository,
+    @Optional() @Inject(AuditService) private readonly audit?: AuditService,
+  ) {}
 
   listUsers(status?: UserStatus): Promise<User[]> {
     return this.users.list(status);
@@ -26,6 +36,7 @@ export class AdminService {
     }
     const user = await this.users.update(id, patch);
     if (!user) throw new NotFoundException('User not found');
+    await this.audit?.record(actor.id, 'user.update', id, patch);
     return user;
   }
 }

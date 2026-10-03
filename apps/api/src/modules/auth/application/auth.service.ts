@@ -5,8 +5,10 @@ import {
   Inject,
   Injectable,
   type OnApplicationBootstrap,
+  Optional,
   UnauthorizedException,
 } from '@nestjs/common';
+import { AuditService } from '../../audit/audit.service';
 import type { User } from '../../users/domain/user';
 import { USER_REPOSITORY, type UserRepository } from '../../users/domain/user.repository';
 import { PASSWORD_HASHER, type PasswordHasher } from '../domain/password-hasher';
@@ -28,6 +30,7 @@ export class AuthService implements OnApplicationBootstrap {
     @Inject(SESSION_REPOSITORY) private readonly sessions: SessionRepository,
     @Inject(PASSWORD_HASHER) private readonly hasher: PasswordHasher,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Optional() @Inject(AuditService) private readonly audit?: AuditService,
   ) {
     this.dummyHash = hasher.hash(randomBytes(32).toString('hex'));
   }
@@ -52,7 +55,8 @@ export class AuthService implements OnApplicationBootstrap {
   /** Same outcome whether or not the email exists, so registration is not an email oracle. */
   async register(email: string, name: string, password: string): Promise<void> {
     const passwordHash = await this.hasher.hash(password);
-    await this.users.create({ email: normalizeEmail(email), name, passwordHash });
+    const user = await this.users.create({ email: normalizeEmail(email), name, passwordHash });
+    if (user) await this.audit?.record(user.id, 'auth.register');
   }
 
   async login(email: string, password: string): Promise<{ token: string; user: User }> {
@@ -70,6 +74,7 @@ export class AuthService implements OnApplicationBootstrap {
       expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     });
     const { passwordHash: _, ...publicUser } = user;
+    await this.audit?.record(user.id, 'auth.login');
     return { token, user: publicUser };
   }
 

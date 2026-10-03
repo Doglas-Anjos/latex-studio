@@ -10,12 +10,14 @@ import {
   Patch,
   Post,
 } from '@nestjs/common';
+import { CurrentUser } from '../../auth/presentation/decorators';
 import type { Project } from '../../projects/domain/project';
 import type { Member } from '../../projects/domain/project.repository';
 import {
   CurrentProject,
   RequireProjectRole,
 } from '../../projects/presentation/guards/project-role.guard';
+import type { User } from '../../users/domain/user';
 import { MembersService } from '../application/members.service';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
 import { InviteDto, SetRoleDto } from './members.dto';
@@ -32,8 +34,12 @@ export class MembersController {
 
   @Post()
   @RequireProjectRole('owner')
-  invite(@CurrentProject() project: Project, @Body() dto: InviteDto): Promise<Member[]> {
-    return this.members.invite(project, dto.email, dto.role);
+  invite(
+    @CurrentProject() project: Project,
+    @CurrentUser() actor: User,
+    @Body() dto: InviteDto,
+  ): Promise<Member[]> {
+    return this.members.invite(project, actor.id, dto.email, dto.role);
   }
 
   @Patch(':userId')
@@ -51,8 +57,9 @@ export class MembersController {
   @HttpCode(204)
   remove(
     @CurrentProject() project: Project,
+    @CurrentUser() actor: User,
     @Param('userId', ParseUUIDPipe) userId: string,
   ): Promise<void> {
-    return this.members.remove(project, userId);
+    return this.members.remove(project, actor.id, userId);
   }
 }

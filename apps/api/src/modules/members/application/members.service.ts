@@ -1,4 +1,11 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { AuditService } from '../../audit/audit.service';
 import type { Project, ProjectRole } from '../../projects/domain/project';
 import {
   type Member,
@@ -12,6 +19,7 @@ export class MembersService {
   constructor(
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
+    @Optional() @Inject(AuditService) private readonly audit?: AuditService,
   ) {}
 
   list(project: Project): Promise<Member[]> {
@@ -19,7 +27,12 @@ export class MembersService {
   }
 
   /** Invites an existing active account by email. Only the owner reaches this (route guard). */
-  async invite(project: Project, email: string, role: ProjectRole): Promise<Member[]> {
+  async invite(
+    project: Project,
+    actorId: string,
+    email: string,
+    role: ProjectRole,
+  ): Promise<Member[]> {
     const user = await this.users.findByEmail(email.trim().toLowerCase());
     if (user?.status !== 'active') {
       throw new NotFoundException('No active user with that email');
@@ -28,6 +41,7 @@ export class MembersService {
       throw new BadRequestException('The owner role cannot be assigned');
     }
     await this.projects.setMember(project.id, user.id, role);
+    await this.audit?.record(actorId, 'member.invite', project.id, { userId: user.id, role });
     return this.list(project);
   }
 
@@ -42,8 +56,9 @@ export class MembersService {
     return this.list(project);
   }
 
-  async remove(project: Project, userId: string): Promise<void> {
+  async remove(project: Project, actorId: string, userId: string): Promise<void> {
     if (userId === project.ownerId) throw new BadRequestException('The owner cannot be removed');
     await this.projects.removeMember(project.id, userId);
+    await this.audit?.record(actorId, 'member.remove', project.id, { userId });
   }
 }

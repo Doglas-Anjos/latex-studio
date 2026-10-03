@@ -24,26 +24,28 @@ describe('MembersService', () => {
   });
 
   it('invites an active user by email and lists the membership', async () => {
-    const members = await service.invite(project, 'Ana@Example.com', 'reviewer');
+    const members = await service.invite(project, 'owner-1', 'Ana@Example.com', 'reviewer');
     expect(members.map((m) => m.role).sort()).toEqual(['owner', 'reviewer']);
     expect(await projects.roleOf('p1', anaId)).toBe('reviewer');
   });
 
   it('rejects unknown emails and the owner role', async () => {
-    await expect(service.invite(project, 'nobody@example.com', 'editor')).rejects.toThrow(
-      NotFoundException,
-    );
-    await expect(service.invite(project, 'ana@example.com', 'owner')).rejects.toThrow(
+    await expect(
+      service.invite(project, 'owner-1', 'nobody@example.com', 'editor'),
+    ).rejects.toThrow(NotFoundException);
+    await expect(service.invite(project, 'owner-1', 'ana@example.com', 'owner')).rejects.toThrow(
       BadRequestException,
     );
   });
 
   it('changes a role and removes a member, never the owner', async () => {
-    await service.invite(project, 'ana@example.com', 'viewer');
+    await service.invite(project, 'owner-1', 'ana@example.com', 'viewer');
     await service.setRole(project, anaId, 'editor');
     expect(await projects.roleOf('p1', anaId)).toBe('editor');
-    await service.remove(project, anaId);
+    await service.remove(project, 'owner-1', anaId);
     expect(await projects.roleOf('p1', anaId)).toBeNull();
-    await expect(service.remove(project, 'owner-1')).rejects.toThrow(BadRequestException);
+    await expect(service.remove(project, 'owner-1', 'owner-1')).rejects.toThrow(
+      BadRequestException,
+    );
   });
 });
