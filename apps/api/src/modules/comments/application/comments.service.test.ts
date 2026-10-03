@@ -12,8 +12,6 @@ const user = (name: string): User => ({
   id: randomUUID(),
   email: `${name}@example.com`,
   name,
-  role: 'user',
-  status: 'active',
   createdAt: new Date(),
 });
 

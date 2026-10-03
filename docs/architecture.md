@@ -125,8 +125,7 @@ apps/api/src/modules/<dominio>/
 
 ## Modelo de dados (Postgres)
 
-- `users` (email, senha argon2id, role `admin|user`, status `pending|active|blocked`, email_verified)
-- `sessions` (cookie httpOnly; expira; revogável)
+- `users` (issuer + subject do JWT, email, name) — criado na primeira visita; sem senha, sem sessão
 - `projects` (owner, nome, main_file, engine `pdflatex|xelatex|lualatex`, quota_bytes, dirty_since)
 - `project_members` (role `owner|editor|reviewer|viewer`) e `project_invites`
 - `yjs_docs` (project_id, path, state bytea, updated_at) — estado CRDT por arquivo
@@ -143,7 +142,7 @@ O **conteúdo dos arquivos não fica no banco**: a árvore de trabalho do Git no
 
 ### 1. Edição simultânea + Git
 - Um `Y.Doc` por arquivo de texto, nome `<projectId>/<path>`; Hocuspocus multiplexa vários docs em um WebSocket.
-- `onAuthenticate`: valida cookie de sessão e papel no projeto (viewer = somente leitura).
+- `onAuthenticate`: valida o token do FasorX (enviado pelo provider), a Origin e o papel no projeto (viewer = somente leitura).
 - `onLoadDocument`: carrega estado de `yjs_docs`; se não existir, cria a partir do arquivo no disco.
 - `onStoreDocument` (debounce 2 s, máx 10 s): grava estado em `yjs_docs`, escreve o arquivo no working tree, marca projeto `dirty`.
 - **Autocommit**: job repetido a cada 5 min commita projetos `dirty` como "Autosave" com co-autores = quem editou. Usuário também faz **commit nomeado** ("Salvar versão" com mensagem).
@@ -196,8 +195,8 @@ O **conteúdo dos arquivos não fica no banco**: a árvore de trabalho do Git no
 
 ## Segurança (código público, servidor exposto)
 
-- **Auth**: argon2id, sessão em cookie `httpOnly; Secure; SameSite=Lax`, CSRF por header custom em mutações, verificação de e-mail, conta `pending` até aprovação do admin, bloqueio após N falhas. 2FA TOTP na fase 3.
-- **Rate limit** (`@fastify/rate-limit` com Redis): login/registro 5/min/IP; API 300/min/usuário; compile 10/min; uploads 50 MB/arquivo e quota 500 MB/projeto; máx. conexões WebSocket por usuário.
+- **Identidade**: sem login próprio. O FasorX autentica e assina um JWT curto (RS256 via JWKS ou HS256), apresentado em `Authorization: Bearer`; a API fixa o algoritmo, confere `iss`/`aud`/`exp` e um teto de validade, e cria a conta na primeira visita (`iss` + `sub`). Token só em memória no navegador, nunca em URL. Sem verificador configurado, modo local, aceito só em `localhost`. CSRF por header custom continua nas mutações.
+- **Rate limit** (`@fastify/rate-limit` com Redis): API 300/min/IP; compile 10/min; uploads 50 MB/arquivo e quota 500 MB/projeto.
 - **Autorização** em toda rota por papel no projeto; projetos privados por padrão, compartilhamento por convite.
 - **Caminhos**: normalização, rejeição de `..`, absolutos, symlinks e nomes fora de allowlist; tudo resolvido dentro de `/data/repos/<id>/` e checado com `realpath`.
 - **Git**: `isomorphic-git` não executa hooks nem shell; nenhum `exec` com string concatenada em lugar nenhum.
@@ -211,17 +210,16 @@ O **conteúdo dos arquivos não fica no banco**: a árvore de trabalho do Git no
 
 Implementado e verificado contra Postgres, Redis e MiKTeX locais (104 testes automatizados):
 
-- Fase 1 completa: auth com aprovação por admin, projetos como repositórios git, arquivos, upload, importação zip/pasta, edição simultânea Yjs, fila de compilação com `latexmk` em sandbox, PDF, exportação de fonte e PDF.
+- Fase 1 completa: identidade delegada ao FasorX (JWT), projetos como repositórios git, arquivos, upload, importação zip/pasta, edição simultânea Yjs, fila de compilação com `latexmk` em sandbox, PDF, exportação de fonte e PDF.
 - Fase 2 completa: gerenciador de bibliotecas com migração de `\usepackage`, comentários ancorados com Yjs, histórico git (log, diff, commit nomeado, restaurar) sincronizado com documentos abertos, cópia de projeto, contagem de palavras, exportações DOCX/MD/HTML via pandoc (não executado localmente: só na imagem Docker), compartilhamento por convite com papéis.
 - Fase 3 parcial: rate limit em Redis, log de auditoria, backup por script, gitleaks e trivy no CI, Redis com senha, worker sem segredos da API, zip com histórico git.
 
 Desvios do plano original, por revisão de segurança:
 
-- Sem bloqueio de conta após falhas de login (permitiria trancar o admin); força bruta limitada por IP e custo do argon2.
+- Login, cadastro e aprovação por admin foram removidos: o projeto é público e a autenticação fica na aplicação da frente (FasorX), como no FitTradeoff. Convidar alguém exige que a pessoa já tenha aberto o app.
 - O worker fica na rede interna com Postgres e Redis (precisa deles), não em `network_mode: none`; o TeX roda com o mesmo uid do worker.
-- Cadastro responde sempre 202 para não revelar e-mails existentes.
 
-Imagens `docker/api` e `docker/web` construídas e a da API testada em modo produção contra Postgres e Redis. Pendente: 2FA, remoto GitHub (push/pull) e importação por URL git, track changes, links de leitura, verificação de e-mail, construção e teste da imagem `docker/texlive` (pandoc só existe nela).
+Imagens `docker/api` e `docker/web` construídas e a da API testada em modo produção contra Postgres e Redis. Pendente: emissão do token `latex` no FasorX, remoto GitHub (push/pull) e importação por URL git, track changes, links de leitura, construção e teste da imagem `docker/texlive` (pandoc só existe nela).
 
 ## Fases de implementação
 

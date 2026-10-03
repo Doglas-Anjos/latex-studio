@@ -15,8 +15,6 @@ const ana: User = {
   id: '00000000-0000-4000-8000-000000000001',
   email: 'ana@example.com',
   name: 'Ana',
-  role: 'user',
-  status: 'active',
   createdAt: new Date(),
 };
 const project = { id: '00000000-0000-4000-8000-0000000000aa' } as Project;

@@ -1,19 +1,22 @@
 import { sql } from 'drizzle-orm';
-import { check, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import { check, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-export const userRole = pgEnum('user_role', ['admin', 'user']);
-export const userStatus = pgEnum('user_status', ['pending', 'active', 'blocked']);
-
+/**
+ * One row per person the authenticator in front vouched for. `issuer` + `subject` is the stable
+ * identity (two issuers may reuse a `sub`); email and name are refreshed from the token.
+ */
 export const users = pgTable(
   'users',
   {
     id: uuid('id').primaryKey().defaultRandom(),
+    issuer: text('issuer').notNull(),
+    subject: text('subject').notNull(),
     email: text('email').notNull().unique(),
     name: text('name').notNull(),
-    passwordHash: text('password_hash').notNull(),
-    role: userRole('role').notNull().default('user'),
-    status: userStatus('status').notNull().default('pending'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check('users_email_lowercase', sql`${t.email} = lower(${t.email})`)],
+  (t) => [
+    uniqueIndex('users_issuer_subject_idx').on(t.issuer, t.subject),
+    check('users_email_lowercase', sql`${t.email} = lower(${t.email})`),
+  ],
 );

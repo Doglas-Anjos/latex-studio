@@ -16,13 +16,32 @@ const baseSchema = z.object({
   MAX_PROJECTS_PER_USER: z.coerce.number().int().positive().default(50),
 });
 
-const envSchema = baseSchema.extend({
-  APP_URL: z.url(),
-  API_PORT: z.coerce.number().int().positive().default(3000),
-  SESSION_SECRET: z.string().min(32),
-  ADMIN_EMAIL: z.email(),
-  ADMIN_PASSWORD: z.string().min(12),
-});
+const optional = (schema: z.ZodType<string>) =>
+  z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
+
+/**
+ * Identity comes from the application in front (FasorX) as a signed JWT in `Authorization`.
+ * Without a verifier (neither AUTH_JWKS_URL nor AUTH_SECRET) the API runs in local mode: every
+ * request is the local user. That is only allowed when APP_URL is localhost, so a published
+ * install cannot be left open by forgetting a variable.
+ */
+const envSchema = baseSchema
+  .extend({
+    APP_URL: z.url(),
+    API_PORT: z.coerce.number().int().positive().default(3000),
+    AUTH_JWKS_URL: optional(z.url()),
+    AUTH_SECRET: optional(z.string().min(32)),
+    AUTH_ISSUER: optional(z.string().min(1)),
+    AUTH_AUDIENCE: optional(z.string().min(1)),
+    AUTH_MAX_TOKEN_TTL_S: z.coerce.number().int().positive().default(900),
+  })
+  .refine((c) => c.AUTH_JWKS_URL || c.AUTH_SECRET || new URL(c.APP_URL).hostname === 'localhost', {
+    message: 'AUTH_JWKS_URL or AUTH_SECRET is required unless APP_URL is localhost',
+  })
+  // The same key signs tokens for every app of that issuer: pin who signs and for whom.
+  .refine((c) => !(c.AUTH_JWKS_URL || c.AUTH_SECRET) || (c.AUTH_ISSUER && c.AUTH_AUDIENCE), {
+    message: 'AUTH_ISSUER and AUTH_AUDIENCE are required with a verifier',
+  });
 
 export type AppConfig = z.output<typeof envSchema>;
 export type WorkerConfig = z.output<typeof baseSchema>;

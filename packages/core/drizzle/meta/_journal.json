@@ -43,6 +43,20 @@
       "when": 1791002769786,
       "tag": "0005_nasty_wilson_fisk",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791063341273,
+      "tag": "0006_drop_password_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791063342551,
+      "tag": "0007_identity",
+      "breakpoints": true
     }
   ]
 }

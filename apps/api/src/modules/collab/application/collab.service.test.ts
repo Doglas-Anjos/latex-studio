@@ -1,32 +1,20 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { sign } from '@fastify/cookie';
 import type { AppConfig } from '@latex-studio/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import { AuthService } from '../../auth/application/auth.service';
-import type { PasswordHasher } from '../../auth/domain/password-hasher';
-import type { Session, SessionRepository } from '../../auth/domain/session.repository';
+import { IdentityService } from '../../auth/application/identity.service';
+import type { TokenVerifier } from '../../auth/domain/token-verifier';
 import { ProjectLock } from '../../projects/application/project-lock';
 import { FsProjectStorage } from '../../projects/infrastructure/fs-project-storage';
 import { FakeProjects } from '../../projects/testing/fake-project.repository';
-import type { UserCredentials } from '../../users/domain/user';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import type { YjsDocRepository } from '../domain/yjs-doc.repository';
 import { CollabService } from './collab.service';
 
-const SECRET = 'x'.repeat(32);
 const ORIGIN = 'https://latex.example.com';
-
-class FakeSessions implements SessionRepository {
-  rows: Session[] = [];
-  create = async (s: Session) => void this.rows.push(s);
-  findByTokenHash = async (h: string) => this.rows.find((s) => s.tokenHash === h) ?? null;
-  deleteByTokenHash = async () => {};
-  deleteExpired = async () => {};
-}
 
 class FakeDocs implements YjsDocRepository {
   rows = new Map<string, Uint8Array>();
@@ -39,43 +27,47 @@ describe('CollabService', () => {
   let dir: string;
   let projects: FakeProjects;
   let users: FakeUsers;
-  let sessions: FakeSessions;
   let docs: FakeDocs;
   let storage: FsProjectStorage;
   let collab: CollabService;
   let projectId: string;
 
+  /** A token the fake verifier maps to a fresh user with the given project role. */
   const login = async (role: 'owner' | 'viewer' | null) => {
-    const user = (await users.create({
-      email: `${randomUUID()}@example.com`,
+    const subject = randomUUID();
+    const user = await users.upsert({
+      issuer: 'i',
+      subject,
+      email: `${subject}@example.com`,
       name: 'U',
-      passwordHash: 'h',
-    })) as UserCredentials;
-    user.status = 'active';
-    const token = randomUUID();
-    sessions.rows.push({
-      tokenHash: createHash('sha256').update(token).digest('hex'),
-      userId: user.id,
-      expiresAt: new Date(Date.now() + 60_000),
     });
     if (role) projects.members.push({ projectId, userId: user.id, role });
-    return `theme=dark; sid=${encodeURIComponent(sign(token, SECRET))}`;
+    return subject;
   };
 
-  const auth = (cookieHeader: string | null, origin = ORIGIN) =>
-    collab.authenticate({ cookieHeader, origin, documentName: `${projectId}/main.tex` });
+  const auth = (token: string, origin = ORIGIN) =>
+    collab.authenticate({
+      token,
+      origin,
+      host: 'latex.example.com',
+      documentName: `${projectId}/main.tex`,
+    });
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'collab-'));
-    const config = { REPOS_DIR: dir, APP_URL: `${ORIGIN}/`, SESSION_SECRET: SECRET } as AppConfig;
+    const config = { REPOS_DIR: dir, APP_URL: `${ORIGIN}/` } as AppConfig;
     projects = new FakeProjects();
     users = new FakeUsers();
-    sessions = new FakeSessions();
     docs = new FakeDocs();
     storage = new FsProjectStorage(config);
-    const hasher = { hash: async () => 'h' } as unknown as PasswordHasher;
-    const authService = new AuthService(users, sessions, hasher, config);
-    collab = new CollabService(authService, projects, storage, docs, new ProjectLock(), config);
+    const verifier: TokenVerifier = {
+      verify: async (token) => {
+        const row = users.rows.find((u) => u.subject === token);
+        return row ? { identity: row, expiresAt: Date.now() / 1000 + 60 } : null;
+      },
+    };
+    const identity = new IdentityService(users, verifier);
+    collab = new CollabService(identity, projects, storage, docs, new ProjectLock(), config);
     projectId = randomUUID();
     await projects.create({ id: projectId, name: 'P' }, randomUUID());
     const files = await storage.init(projectId);
@@ -84,17 +76,18 @@ describe('CollabService', () => {
 
   afterEach(() => rm(dir, { recursive: true, force: true }));
 
-  it('accepts an editor and rejects a wrong origin, a bad cookie or a non-member', async () => {
-    const cookie = await login('owner');
-    await expect(auth(cookie)).resolves.toMatchObject({ path: 'main.tex', readOnly: false });
-    await expect(auth(cookie, 'https://evil.example.com')).rejects.toThrow();
-    await expect(auth(cookie.replace(/sid=[^;]+/, 'sid=forged.sig'))).rejects.toThrow();
-    await expect(auth(null)).rejects.toThrow();
+  it('accepts an editor and rejects a wrong origin, a bad token or a non-member', async () => {
+    const token = await login('owner');
+    await expect(auth(token)).resolves.toMatchObject({ path: 'main.tex', readOnly: false });
+    await expect(auth(token, 'https://evil.example.com')).rejects.toThrow();
+    await expect(auth('forged')).rejects.toThrow();
+    await expect(auth('')).rejects.toThrow();
     await expect(auth(await login(null))).rejects.toThrow();
     await expect(
       collab.authenticate({
-        cookieHeader: cookie,
+        token,
         origin: ORIGIN,
+        host: 'latex.example.com',
         documentName: `${projectId}/a.png`,
       }),
     ).rejects.toThrow();

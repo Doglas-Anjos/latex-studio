@@ -1,5 +1,4 @@
 import { extname } from 'node:path';
-import { unsign } from '@fastify/cookie';
 import { APP_CONFIG, type AppConfig } from '@latex-studio/core';
 import {
   BadRequestException,
@@ -11,8 +10,7 @@ import {
 } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import * as Y from 'yjs';
-import { AuthService } from '../../auth/application/auth.service';
-import { SESSION_COOKIE } from '../../auth/presentation/guards/session.guard';
+import { IdentityService } from '../../auth/application/identity.service';
 import { ProjectLock } from '../../projects/application/project-lock';
 import {
   PROJECT_REPOSITORY,
@@ -24,21 +22,6 @@ import { YJS_DOC_REPOSITORY, type YjsDocRepository } from '../domain/yjs-doc.rep
 
 const TEXT_EXTENSIONS = new Set(['.tex', '.bib', '.sty', '.cls', '.txt', '.md', '.json']);
 
-/** `@fastify/cookie`'s parse needs the plugin loaded; this reads one URI-encoded cookie. */
-function readCookie(header: string, name: string): string | null {
-  for (const part of header.split(';')) {
-    const eq = part.indexOf('=');
-    if (eq > 0 && part.slice(0, eq).trim() === name) {
-      try {
-        return decodeURIComponent(part.slice(eq + 1).trim());
-      } catch {
-        return null;
-      }
-    }
-  }
-  return null;
-}
-
 export interface CollabSession {
   user: User;
   projectId: string;
@@ -48,12 +31,12 @@ export interface CollabSession {
 
 /**
  * Backs the Hocuspocus hooks. WebSocket upgrades bypass Nest guards, so `authenticate` checks
- * the Origin, the signed session cookie and the project role itself.
+ * the Origin, the bearer token (sent by the provider in its auth message) and the project role.
  */
 @Injectable()
 export class CollabService {
   constructor(
-    @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(IdentityService) private readonly identity: IdentityService,
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
     @Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage,
     @Inject(YJS_DOC_REPOSITORY) private readonly docs: YjsDocRepository,
@@ -78,18 +61,16 @@ export class CollabService {
   }
 
   async authenticate(input: {
-    cookieHeader: string | null;
+    token: string;
     origin: string | null;
+    host: string | null;
     documentName: string;
   }): Promise<CollabSession> {
     if (!input.origin || !this.sameOrigin(input.origin)) throw new ForbiddenException('Bad origin');
     const { projectId, path } = this.parseDocumentName(input.documentName);
 
-    const raw = input.cookieHeader ? readCookie(input.cookieHeader, SESSION_COOKIE) : null;
-    const token = raw ? unsign(raw, this.config.SESSION_SECRET) : null;
-    const user = token?.valid ? await this.auth.resolveSession(token.value) : null;
+    const user = await this.identity.resolve(input.token || null, input.host ?? undefined);
     if (!user) throw new UnauthorizedException();
-    if (user.status !== 'active') throw new ForbiddenException('Account is not active');
 
     const role = await this.projects.roleOf(projectId, user.id);
     if (!role) throw new ForbiddenException();

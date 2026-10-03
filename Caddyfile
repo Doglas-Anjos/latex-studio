@@ -7,7 +7,7 @@ header {
     X-Content-Type-Options nosniff
     Referrer-Policy strict-origin-when-cross-origin
     X-Frame-Options DENY
-    Content-Security-Policy "default-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
+    Content-Security-Policy "default-src 'self'; connect-src 'self' {$VITE_FASORX_URL}; img-src 'self' blob:; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
     -Server
 }
 

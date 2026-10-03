@@ -27,9 +27,10 @@ Full architecture plan: see `docs/architecture.md`.
 - Every filesystem path from a user goes through `SafePath` (rejects `..`, absolute paths, symlinks; realpath inside the project dir).
 - Zip import: zip-slip check, entry/size caps, drop any `.git/` entry.
 - Compile: `latexmk -no-shell-escape`, timeout, memory and pid limits, no network.
-- Every route has `SessionGuard` and a `ProjectRoleGuard`. Rate limits on auth, compile and upload.
-- WebSocket upgrades bypass Nest guards: the Hocuspocus `onAuthenticate` hook must verify the signed `sid` cookie and the `Origin` header itself.
-- No account lockout by design (it would let anyone lock the admin out); brute force is bounded by per-IP rate limits and argon2 cost.
+- No login of its own: the application in front (FasorX) signs a short JWT; `IdentityGuard` verifies it (`jose`, algorithm pinned by config, `iss`/`aud`, max lifetime) and a `ProjectRoleGuard` checks the role. Rate limits on compile and upload.
+- Local mode (no verifier) is only accepted when `APP_URL` is localhost; the config schema enforces it.
+- WebSocket upgrades bypass Nest guards: the Hocuspocus `onAuthenticate` hook must verify the bearer token (provider `token`) and the `Origin` header itself.
+- Downloads go through fetch with the bearer header; never put the token in a URL.
 - Secrets only via env; `.env` is gitignored; `.env.example` lists every variable.
 
 ## Code style

@@ -2,17 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { loadConfig, loadWorkerConfig } from './config.schema';
 
 const valid = {
-  NODE_ENV: 'test',
   APP_URL: 'http://localhost:8080',
   API_PORT: '4000',
   DATABASE_URL: 'postgres://latex:latex@localhost:5432/latex',
   REDIS_URL: 'redis://localhost:6379',
-  SESSION_SECRET: 'x'.repeat(32),
   REPOS_DIR: '/data/repos',
   BUILDS_DIR: '/data/builds',
   COMPILE_TIMEOUT_MS: '1000',
-  ADMIN_EMAIL: 'admin@example.com',
-  ADMIN_PASSWORD: 'long-enough-password',
 };
 
 describe('loadConfig', () => {
@@ -21,20 +17,38 @@ describe('loadConfig', () => {
     expect(config.API_PORT).toBe(4000);
     expect(config.COMPILE_TIMEOUT_MS).toBe(1000);
     expect(config.COMPILE_CONCURRENCY).toBe(1);
-    expect(config.DATABASE_URL).toBe(valid.DATABASE_URL);
+    expect(config.AUTH_MAX_TOKEN_TTL_S).toBe(900);
+    expect(config.AUTH_JWKS_URL).toBeUndefined();
   });
 
-  it('names the invalid field when SESSION_SECRET is missing', () => {
-    const { SESSION_SECRET: _omit, ...env } = valid;
-    expect(() => loadConfig(env)).toThrow(/SESSION_SECRET/);
+  it('allows local mode (no verifier) only on localhost', () => {
+    expect(() => loadConfig({ ...valid, APP_URL: 'https://latex.example.com' })).toThrow(
+      /AUTH_JWKS_URL or AUTH_SECRET/,
+    );
+    const env = { ...valid, APP_URL: 'https://latex.example.com', AUTH_SECRET: 's'.repeat(32) };
+    expect(() => loadConfig(env)).toThrow(/AUTH_ISSUER and AUTH_AUDIENCE/);
+    const full = { ...env, AUTH_ISSUER: 'https://fasorx.example', AUTH_AUDIENCE: 'latex' };
+    expect(loadConfig(full).AUTH_SECRET).toBe(env.AUTH_SECRET);
+  });
+
+  it('treats empty strings as unset', () => {
+    const jwks = { ...valid, AUTH_JWKS_URL: 'https://fasorx.example/.well-known/jwks.json' };
+    expect(() => loadConfig(jwks)).toThrow(/AUTH_ISSUER and AUTH_AUDIENCE/);
+    expect(() => loadConfig({ ...jwks, AUTH_ISSUER: 'x', AUTH_AUDIENCE: '' })).toThrow();
+    const config = loadConfig({
+      ...jwks,
+      AUTH_ISSUER: 'https://fasorx.example',
+      AUTH_AUDIENCE: 'latex',
+    });
+    expect(config.AUTH_AUDIENCE).toBe('latex');
   });
 });
 
 describe('loadWorkerConfig', () => {
-  it('accepts an env without the API secrets', () => {
-    const { SESSION_SECRET: _s, ADMIN_PASSWORD: _p, ADMIN_EMAIL: _e, APP_URL: _u, ...env } = valid;
+  it('accepts an env without the API variables', () => {
+    const { APP_URL: _u, API_PORT: _p, ...env } = valid;
     const config = loadWorkerConfig(env);
     expect(config.COMPILE_TIMEOUT_MS).toBe(1000);
-    expect('SESSION_SECRET' in config).toBe(false);
+    expect('APP_URL' in config).toBe(false);
   });
 });

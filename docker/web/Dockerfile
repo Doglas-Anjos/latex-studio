@@ -11,6 +11,8 @@ COPY packages/git-store/package.json packages/git-store/
 COPY packages/latex-tools/package.json packages/latex-tools/
 RUN pnpm install --frozen-lockfile
 COPY . .
+ARG VITE_FASORX_URL
+ARG VITE_FASORX_APP=latex
 RUN pnpm --filter @latex-studio/web build
 
 FROM caddy:2-alpine

@@ -60,7 +60,7 @@ services:
     build:
       context: .
       dockerfile: docker/texlive/Dockerfile
-    # Only what the worker needs: no session secret, no admin password (TeX runs as the same uid).
+    # Only what the worker needs: no auth secret (TeX runs as the same uid).
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL}
@@ -97,6 +97,9 @@ services:
     build:
       context: .
       dockerfile: docker/web/Dockerfile
+      args:
+        VITE_FASORX_URL: ${VITE_FASORX_URL}
+        VITE_FASORX_APP: ${VITE_FASORX_APP:-latex}
     ports:
       - "80:80"
       - "443:443"
@@ -105,6 +108,7 @@ services:
       - caddy_config:/config
     environment:
       APP_DOMAIN: ${APP_DOMAIN:-localhost}
+      VITE_FASORX_URL: ${VITE_FASORX_URL}
     depends_on:
       - api
     networks:

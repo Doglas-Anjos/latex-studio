@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import { join } from 'node:path';
-import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
@@ -44,9 +43,7 @@ async function bootstrap() {
       },
     },
   });
-  await app.register(cookie, { secret: config.SESSION_SECRET });
-  // Counters live in Redis so every API process shares them. Login/register override the
-  // global limit with 5/min via @RouteConfig.
+  // Counters live in Redis so every API process shares them.
   await app.register(rateLimit, {
     max: 300,
     timeWindow: '1 minute',
@@ -69,13 +66,12 @@ async function bootstrap() {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
 
-  // Migrations must run before listen(): onApplicationBootstrap seeds the first admin.
   await runMigrations(app.get<Database>(DATABASE));
   app.setGlobalPrefix('api');
   await app.init();
 
   // Collaborative editing shares the HTTP server. Upgrades skip Nest guards: Hocuspocus'
-  // onAuthenticate checks the Origin, the signed sid cookie and the project role itself.
+  // onAuthenticate checks the Origin, the bearer token and the project role itself.
   const hocuspocus = app.get<Hocuspocus>(HOCUSPOCUS);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
   app

@@ -26,7 +26,7 @@ export class MembersService {
     return this.projects.listMembers(project.id);
   }
 
-  /** Invites an existing active account by email. Only the owner reaches this (route guard). */
+  /** Invites by email someone who has opened the app at least once. Only the owner reaches this. */
   async invite(
     project: Project,
     actorId: string,
@@ -34,9 +34,7 @@ export class MembersService {
     role: ProjectRole,
   ): Promise<Member[]> {
     const user = await this.users.findByEmail(email.trim().toLowerCase());
-    if (user?.status !== 'active') {
-      throw new NotFoundException('No active user with that email');
-    }
+    if (!user) throw new NotFoundException('No user with that email: they must open the app once');
     if (user.id === project.ownerId || role === 'owner') {
       throw new BadRequestException('The owner role cannot be assigned');
     }

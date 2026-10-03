@@ -61,8 +61,6 @@ const ana: User = {
   id: randomUUID(),
   email: 'ana@example.com',
   name: 'Ana',
-  role: 'user',
-  status: 'active',
   createdAt: new Date(),
 };
 

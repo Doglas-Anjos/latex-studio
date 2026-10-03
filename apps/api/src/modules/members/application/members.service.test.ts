@@ -17,13 +17,16 @@ describe('MembersService', () => {
     users = new FakeUsers();
     service = new MembersService(projects, users);
     project = await projects.create({ id: 'p1', name: 'P' }, 'owner-1');
-    const ana = await users.create({ email: 'ana@example.com', name: 'Ana', passwordHash: 'h' });
-    if (!ana) throw new Error('fake create failed');
+    const ana = await users.upsert({
+      issuer: 'i',
+      subject: 's',
+      email: 'ana@example.com',
+      name: 'Ana',
+    });
     anaId = ana.id;
-    await users.update(anaId, { status: 'active' });
   });
 
-  it('invites an active user by email and lists the membership', async () => {
+  it('invites a known user by email and lists the membership', async () => {
     const members = await service.invite(project, 'owner-1', 'Ana@Example.com', 'reviewer');
     expect(members.map((m) => m.role).sort()).toEqual(['owner', 'reviewer']);
     expect(await projects.roleOf('p1', anaId)).toBe('reviewer');

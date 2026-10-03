@@ -18,8 +18,6 @@ const user = (id: string, name: string): User => ({
   id,
   email: `${name.toLowerCase()}@example.com`,
   name,
-  role: 'user',
-  status: 'active',
   createdAt: new Date(),
 });
 

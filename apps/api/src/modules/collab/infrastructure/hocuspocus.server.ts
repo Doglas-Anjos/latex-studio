@@ -11,10 +11,11 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
     debounce: 2000,
     maxDebounce: 10000,
     // Throwing refuses the document; the token is never logged.
-    async onAuthenticate({ request, documentName, connectionConfig }) {
+    async onAuthenticate({ request, documentName, connectionConfig, token }) {
       const session = await collab.authenticate({
-        cookieHeader: request.headers.get('cookie'),
+        token,
         origin: request.headers.get('origin'),
+        host: request.headers.get('host'),
         documentName,
       });
       connectionConfig.readOnly = session.readOnly;
