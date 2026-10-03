@@ -24,26 +24,9 @@ import {
 import { UPLOAD_RATE_LIMIT, withParts } from '../../projects/presentation/multipart';
 import type { User } from '../../users/domain/user';
 import { FilesService } from '../application/files.service';
+import { CONTENT_TYPES } from './content-types';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
 import { CreateFileDto, CreateFolderDto, RenameFileDto, UpdateFileDto } from './files.dto';
-
-const TEXT = 'text/plain; charset=utf-8';
-// SVG is left out on purpose: it can carry script, so it downloads as an attachment.
-const TYPES: Record<string, string> = {
-  '.tex': TEXT,
-  '.bib': TEXT,
-  '.sty': TEXT,
-  '.cls': TEXT,
-  '.txt': TEXT,
-  '.md': TEXT,
-  '.json': TEXT,
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.pdf': 'application/pdf',
-};
 
 @Controller('projects/:projectId')
 export class FilesController {
@@ -65,7 +48,7 @@ export class FilesController {
     @Param('*') path: string,
   ): Promise<StreamableFile> {
     const content = await this.files.read(project, path);
-    const type = TYPES[extname(path).toLowerCase()];
+    const type = CONTENT_TYPES[extname(path).toLowerCase()];
     if (type) return new StreamableFile(content, { type });
     // SafePath limits names to [A-Za-z0-9._ -()], so the filename needs no escaping.
     return new StreamableFile(content, {
