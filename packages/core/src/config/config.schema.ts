@@ -4,7 +4,6 @@ import { z } from 'zod';
 
 /** Everything the worker needs: no API secrets. */
 const baseSchema = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   DATABASE_URL: z.string().min(1),
   REDIS_URL: z.string().min(1),
   REPOS_DIR: z.string().min(1),
