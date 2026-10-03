@@ -489,9 +489,17 @@ a {
 .menu summary {
   cursor: pointer;
 }
-.menu[open] > a {
+.menu[open] > a,
+.menu[open] > button {
   display: block;
+  width: 100%;
   padding: 0.25rem 0.5rem;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .packages-details {
@@ -545,4 +553,111 @@ a {
 .package-note {
   margin: 0;
   color: var(--warn);
+}
+
+.cm-comment {
+  background: rgb(232 170 40 / 0.3);
+  border-bottom: 2px solid rgb(201 146 27 / 0.7);
+  cursor: pointer;
+}
+.comments-panel,
+.history-panel {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem 0.75rem;
+  max-height: 20rem;
+  overflow: auto;
+  font-size: 0.85rem;
+}
+.comment-form {
+  display: grid;
+  gap: 0.4rem;
+}
+.comment-toggle {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.comment-list,
+.comment-replies,
+.history-list,
+.history-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.comment {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.4rem 0.5rem;
+  display: grid;
+  gap: 0.3rem;
+}
+.comment-active {
+  border-color: var(--focus);
+}
+.comment-done {
+  opacity: 0.65;
+}
+.comment-head,
+.history-entry {
+  all: unset;
+  cursor: pointer;
+  display: grid;
+  gap: 0.15rem;
+}
+.comment-quote {
+  margin: 0;
+  padding-left: 0.5rem;
+  border-left: 3px solid var(--focus);
+  color: var(--muted);
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.comment-body {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.comment-replies {
+  padding-left: 0.75rem;
+}
+.comment-reply input {
+  width: 100%;
+}
+.comment-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+.comment-empty {
+  color: var(--muted);
+}
+.history-entry {
+  width: 100%;
+  padding: 0.2rem 0.3rem;
+  border-radius: 4px;
+}
+.history-entry[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--line) 50%, transparent);
+}
+.history-changes {
+  padding: 0.2rem 0 0 0.75rem;
+}
+.history-changes li {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.history-changes code {
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.history-pre {
+  max-height: 60vh;
+  max-width: 70vw;
+  overflow: auto;
+  white-space: pre;
 }

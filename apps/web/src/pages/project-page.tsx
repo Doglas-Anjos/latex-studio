@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useParams } from 'react-router';
 import { BuildPanel } from '../components/build-panel';
+import { CommentsPanel } from '../components/comments-panel';
 import { Editor } from '../components/editor';
 import { FileTree } from '../components/file-tree';
+import { HistoryPanel } from '../components/history-panel';
 import { PackagesPanel } from '../components/packages-panel';
 import { PdfViewer } from '../components/pdf-viewer';
 import { useService } from '../di/service-provider';
@@ -49,6 +51,14 @@ export function ProjectPage() {
         <details className="packages-details">
           <summary>Bibliotecas</summary>
           <PackagesPanel projectId={project.id} canEdit={canEdit} />
+        </details>
+        <details className="packages-details" open>
+          <summary>Comentários</summary>
+          <CommentsPanel projectId={project.id} path={path} role={project.role} />
+        </details>
+        <details className="packages-details">
+          <summary>Histórico</summary>
+          <HistoryPanel projectId={project.id} canEdit={canEdit} />
         </details>
         <PdfViewer projectId={project.id} />
       </section>

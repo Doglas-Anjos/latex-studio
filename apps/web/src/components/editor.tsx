@@ -1,12 +1,14 @@
-import { EditorState } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorState, type Extension, StateEffect, StateField } from '@codemirror/state';
+import { Decoration, type DecorationSet, EditorView } from '@codemirror/view';
 import { HocuspocusProvider } from '@hocuspocus/provider';
+import { useQuery } from '@tanstack/react-query';
 import { basicSetup } from 'codemirror';
 import { latex } from 'codemirror-lang-latex';
 import { useEffect, useRef, useState } from 'react';
 import { yCollab } from 'y-codemirror.next';
 import * as Y from 'yjs';
 import { useService } from '../di/service-provider';
+import { type Comment, CommentServiceToken } from '../services/comment.service';
 import { FileServiceToken } from '../services/file.service';
 import type { Role } from '../services/project.service';
 import { useWorkspaceStore } from '../workspace-store';
@@ -23,6 +25,66 @@ const theme = EditorView.theme({
   },
   '.cm-cursor': { borderLeftColor: 'var(--ink)' },
 });
+
+const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
+const fromBase64 = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+const encodePos = (ytext: Y.Text, index: number) =>
+  toBase64(Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(ytext, index)));
+
+/** Absolute index of a stored relative position, or null if it no longer resolves. */
+function resolvePos(ytext: Y.Text, b64: string): number | null {
+  try {
+    const abs = ytext.doc
+      ? Y.createAbsolutePositionFromRelativePosition(
+          Y.decodeRelativePosition(fromBase64(b64)),
+          ytext.doc,
+        )
+      : null;
+    return abs && abs.type === ytext ? abs.index : null;
+  } catch {
+    return null;
+  }
+}
+
+const refreshHighlights = StateEffect.define<null>();
+
+/** Highlights open comments; positions are re-resolved on every doc change so they follow edits. */
+function commentHighlights(ytext: Y.Text, comments: { current: Comment[] }): Extension {
+  const field = StateField.define<DecorationSet>({
+    create: () => Decoration.none,
+    update(deco, tr) {
+      if (!tr.docChanged && !tr.effects.some((e) => e.is(refreshHighlights))) return deco;
+      const length = tr.state.doc.length;
+      return Decoration.set(
+        comments.current.flatMap((c) => {
+          const from = resolvePos(ytext, c.anchor.start);
+          const to = resolvePos(ytext, c.anchor.end);
+          if (from === null || to === null || from >= to || to > length) return [];
+          return [
+            Decoration.mark({
+              class: 'cm-comment',
+              attributes: { 'data-comment-id': c.id },
+            }).range(from, to),
+          ];
+        }),
+        true,
+      );
+    },
+    provide: (f) => EditorView.decorations.from(f),
+  });
+  return [
+    field,
+    EditorView.domEventHandlers({
+      click(event) {
+        const id = (event.target as HTMLElement)
+          .closest?.('[data-comment-id]')
+          ?.getAttribute('data-comment-id');
+        if (id) useWorkspaceStore.getState().setActiveComment(id);
+        return false;
+      },
+    }),
+  ];
+}
 
 type Status = 'connecting' | 'connected' | 'disconnected';
 const statusLabel: Record<Status, string> = {
@@ -64,6 +126,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const host = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<Status>('connecting');
   const readOnly = role === 'viewer' || role === 'reviewer';
+  const comments = useService(CommentServiceToken);
+  const viewRef = useRef<EditorView | null>(null);
+  const { data } = useQuery({
+    queryKey: ['comments', projectId, path, false],
+    queryFn: () => comments.list(projectId, path, false),
+  });
+  const commentsRef = useRef<Comment[]>([]);
+  commentsRef.current = data ?? [];
 
   // External sync: Yjs doc + websocket provider + CodeMirror view live and die with the file.
   useEffect(() => {
@@ -88,22 +158,56 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           EditorState.readOnly.of(readOnly),
           path.endsWith('.tex') ? latex() : [],
           yCollab(ytext, provider.awareness),
+          commentHighlights(ytext, commentsRef),
         ],
       }),
     });
+    viewRef.current = view;
+    const store = useWorkspaceStore.getState();
+    store.setSelectionProvider(() => {
+      const { from, to } = view.state.selection.main;
+      if (from === to) return null;
+      return {
+        anchor: { start: encodePos(ytext, from), end: encodePos(ytext, to) },
+        quote: view.state.sliceDoc(from, Math.min(to, from + 500)),
+        line: view.state.doc.lineAt(from).number,
+      };
+    });
+    const revealComment = (id: string) => {
+      const c = commentsRef.current.find((x) => x.id === id);
+      const pos = c ? resolvePos(ytext, c.anchor.start) : null;
+      if (pos !== null) {
+        view.dispatch({
+          selection: { anchor: Math.min(pos, view.state.doc.length) },
+          effects: EditorView.scrollIntoView(pos, { y: 'center' }),
+        });
+        view.focus();
+      } else if (c?.line) {
+        useWorkspaceStore.getState().goToLine(path, c.line);
+      }
+    };
     // A "go to line" request may arrive before or after the first sync.
     provider.on('synced', () => revealLine(view));
     const unsubscribe = useWorkspaceStore.subscribe((s, prev) => {
       if (s.pendingLine !== null && s.pendingLine !== prev.pendingLine) revealLine(view);
+      if (s.commentJump && s.commentJump !== prev.commentJump) revealComment(s.commentJump.id);
     });
     revealLine(view);
     return () => {
       unsubscribe();
+      useWorkspaceStore.getState().setSelectionProvider(null);
+      viewRef.current = null;
       view.destroy();
       provider.destroy();
       doc.destroy();
     };
   }, [projectId, path, readOnly]);
+
+  // Rebuild highlights when comments change.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `data` is the trigger; highlights read it via commentsRef
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: refreshHighlights.of(null) });
+  }, [data]);
 
   return (
     <div className="editor">
