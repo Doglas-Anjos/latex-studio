@@ -53,6 +53,8 @@ export class GitRepository {
     return out;
   }
 
+  // ponytail: statusMatrix trusts mtime (seconds) + size, so a same-size edit within the same
+  // second as the previous add is missed until the next change. Fine for autosave cadence.
   /** statusMatrix rows that differ from HEAD. */
   private async changes() {
     const rows = await git.statusMatrix({ fs, dir: this.dir });

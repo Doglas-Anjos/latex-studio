@@ -21,7 +21,7 @@ it('commits, logs, diffs and reads history', async () => {
   expect(await repo.commitAll('noop', author)).toBeNull();
   expect(await repo.isDirty()).toBe(false);
 
-  await repo.writeFile('main.tex', 'v2');
+  await repo.writeFile('main.tex', 'version two');
   await repo.writeFile('sub/dir/new.tex', 'n');
   await repo.deleteFile('old.tex');
   const second = await repo.commitAll('second', author);
