@@ -9,9 +9,11 @@ import {
   Settings,
   Users,
 } from 'lucide-react';
+import { useRef } from 'react';
 import { useService } from '../../di/service-provider';
 import { HistoryServiceToken } from '../../services/history.service';
 import { type SidebarView, useSettingsStore } from '../../settings-store';
+import { AppearanceDialog } from '../appearance-dialog';
 
 export const viewLabels: Record<SidebarView, string> = {
   files: 'Arquivos',
@@ -30,13 +32,8 @@ const icons: Record<SidebarView, LucideIcon> = {
   members: Users,
 };
 
-export function ActivityBar({
-  projectId,
-  onSettings,
-}: {
-  projectId: string;
-  onSettings?: () => void;
-}) {
+export function ActivityBar({ projectId }: { projectId: string }) {
+  const appearance = useRef<HTMLDialogElement>(null);
   const view = useSettingsStore((s) => s.sidebarView);
   const set = useSettingsStore((s) => s.set);
   const history = useService(HistoryServiceToken);
@@ -70,10 +67,11 @@ export function ActivityBar({
         className="activity-btn activity-settings"
         aria-label="Aparência"
         title="Aparência"
-        onClick={onSettings}
+        onClick={() => appearance.current?.showModal()}
       >
         <Settings size={20} aria-hidden="true" />
       </button>
+      <AppearanceDialog ref={appearance} />
     </nav>
   );
 }

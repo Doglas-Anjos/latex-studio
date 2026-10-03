@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useService } from '../di/service-provider';
 import { type AssignableRole, type Member, MemberServiceToken } from '../services/member.service';
+import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { Form } from './form';
 
@@ -34,6 +35,7 @@ export function MembersPanel({ projectId, isOwner }: { projectId: string; isOwne
     mutationFn: (userId: string) => service.remove(projectId, userId),
     onSuccess: refresh,
   });
+  const online = new Set(useWorkspaceStore((s) => s.peers).map((p) => p.name));
   const error = invite.error ?? setRole.error ?? remove.error;
 
   return (
@@ -43,6 +45,12 @@ export function MembersPanel({ projectId, isOwner }: { projectId: string; isOwne
           <li key={m.userId} className="member-item">
             <div>
               <strong>{m.name}</strong>
+              {/* ponytail: matches awareness by display name; two members sharing a name both show online. Key awareness by user id to fix. */}
+              {online.has(m.name) && (
+                <span className="online" title="online">
+                  ●
+                </span>
+              )}
               <span className="muted">{m.email}</span>
             </div>
             {isOwner && m.role !== 'owner' ? (
