@@ -7,8 +7,13 @@ header {
     X-Content-Type-Options nosniff
     Referrer-Policy strict-origin-when-cross-origin
     X-Frame-Options DENY
+    Content-Security-Policy "default-src 'self'; worker-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
     -Server
 }
+
+# HSTS only for real domains; on localhost it would also force https on other local dev servers
+@prod not host localhost
+header @prod Strict-Transport-Security "max-age=31536000"
 
 # API and collaboration WebSocket go to the NestJS process
 handle /api/* {

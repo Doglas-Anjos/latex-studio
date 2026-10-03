@@ -28,6 +28,8 @@ Full architecture plan: see `docs/architecture.md`.
 - Zip import: zip-slip check, entry/size caps, drop any `.git/` entry.
 - Compile: `latexmk -no-shell-escape`, timeout, memory and pid limits, no network.
 - Every route has `SessionGuard` and a `ProjectRoleGuard`. Rate limits on auth, compile and upload.
+- WebSocket upgrades bypass Nest guards: the Hocuspocus `onAuthenticate` hook must verify the signed `sid` cookie and the `Origin` header itself.
+- No account lockout by design (it would let anyone lock the admin out); brute force is bounded by per-IP rate limits and argon2 cost.
 - Secrets only via env; `.env` is gitignored; `.env.example` lists every variable.
 
 ## Code style
