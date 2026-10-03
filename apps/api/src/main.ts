@@ -10,11 +10,13 @@ import {
   type AppConfig,
   DATABASE,
   type Database,
+  parseRedisUrl,
   runMigrations,
 } from '@latex-studio/core';
 import { HttpException, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
+import Redis from 'ioredis';
 import { WebSocketServer } from 'ws';
 import { AppModule } from './app.module';
 import { HOCUSPOCUS } from './modules/collab/infrastructure/hocuspocus.server';
@@ -43,12 +45,16 @@ async function bootstrap() {
     },
   });
   await app.register(cookie, { secret: config.SESSION_SECRET });
-  // ponytail: in-memory store is per process; the Redis store comes in with the queue (BullMQ).
-  // Login/register override this with 5/min via @RouteConfig.
+  // Counters live in Redis so every API process shares them. Login/register override the
+  // global limit with 5/min via @RouteConfig.
   await app.register(rateLimit, {
     max: 300,
     timeWindow: '1 minute',
-    cache: 10000,
+    redis: new Redis({
+      ...parseRedisUrl(config.REDIS_URL),
+      connectTimeout: 500,
+      maxRetriesPerRequest: 1,
+    }),
     // One IPv6 client usually owns a whole /64, so key on the prefix.
     keyGenerator: ({ ip }) => (ip.includes(':') ? ip.split(':').slice(0, 4).join(':') : ip),
     // Nest's exception handler turns plain errors into 500; an HttpException keeps the 429.

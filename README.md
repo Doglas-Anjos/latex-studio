@@ -25,6 +25,8 @@ docker compose up -d --build
 
 O Caddy obtém TLS automaticamente para `APP_DOMAIN`. O primeiro admin é criado na primeira subida com `ADMIN_EMAIL` e `ADMIN_PASSWORD`. Novos cadastros ficam pendentes até um admin aprovar em **Admin → Usuários**.
 
+Backup noturno (dump do Postgres + tar dos repositórios): `./scripts/backup.sh /srv/backups` via cron.
+
 ## Desenvolvimento
 
 Requisitos: Node 22.22 ou superior, pnpm 12 (`npm i -g pnpm`), Docker, e um TeX Live ou MiKTeX com `latexmk` no PATH para compilar localmente.
