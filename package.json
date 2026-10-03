@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@12.8.1",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.22.3"
   },
   "scripts": {
     "lint": "biome check .",
@@ -16,7 +16,6 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.15",
     "@types/node": "^26.6.4",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "^5.0.3"
   }

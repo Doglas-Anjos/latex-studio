@@ -1,2 +1,2 @@
-// Each domain module adds its tables here (export * from '../../<module>/infrastructure/...').
-export {};
+export * from './sessions';
+export * from './users';

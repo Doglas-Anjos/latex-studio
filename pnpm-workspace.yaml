@@ -8,3 +8,4 @@ minimumReleaseAge: 1440
 # Native build scripts allowed to run on install (reviewed)
 allowBuilds:
   esbuild: true
+  argon2: true
