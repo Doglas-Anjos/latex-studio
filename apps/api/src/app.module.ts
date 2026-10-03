@@ -3,6 +3,8 @@ import { Controller, Get, Module } from '@nestjs/common';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { Public } from './modules/auth/presentation/decorators';
+import { FilesModule } from './modules/files/files.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 
 @Controller('health')
 class HealthController {
@@ -14,7 +16,14 @@ class HealthController {
 }
 
 @Module({
-  imports: [ConfigModule.forRoot(), DatabaseModule, AuthModule, AdminModule],
+  imports: [
+    ConfigModule.forRoot(),
+    DatabaseModule,
+    AuthModule,
+    AdminModule,
+    ProjectsModule,
+    FilesModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}

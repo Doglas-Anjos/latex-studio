@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import {
   APP_CONFIG,
@@ -44,6 +45,10 @@ async function bootstrap() {
     // Nest's exception handler turns plain errors into 500; an HttpException keeps the 429.
     errorResponseBuilder: (_request, context) =>
       new HttpException(`Rate limit exceeded, retry in ${context.after}`, 429),
+  });
+  // Consumed as streams via request.parts(); the per-file limit is enforced while streaming.
+  await app.register(multipart, {
+    limits: { fileSize: config.MAX_UPLOAD_MB * 1024 * 1024, files: 200 },
   });
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),

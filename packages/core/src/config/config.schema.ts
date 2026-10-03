@@ -16,6 +16,7 @@ const envSchema = z.object({
   COMPILE_MEMORY_MB: z.coerce.number().int().positive().default(1024),
   MAX_UPLOAD_MB: z.coerce.number().positive().default(50),
   PROJECT_QUOTA_MB: z.coerce.number().positive().default(500),
+  MAX_PROJECTS_PER_USER: z.coerce.number().int().positive().default(50),
   ADMIN_EMAIL: z.email(),
   ADMIN_PASSWORD: z.string().min(12),
 });

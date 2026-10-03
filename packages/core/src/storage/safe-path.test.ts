@@ -12,9 +12,30 @@ describe('SafePath.resolve', () => {
     expect(safe.resolve('chapters/intro.tex')).toBe(path.join(root, 'chapters', 'intro.tex'));
   });
 
-  it.each(['../x.tex', '/etc/passwd', 'a/../../b', 'a//b', '.git/config', 'a\b', 'a\0b', ''])(
-    'rejects %j',
-    (p) => expect(() => safe.resolve(p)).toThrow(/Invalid path/),
+  it.each([
+    '../x.tex',
+    '/etc/passwd',
+    'a/../../b',
+    'a//b',
+    '.git/config',
+    '.GIT/config',
+    '.gitignore',
+    'sub/.gitmodules',
+    'a\b',
+    'a\0b',
+    '',
+    'name.',
+    'name ',
+    'NUL',
+    'nul.tex',
+    'Com1',
+    'lpt9.txt',
+    'x'.repeat(201),
+  ])('rejects %j', (p) => expect(() => safe.resolve(p)).toThrow(/Invalid path/));
+
+  it.each(['console.tex', 'auxiliary.tex', 'com10', 'my.git.tex', 'x'.repeat(200)])(
+    'accepts %j',
+    (p) => expect(() => safe.resolve(p)).not.toThrow(),
   );
 });
 
