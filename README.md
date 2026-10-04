@@ -3,10 +3,12 @@
 Editor LaTeX colaborativo, no estilo do Overleaf, com três diferenças de premissa:
 
 - **Cada projeto é um repositório Git.** Histórico, diff e restauração vêm do Git, não de um formato próprio.
-- **Bibliotecas gerenciadas por manifesto.** Pacotes LaTeX são ligados e desligados em um painel; o arquivo `latex-packages.tex` é gerado a partir de `latex-packages.json` e o zip exportado compila em qualquer lugar.
+- **Bibliotecas gerenciadas por manifesto.** Pacotes LaTeX são ligados e desligados em um painel, sem comentar código: um pacote desligado que ainda aparece como `\usepackage` no `.tex` é pulado pelo LaTeX (o `latex-packages.tex` gerado define `\ver@<pacote>.sty`), e o zip exportado compila em qualquer lugar.
 - **Compilação em fila isolada.** Um worker com TeX Live compila sem shell-escape, sem rede, com tempo e memória limitados.
 
-Mantém o essencial: edição simultânea (Yjs), comentários de revisão, importação por zip ou pasta, exportação (fonte, PDF, DOCX, Markdown, HTML).
+Mantém o essencial: edição simultânea (Yjs, com cursores nomeados), comentários de revisão, importação por zip ou pasta, exportação (fonte, PDF, DOCX, Markdown, HTML).
+
+A interface segue o modelo do VS Code: barra de atividades, sidebar redimensionável, abas, painel de compilação e barra de status. "Mudanças" mostra o que mudou desde a última versão salva (marcas na margem, lista de arquivos, diff lado a lado), o histórico compara versões, o botão Blame mostra quem alterou cada linha, e Auto-indent formata com `latexindent` (no worker) ou com o indentador do editor quando ele não existe. Tema claro/escuro e cores de sintaxe são editáveis pelo usuário (engrenagem), guardados no navegador.
 
 **Não tem login próprio.** Quem autentica é a aplicação na frente (FasorX): ela emite um JWT curto para o navegador, que o apresenta em `Authorization: Bearer`, e a API só verifica a assinatura. Localmente, sem verificador configurado, tudo roda como um usuário local, sem cadastro.
 
@@ -56,7 +58,7 @@ Verificações: `pnpm lint`, `pnpm typecheck`, `pnpm test`. Os pacotes em `packa
 ```
 apps/api        API NestJS: identidade (JWT do FasorX), projects, files, collab (Yjs), compile, packages, export
 apps/worker     Fila: compilação latexmk em sandbox, autocommit
-apps/web        React: projetos, editor colaborativo, PDF, bibliotecas, builds
+apps/web        React: dashboard, workspace (editor colaborativo, diff, blame, PDF, bibliotecas, builds)
 packages/core   Config validada, banco (Drizzle + migrações), fila, SafePath
 packages/git-store, packages/latex-tools   Classes puras (git, parsers LaTeX)
 docker/         Imagens da API, do worker (TeX Live) e do web (Caddy)
