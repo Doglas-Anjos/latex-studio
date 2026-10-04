@@ -94,12 +94,13 @@ export class ExportController {
     return this.exporter.requestExport(project, format as ExportFormat);
   }
 
-  @RouteConfig(RATE_LIMIT)
+  // Its own limit: "format project" sends one request per .tex file.
+  @RouteConfig({ rateLimit: { max: 30, timeWindow: '1 minute' } })
   @Post('format')
   @RequireProjectRole('editor')
   @HttpCode(202)
   format(@CurrentProject() project: Project, @Body() dto: FormatDto): Promise<{ jobId: string }> {
-    return this.exporter.requestFormat(project, dto.path);
+    return this.exporter.requestFormat(project, dto.path, dto.text);
   }
 
   @Get('jobs/:jobId')

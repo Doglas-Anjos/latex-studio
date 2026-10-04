@@ -17,7 +17,7 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
   const { data } = useQuery({
     queryKey: ['history', projectId, 'status'],
     queryFn: () => history.status(projectId),
-    refetchInterval: 5000,
+    refetchInterval: 30_000,
   });
   const baseline = data?.baseline;
   const save = useMutation({

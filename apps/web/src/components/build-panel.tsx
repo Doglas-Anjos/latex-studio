@@ -58,14 +58,26 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
       const paths = (await files.list(projectId))
         .map((f) => f.path)
         .filter((p) => /\.tex$/i.test(p));
+      let skipped = 0;
       for (const [i, path] of paths.entries()) {
         setFormatProgress(`Formatando ${i + 1}/${paths.length}…`);
-        const { jobId } = await tools.format(projectId, path);
-        const r = await waitFor<{ text: string }>(jobId);
-        if (!r) continue;
         const { activePath, editorCommands } = useWorkspaceStore.getState();
-        if (editorCommands && path === (activePath ?? paths[0])) editorCommands.applyText(r.text);
+        const live = editorCommands && path === (activePath ?? paths[0]) ? editorCommands : null;
+        const read = async () =>
+          live ? live.getText() : (await files.blob(projectId, path)).text();
+        const before = await read();
+        const { jobId } = await tools.format(projectId, path, before);
+        const r = await waitFor<{ text: string }>(jobId);
+        // Edited meanwhile (here or by a collaborator): skip rather than revert their change.
+        if (!r || (await read()) !== before) {
+          skipped++;
+          continue;
+        }
+        if (live) live.applyText(r.text);
         else await files.write(projectId, path, r.text);
+      }
+      if (skipped) {
+        throw new Error(`${skipped} arquivo(s) mudaram durante a formatação e não foram tocados`);
       }
     },
     onSettled: () => {

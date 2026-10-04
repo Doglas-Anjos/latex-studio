@@ -17,6 +17,22 @@ export const AUTOSAVE_AUTHOR: Author = {
   email: 'autosave@latex-studio.local',
 };
 const MAX_BLAME_CHARS = 1024 * 1024;
+/** One deadline for all the diffs of a blame request; the API is single-threaded. */
+const BLAME_DIFF_BUDGET_MS = 1000;
+/** Commits + texts per `${head}:${path}`, the costly part that does not depend on the working tree. */
+const blameCache = new Map<string, Promise<{ oids: string[]; texts: string[] }>>();
+const baselineCache = new Map<string, Promise<unknown>>();
+const remember = <T>(cache: Map<string, Promise<T>>, key: string, make: () => Promise<T>) => {
+  const hit = cache.get(key);
+  if (hit) return hit;
+  if (cache.size >= 200) cache.clear();
+  const value = make().catch((e) => {
+    cache.delete(key);
+    throw e;
+  });
+  cache.set(key, value);
+  return value;
+};
 const SYMLINK_MODE = 0o120000;
 
 const dec = new TextDecoder();
@@ -136,9 +152,20 @@ export class GitRepository {
 
   /** Newest non-autosave commit; the oldest fetched one if all are autosaves. */
   async baseline(limit = 200) {
-    const commits = await this.log(limit);
-    // ponytail: only `limit` commits are scanned; more consecutive autosaves than that yields the oldest of them.
-    return commits.find((c) => !c.message.startsWith(AUTOSAVE_MESSAGE)) ?? commits.at(-1) ?? null;
+    const head = await this.head();
+    if (!head) return null;
+    return remember(baselineCache, `${this.dir}:${head}`, async () => {
+      const commits = await this.log(limit);
+      // ponytail: only `limit` commits are scanned; more consecutive autosaves than that yields the oldest of them.
+      const isAutosave = (m: string) =>
+        m === AUTOSAVE_MESSAGE || m.startsWith(`${AUTOSAVE_MESSAGE}\n`);
+      return commits.find((c) => !isAutosave(c.message)) ?? commits.at(-1) ?? null;
+    }) as Promise<Awaited<ReturnType<GitRepository['log']>>[number] | null>;
+  }
+
+  /** HEAD's sha, or null for an empty repo. */
+  private head(): Promise<string | null> {
+    return git.resolveRef({ fs, dir: this.dir, ref: 'HEAD' }).catch(() => null);
   }
 
   /**
@@ -191,21 +218,34 @@ export class GitRepository {
    * ponytail: O(commits x lines) diffs per request, capped at `maxCommits` and 1 MB.
    */
   async blame(path: string, maxCommits = 100): Promise<Blame> {
+    const full = join(this.dir, path);
+    if ((await fs.promises.stat(full)).size > MAX_BLAME_CHARS) {
+      throw new Error('File too large to blame');
+    }
     const current = dec.decode(await this.readFile(path));
-    if (current.length > MAX_BLAME_CHARS) throw new Error('File too large to blame');
-    const commits = await git.log({
-      fs,
-      dir: this.dir,
-      filepath: path,
-      force: true,
-      depth: maxCommits,
+    const head = (await this.head()) ?? '';
+    const { oids, texts } = await remember(blameCache, `${this.dir}:${head}:${path}`, async () => {
+      const cache = {};
+      // force:false stops at the file's creation; a never-committed file has no history at all.
+      const log = await git
+        .log({ fs, dir: this.dir, filepath: path, depth: maxCommits, cache })
+        .catch((e: { code?: string }) => {
+          if (e.code === 'NotFoundError') return [];
+          throw e;
+        });
+      const texts: string[] = [];
+      for (const c of log) {
+        const blob = await git
+          .readBlob({ fs, dir: this.dir, oid: c.oid, filepath: path, cache })
+          .then((r) => r.blob)
+          .catch(() => null);
+        if (blob && blob.length > MAX_BLAME_CHARS) throw new Error('File too large to blame');
+        texts.push(blob ? dec.decode(blob) : '');
+      }
+      return { oids: log.map((c) => c.oid), texts };
     });
-    const texts = await Promise.all(
-      commits.map(async (c) => {
-        const blob = await this.readFileAt(c.oid, path);
-        return blob ? dec.decode(blob) : '';
-      }),
-    );
+    const commits = await this.commitsByOid(oids);
+    const deadline = Date.now() + BLAME_DIFF_BUDGET_MS;
     const owner: Array<string | null> = Array(countLines(current)).fill(null);
     // Walks diffLines(before, after) with a line counter per side.
     const walk = (
@@ -216,7 +256,9 @@ export class GitRepository {
     ) => {
       let b = 0;
       let a = 0;
-      for (const part of diffLines(before, after)) {
+      const parts = diffLines(before, after, { timeout: Math.max(1, deadline - Date.now()) });
+      if (!parts) throw new Error('File too large to blame');
+      for (const part of parts) {
         const n = countLines(part.value);
         for (let k = 0; k < n; k++) {
           if (part.added) onAdded(a + k);
@@ -228,15 +270,15 @@ export class GitRepository {
     };
     // pending: line index in the text being compared -> index in `current`.
     let pending = new Map<number, number>();
-    if (commits.length > 0)
+    if (oids.length > 0)
       walk(
         texts[0] ?? '',
         current,
         () => {},
         (ib, ia) => pending.set(ib, ia),
       );
-    for (let i = 0; i < commits.length && pending.size > 0; i++) {
-      const sha = (commits[i] as { oid: string }).oid;
+    for (let i = 0; i < oids.length && pending.size > 0; i++) {
+      const sha = oids[i] as string;
       const next = new Map<number, number>();
       walk(
         texts[i + 1] ?? '',
@@ -258,19 +300,25 @@ export class GitRepository {
       if (last && last.sha === sha) last.to = i + 1;
       else lines.push({ from: i + 1, to: i + 1, sha });
     }
-    const byOid = new Map(commits.map((c) => [c.oid, c.commit]));
     const used: Blame['commits'] = {};
     for (const { sha } of lines) {
-      const c = sha && byOid.get(sha);
-      if (c) {
-        used[sha] = {
-          author: { name: c.author.name, email: c.author.email },
-          date: new Date(c.author.timestamp * 1000),
-          message: c.message.trim(),
-        };
-      }
+      const c = sha && commits.get(sha);
+      if (c) used[sha] = c;
     }
     return { commits: used, lines };
+  }
+
+  private async commitsByOid(oids: string[]): Promise<Map<string, Blame['commits'][string]>> {
+    const out = new Map<string, Blame['commits'][string]>();
+    for (const oid of oids) {
+      const { commit } = await git.readCommit({ fs, dir: this.dir, oid });
+      out.set(oid, {
+        author: { name: commit.author.name, email: commit.author.email },
+        date: new Date(commit.author.timestamp * 1000),
+        message: commit.message.trim(),
+      });
+    }
+    return out;
   }
 
   async isDirty(): Promise<boolean> {

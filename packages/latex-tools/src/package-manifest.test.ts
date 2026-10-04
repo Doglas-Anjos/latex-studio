@@ -36,6 +36,19 @@ describe('renderPackagesTex bypass', () => {
       '\\expandafter\\def\\csname opt@hyperref.sty\\endcsname{colorlinks,urlcolor=blue}',
     );
     expect(tex).not.toContain('other');
+    const braces = renderPackagesTex(
+      [{ name: 'p', enabled: false, order: 0 }],
+      [
+        { name: 'p', options: 'a={x,y}' },
+        { name: 'p', options: 'b=#1' },
+      ],
+    );
+    expect(braces).not.toContain('opt@');
+    const ok = renderPackagesTex(
+      [{ name: 'p', enabled: false, order: 0 }],
+      [{ name: 'p', options: 'a={x,y}, c' }],
+    );
+    expect(ok).toContain('opt@p.sty\\endcsname{a={x,y},c}');
   });
 
   it('keeps the usepackage line when enabled', () => {

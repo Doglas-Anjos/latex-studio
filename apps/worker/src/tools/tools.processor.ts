@@ -1,5 +1,5 @@
-import { type ExecFileOptionsWithStringEncoding, execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, unlink } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -69,26 +69,36 @@ const MAX_FORMAT_BYTES = 1024 * 1024;
  * latexindent ignores localSettings.yaml/.latexindent.yaml in the project (`-l=` would load them),
  * and HOME is an empty dir, so no indentconfig.yaml either. indent.log lands next to the file.
  */
-async function formatFile(
-  dir: string,
-  path: string,
-  options: Omit<ExecFileOptionsWithStringEncoding, 'encoding'>,
-): Promise<{ text: string }> {
-  const abs = new SafePath(dir).resolve(path);
-  if (path.split('/').some((s) => s.startsWith('-')) || !FORMATTABLE.test(path)) {
-    throw new Error(`Invalid path: ${path}`);
+/**
+ * Formats the submitted text (the live editor content, not the disk snapshot, which lags the
+ * editor by seconds) in a throwaway dir: `in.<ext>` is the only file latexindent sees.
+ * Memory is bounded by the container limit, like compile.
+ */
+async function formatText(path: string, text: string): Promise<{ text: string }> {
+  const ext = FORMATTABLE.exec(path)?.[1]?.toLowerCase();
+  if (!ext) throw new Error(`Invalid path: ${path}`);
+  if (Buffer.byteLength(text) > MAX_FORMAT_BYTES) {
+    throw new Error('File too large to format (max 1 MB)');
   }
-  const info = await stat(abs).catch(() => undefined);
-  if (!info?.isFile()) throw new Error('File not found');
-  if (info.size > MAX_FORMAT_BYTES) throw new Error('File too large to format (max 1 MB)');
-  const args = ["-y=defaultIndent: '  '", '-g=indent.log', path];
-  const { stdout } = await run('latexindent', args, { ...options, timeout: 60_000 }).catch(
-    (e: { stderr?: string; message: string }) => {
+  const dir = await mkdtemp(join(tmpdir(), 'ls-fmt-'));
+  try {
+    const name = `in.${ext}`;
+    await writeFile(join(dir, name), text);
+    const args = ["-y=defaultIndent: '  '", '-g=indent.log', name];
+    const { stdout } = await run('latexindent', args, {
+      cwd: dir,
+      windowsHide: true,
+      maxBuffer: 2 * MAX_FORMAT_BYTES,
+      env: { PATH: process.env.PATH, HOME: dir },
+      timeout: 15_000,
+    }).catch((e: { stderr?: string; message: string }) => {
       const lines = (e.stderr || e.message).split('\n').slice(0, 5).join('\n');
       throw new Error(lines.replace(/[^\t\n\x20-\x7e]/g, '').slice(0, 500));
-    },
-  );
-  return { text: stdout };
+    });
+    return { text: stdout };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 const fail = (e: unknown): never => {
@@ -109,6 +119,7 @@ export class ToolsProcessor extends WorkerHost {
   }
 
   async process(job: Job<ToolJobData>): Promise<unknown> {
+    if (job.data.kind === 'format') return formatText(job.data.path, job.data.text);
     const { projectId } = job.data;
     const [project] = await this.db.select().from(projects).where(eq(projects.id, projectId));
     if (!project) throw new Error('Project not found');
@@ -121,7 +132,6 @@ export class ToolsProcessor extends WorkerHost {
       env: { PATH: process.env.PATH, HOME: home },
     };
     try {
-      if (job.data.kind === 'format') return await formatFile(tmp, job.data.path, options);
       new SafePath(tmp).resolve(project.mainFile); // throws on `..`, absolute or odd names
       if (project.mainFile.startsWith('-')) throw new Error('Invalid main file');
       const files = await listTree(tmp);

@@ -8,6 +8,7 @@ import { useEffect, useRef } from 'react';
 import { useService } from '../../di/service-provider';
 import { FileServiceToken } from '../../services/file.service';
 import { HistoryServiceToken } from '../../services/history.service';
+import { DIFF_LIMITS } from '../editor-changes';
 import { latexHighlight } from '../editor-theme';
 
 const short = (sha: string, none: string) => (sha === 'empty' ? none : sha.slice(0, 7));
@@ -48,6 +49,7 @@ export function DiffTab(props: { projectId: string; path: string; from: string; 
       highlightChanges: true,
       gutter: true,
       collapseUnchanged: { margin: 3, minSize: 4 },
+      diffConfig: DIFF_LIMITS,
     });
     return () => view.destroy();
   }, [data, path]);

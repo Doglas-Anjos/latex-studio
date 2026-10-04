@@ -62,46 +62,29 @@ it('refuses absolute and parent paths in input-like commands', async () => {
 
 describe('format', () => {
   const runSpy = (execFile as unknown as Record<symbol, Mock>)[promisify.custom] as Mock;
+  const proc = new ToolsProcessor({} as never, { REPOS_DIR: 'x', BUILDS_DIR: 'x' } as never);
+  const format = (path: string, text = '\\item x\n') =>
+    proc.process({ data: { projectId: 'p1', kind: 'format', path, text } } as Job<never>);
 
-  async function setup() {
-    const repos = await mkdtemp(join(tmpdir(), 'ls-fmt-'));
-    await mkdir(join(repos, 'p1', 'sub'), { recursive: true });
-    await writeFile(join(repos, 'p1', 'sub', 'a.tex'), '\\item x\n');
-    const db = {
-      select: () => ({ from: () => ({ where: async () => [{ mainFile: 'main.tex' }] }) }),
-    };
-    const proc = new ToolsProcessor(db as never, { REPOS_DIR: repos, BUILDS_DIR: repos } as never);
-    const format = (path: string) =>
-      proc.process({ data: { projectId: 'p1', kind: 'format', path } } as Job<never>);
-    return { repos, format };
-  }
-
-  it('runs latexindent with an argument array and returns stdout as text', async () => {
-    const { repos, format } = await setup();
+  it('runs latexindent on the submitted text with an argument array', async () => {
     runSpy.mockResolvedValueOnce({ stdout: 'formatted', stderr: '' });
-    try {
-      await expect(format('sub/a.tex')).resolves.toEqual({ text: 'formatted' });
-      expect(runSpy).toHaveBeenCalledWith(
-        'latexindent',
-        ["-y=defaultIndent: '  '", '-g=indent.log', 'sub/a.tex'],
-        expect.objectContaining({ timeout: 60_000, maxBuffer: 4 * 1024 * 1024 }),
-      );
-      expect(runSpy.mock.calls[0]?.[2]).not.toHaveProperty('shell');
-    } finally {
-      await rm(repos, { recursive: true, force: true });
-    }
+    await expect(format('sub/a.tex')).resolves.toEqual({ text: 'formatted' });
+    const [cmd, args, opts] = runSpy.mock.calls.at(-1) as [
+      string,
+      string[],
+      Record<string, unknown>,
+    ];
+    expect(cmd).toBe('latexindent');
+    expect(args).toEqual(["-y=defaultIndent: '  '", '-g=indent.log', 'in.tex']);
+    expect(opts).toMatchObject({ timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
+    expect(opts).not.toHaveProperty('shell');
+    expect(opts.env).toEqual({ PATH: process.env.PATH, HOME: opts.cwd });
   });
 
-  it('rejects traversal, option-like names and other extensions before running', async () => {
-    const { repos, format } = await setup();
+  it('rejects other extensions and oversized text before running', async () => {
     runSpy.mockClear();
-    try {
-      for (const path of ['../x.tex', '-flag.tex', 'sub/-w.tex', 'sub/a.txt']) {
-        await expect(format(path)).rejects.toThrow(/Invalid path/);
-      }
-      expect(runSpy).not.toHaveBeenCalled();
-    } finally {
-      await rm(repos, { recursive: true, force: true });
-    }
+    await expect(format('sub/a.txt')).rejects.toThrow(/Invalid path/);
+    await expect(format('a.tex', 'x'.repeat(1024 * 1024 + 1))).rejects.toThrow(/too large/);
+    expect(runSpy).not.toHaveBeenCalled();
   });
 });

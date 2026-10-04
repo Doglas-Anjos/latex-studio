@@ -45,11 +45,18 @@ export function StatusBar({ projectId, role }: { projectId: string; role: Role }
   const format = useMutation({
     mutationFn: async () => {
       if (!commands || !activePath) return;
+      const before = commands.getText();
       try {
-        const { jobId } = await tools.format(projectId, activePath);
+        const { jobId } = await tools.format(projectId, activePath, before);
         const r = await waitForJob<{ text: string }>(tools, projectId, jobId);
+        // Someone typed meanwhile: applying would revert their edit.
+        if (r && commands.getText() !== before) throw new Error('changed');
         if (r) commands.applyText(r.text);
-      } catch {
+      } catch (e) {
+        if ((e as Error).message === 'changed') {
+          setNote('O documento mudou durante a formatação; tente de novo');
+          return;
+        }
         commands.indentAll();
         setNote('latexindent indisponível; indentação local aplicada');
       }

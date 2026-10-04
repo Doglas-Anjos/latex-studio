@@ -1,5 +1,8 @@
 // \usepackage[opts]{a,b} or \RequirePackage; options optional, spaces tolerated
-const PACKAGE_CMD = /\\(?:usepackage|RequirePackage)\s*(?:\[([^\]]*)\])?\s*\{([^}]*)\}/g;
+// Bounded quantifiers: unbounded `[^}]*` scans to the end of the line from every match start,
+// which a 1 MB line of `\usepackage{` turns into tens of seconds (ReDoS).
+const PACKAGE_CMD =
+  /\\(?:usepackage|RequirePackage)\s{0,50}(?:\[([^\]]{0,500})\]\s{0,50})?\{([^}]{0,500})\}/g;
 // first % not preceded by a backslash
 const COMMENT_START = /(?<!\\)%/;
 

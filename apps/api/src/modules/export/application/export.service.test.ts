@@ -112,9 +112,11 @@ describe('ExportService', () => {
       } as AppConfig,
     );
     const project = { id: 'p1' } as Project;
-    await expect(exporter.requestFormat(project, 'chap/a.tex')).resolves.toEqual({ jobId: '7' });
-    expect(added).toEqual([{ projectId: 'p1', kind: 'format', path: 'chap/a.tex' }]);
-    expect(() => exporter.requestFormat(project, '../x.tex')).toThrow('Invalid path');
+    await expect(exporter.requestFormat(project, 'chap/a.tex', 'x')).resolves.toEqual({
+      jobId: '7',
+    });
+    expect(added).toEqual([{ projectId: 'p1', kind: 'format', path: 'chap/a.tex', text: 'x' }]);
+    expect(() => exporter.requestFormat(project, '../x.tex', 'x')).toThrow('Invalid path');
   });
 
   it('slugifies names', () => {

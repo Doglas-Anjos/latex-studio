@@ -61,6 +61,7 @@ export class HistoryService {
     const files = this.storage.open(project.id);
     if (!path) throw new BadRequestException('Missing path');
     checkPath(files, path);
+    if (!(await files.isFile(path))) throw new NotFoundException('File not found');
     try {
       return await files.repo.blame(path);
     } catch (e) {

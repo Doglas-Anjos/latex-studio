@@ -40,7 +40,7 @@ export function ActivityBar({ projectId }: { projectId: string }) {
   const { data } = useQuery({
     queryKey: ['history', projectId, 'status'],
     queryFn: () => history.status(projectId),
-    refetchInterval: 5000,
+    refetchInterval: 30_000,
   });
   const changed = data?.changes.length ?? 0;
   return (

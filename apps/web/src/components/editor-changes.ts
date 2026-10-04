@@ -6,6 +6,8 @@ import { type Extension, StateEffect, StateField, Text } from '@codemirror/state
 import { type EditorView, GutterMarker, gutter, ViewPlugin } from '@codemirror/view';
 
 type LineClass = 'added' | 'modified' | 'deleted';
+/** Keeps a huge rewrite from freezing the tab; the diff degrades instead. */
+export const DIFF_LIMITS = { scanLimit: 500, timeout: 500 };
 
 export const setChangeBase = StateEffect.define<string | null>();
 const setLineClasses = StateEffect.define<Map<number, LineClass>>();
@@ -15,7 +17,7 @@ export function lineClasses(base: string, current: string): Map<number, LineClas
   const a = Text.of(base.split('\n'));
   const b = Text.of(current.split('\n'));
   const out = new Map<number, LineClass>();
-  for (const c of Chunk.build(a, b)) {
+  for (const c of Chunk.build(a, b, DIFF_LIMITS)) {
     if (c.fromB === c.toB) {
       out.set(Math.min(b.lineAt(c.fromB).number, b.lines), 'deleted');
       continue;

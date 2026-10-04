@@ -17,22 +17,41 @@ export type PackageUsage = { name: string; options?: string };
 
 // Defining \ver@<name>.sty makes LaTeX skip any later \usepackage/\RequirePackage of it;
 // \opt@<name>.sty pre-seeds the options so the skipped call can't raise "Option clash".
+/** Splits `a,b={c,d}` at top-level commas only. */
+function splitOptions(s: string): string[] {
+  const out: string[] = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of s) {
+    if (ch === ',' && depth === 0) {
+      out.push(cur);
+      cur = '';
+      continue;
+    }
+    if (ch === '{') depth++;
+    if (ch === '}') depth--;
+    cur += ch;
+  }
+  out.push(cur);
+  return out.map((o) => o.trim()).filter(Boolean);
+}
+
 function bypass(e: PackageEntry, usage: PackageUsage[]): string[] {
   const opts = [
     ...new Set(
-      usage
-        .filter((u) => u.name === e.name)
-        .flatMap((u) => (u.options ?? '').split(','))
-        .map((o) => o.trim())
-        .filter(Boolean),
+      usage.filter((u) => u.name === e.name).flatMap((u) => splitOptions(u.options ?? '')),
     ),
-  ];
+  ].join(',');
+  // An unbalanced brace or a `#` inside \def would swallow the rest of the preamble.
+  const depth = [...opts].reduce(
+    (d, c) => (d < 0 ? d : c === '{' ? d + 1 : c === '}' ? d - 1 : d),
+    0,
+  );
+  const safe = opts && depth === 0 && !opts.includes('#');
   return [
     `% disabled: ${e.name} (bypass: later \\usepackage{${e.name}} lines are skipped)`,
     `\\expandafter\\def\\csname ver@${e.name}.sty\\endcsname{0000/00/00}`,
-    ...(opts.length
-      ? [`\\expandafter\\def\\csname opt@${e.name}.sty\\endcsname{${opts.join(',')}}`]
-      : []),
+    ...(safe ? [`\\expandafter\\def\\csname opt@${e.name}.sty\\endcsname{${opts}}`] : []),
   ];
 }
 

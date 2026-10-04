@@ -11,6 +11,7 @@ import {
   Query,
   StreamableFile,
 } from '@nestjs/common';
+import { RouteConfig } from '@nestjs/platform-fastify';
 import { CurrentUser } from '../../auth/presentation/decorators';
 import { CONTENT_TYPES } from '../../files/presentation/content-types';
 import type { Project } from '../../projects/domain/project';
@@ -49,6 +50,7 @@ export class HistoryController {
   }
 
   @Get('blame')
+  @RouteConfig({ rateLimit: { max: 30, timeWindow: '1 minute' } })
   @RequireProjectRole('viewer')
   blame(@CurrentProject() project: Project, @Query('path') path = '') {
     return this.history.blame(project, path);

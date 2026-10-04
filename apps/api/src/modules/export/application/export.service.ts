@@ -93,9 +93,10 @@ export class ExportService {
     return this.enqueue({ projectId: project.id, kind: 'export', format });
   }
 
-  requestFormat(project: Project, path: string): Promise<{ jobId: string }> {
+  requestFormat(project: Project, path: string, text: string): Promise<{ jobId: string }> {
     checkPath(this.storage.open(project.id), path);
-    return this.enqueue({ projectId: project.id, kind: 'format', path });
+    // Results are up to 1 MB each: kept just long enough for the client to poll them.
+    return this.enqueue({ projectId: project.id, kind: 'format', path, text }, { age: 120 });
   }
 
   async jobStatus(project: Project, jobId: string): Promise<JobStatus> {
@@ -120,10 +121,10 @@ export class ExportService {
     return { path: this.builds.resolve(`${project.id}/exports/${file}`), format: job.data.format };
   }
 
-  private async enqueue(data: ToolJobData): Promise<{ jobId: string }> {
+  private async enqueue(data: ToolJobData, keep = KEEP): Promise<{ jobId: string }> {
     const job = await this.queue.add(data.kind, data, {
-      removeOnComplete: KEEP,
-      removeOnFail: KEEP,
+      removeOnComplete: keep,
+      removeOnFail: keep,
     });
     return { jobId: String(job.id) };
   }

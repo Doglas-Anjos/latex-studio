@@ -26,7 +26,7 @@ import type { Role } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
 import { type Connection, useWorkspaceStore } from '../workspace-store';
 import { blameGutter, setBlame } from './editor-blame';
-import { changeGutter, setChangeBase } from './editor-changes';
+import { changeGutter, DIFF_LIMITS, setChangeBase } from './editor-changes';
 import { editorTheme, latexHighlight } from './editor-theme';
 import { peerColor } from './presence';
 import { approxWords } from './word-count';
@@ -159,7 +159,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const { data: status } = useQuery({
     queryKey: ['history', projectId, 'status'],
     queryFn: () => history.status(projectId),
-    refetchInterval: 5000,
+    refetchInterval: 30_000,
   });
   const baseSha = status ? (status.baseline?.sha ?? '') : null;
   const { data: baseText } = useQuery({
@@ -239,7 +239,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       applyText(text) {
         const current = view.state.doc.toString();
         if (text === current) return;
-        const changes = diff(current, text).map((c) => ({
+        const changes = diff(current, text, DIFF_LIMITS).map((c) => ({
           from: c.fromA,
           to: c.toA,
           insert: text.slice(c.fromB, c.toB),

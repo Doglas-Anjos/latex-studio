@@ -31,7 +31,8 @@ const APPEARANCE_KEYS = ['theme', 'syntax', 'editorFont', 'fontSize', 'lineWrapp
 function parseAppearance(raw: unknown): Partial<Settings> {
   const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const out: Partial<Settings> = {};
-  if (typeof o.theme === 'string' && o.theme in THEMES) out.theme = o.theme as Settings['theme'];
+  if (typeof o.theme === 'string' && Object.hasOwn(THEMES, o.theme))
+    out.theme = o.theme as Settings['theme'];
   if (typeof o.editorFont === 'string' && FONTS.includes(o.editorFont))
     out.editorFont = o.editorFont;
   if (typeof o.fontSize === 'number' && o.fontSize >= 11 && o.fontSize <= 20)
