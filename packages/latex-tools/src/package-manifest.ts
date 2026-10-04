@@ -37,9 +37,15 @@ function bypass(e: PackageEntry, usage: PackageUsage[]): string[] {
 }
 
 export function renderPackagesTex(manifest: PackageManifest, usage: PackageUsage[] = []): string {
+  const used = (e: PackageEntry) => usage.some((u) => u.name === e.name);
   const lines = [...manifest]
     .sort((a, b) => a.order - b.order)
-    .flatMap((e) => (e.enabled ? [usepackage(e)] : bypass(e, usage)));
+    .flatMap((e) => {
+      if (!e.enabled) return bypass(e, usage);
+      // Still loaded by the source itself: a second \usepackage would raise "Option clash".
+      if (used(e)) return [`% enabled: ${e.name} (loaded by the source)`];
+      return [usepackage(e)];
+    });
   return `${[HEADER, ...lines].join('\n')}\n`;
 }
 

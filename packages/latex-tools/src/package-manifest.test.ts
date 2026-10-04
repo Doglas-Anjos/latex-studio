@@ -40,10 +40,16 @@ describe('renderPackagesTex bypass', () => {
 
   it('keeps the usepackage line when enabled', () => {
     const tex = renderPackagesTex(
-      [{ name: 'a', options: 'x', enabled: true, order: 0 }],
-      [{ name: 'a' }],
+      [
+        { name: 'a', options: 'x', enabled: true, order: 0 },
+        { name: 'b', enabled: true, order: 1 },
+      ],
+      [{ name: 'a', options: 'y' }],
     );
-    expect(tex).toContain('\\usepackage[x]{a}');
+    // `a` is still loaded by the source: not repeated (it would clash on options).
+    expect(tex).toContain('% enabled: a (loaded by the source)');
+    expect(tex).not.toContain('\\usepackage[x]{a}');
+    expect(tex).toContain('\\usepackage{b}');
     expect(tex).not.toContain('ver@');
   });
 });
