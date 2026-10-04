@@ -1369,3 +1369,26 @@ button.change-path:hover {
 .cm-changedText {
   background: color-mix(in srgb, var(--warn) 35%, transparent);
 }
+
+/* Blame */
+.cm-blame-gutter {
+  min-width: 9rem;
+  max-width: 12rem;
+  padding-right: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.cm-blame-run {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 0.4rem;
+  border-left: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+}
+.status-btn[aria-pressed="true"] {
+  color: var(--primary);
+}
+.status-note-inline {
+  color: var(--warn);
+}

@@ -17,6 +17,7 @@ const fake = (): FileService => ({
   remove: vi.fn(),
   rename: vi.fn(),
   upload: vi.fn(),
+  write: vi.fn(),
 });
 
 describe('FileTree', () => {

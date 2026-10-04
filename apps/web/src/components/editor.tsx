@@ -1,5 +1,6 @@
 import { indentSelection } from '@codemirror/commands';
 import { syntaxHighlighting } from '@codemirror/language';
+import { diff } from '@codemirror/merge';
 import {
   Compartment,
   EditorState,
@@ -24,6 +25,7 @@ import { IdentityToken } from '../services/identity';
 import type { Role } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
 import { type Connection, useWorkspaceStore } from '../workspace-store';
+import { blameGutter, setBlame } from './editor-blame';
 import { changeGutter, setChangeBase } from './editor-changes';
 import { editorTheme, latexHighlight } from './editor-theme';
 import { peerColor } from './presence';
@@ -166,6 +168,13 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     enabled: baseSha !== null,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  const blameOn = useWorkspaceStore((s) => s.blameOn);
+  const { data: blame } = useQuery({
+    queryKey: ['history', projectId, 'blame', path],
+    queryFn: () => history.blame(projectId, path),
+    enabled: blameOn,
+    staleTime: 30_000,
+  });
   const { data } = useQuery({
     queryKey: ['comments', projectId, path, false],
     queryFn: () => comments.list(projectId, path, false),
@@ -203,6 +212,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           yCollab(ytext, provider.awareness),
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
+          blameGutter(),
           EditorView.updateListener.of((u) => {
             if (!u.docChanged) return;
             clearTimeout(wordTimer);
@@ -226,6 +236,17 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
         const at = Math.min(head, view.state.doc.length);
         view.dispatch({ selection: { anchor: at } });
       },
+      applyText(text) {
+        const current = view.state.doc.toString();
+        if (text === current) return;
+        const changes = diff(current, text).map((c) => ({
+          from: c.fromA,
+          to: c.toA,
+          insert: text.slice(c.fromB, c.toB),
+        }));
+        view.dispatch({ changes, userEvent: 'format' });
+      },
+      getText: () => view.state.doc.toString(),
     });
     store.setSelectionProvider(() => {
       const { from, to } = view.state.selection.main;
@@ -294,6 +315,10 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     changeBase.current = text;
     viewRef.current?.dispatch({ effects: setChangeBase.of(text) });
   }, [baseText]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: setBlame.of(blameOn ? (blame ?? null) : null) });
+  }, [blame, blameOn]);
 
   // Own cursor label; separate so a late /me answer does not rebuild the editor.
   useEffect(() => {

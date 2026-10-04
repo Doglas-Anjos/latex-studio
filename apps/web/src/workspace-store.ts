@@ -20,6 +20,9 @@ export interface Peer {
 }
 interface EditorCommands {
   indentAll: () => void;
+  /** Replaces the document with `text` as minimal edits (collaborators keep their cursors). */
+  applyText: (text: string) => void;
+  getText: () => string;
 }
 
 const tabId = (t: NewTab) =>
@@ -38,6 +41,8 @@ interface WorkspaceState {
   setEditorCommands: (c: EditorCommands | null) => void;
   peers: Peer[];
   setPeers: (p: Peer[]) => void;
+  blameOn: boolean;
+  toggleBlame: () => void;
   /** null means "the project's main file". */
   activePath: string | null;
   /** Line the editor should reveal once the file is open (1-based). */
@@ -89,6 +94,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setEditorCommands: (editorCommands) => set({ editorCommands }),
   peers: [],
   setPeers: (peers) => set({ peers }),
+  blameOn: false,
+  toggleBlame: () => set((s) => ({ blameOn: !s.blameOn })),
   activePath: null,
   pendingLine: null,
   getSelection: null,

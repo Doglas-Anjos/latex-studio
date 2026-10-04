@@ -10,6 +10,8 @@ export interface FileService {
   list(projectId: string): Promise<ProjectFile[]>;
   download(projectId: string, path: string): Promise<void>;
   blob(projectId: string, path: string): Promise<Blob>;
+  /** Replaces a text file; an open collaborative doc is patched server-side. */
+  write(projectId: string, path: string, content: string): Promise<void>;
   create(projectId: string, path: string): Promise<void>;
   createFolder(projectId: string, path: string): Promise<void>;
   remove(projectId: string, path: string): Promise<void>;
@@ -38,6 +40,10 @@ export class HttpFileService implements FileService {
   async blob(projectId: string, path: string) {
     const res = await this.api.getRaw(`/projects/${projectId}/files/${encodePath(path)}`);
     return res.blob();
+  }
+
+  async write(projectId: string, path: string, content: string) {
+    await this.api.put(`/projects/${projectId}/files/${encodePath(path)}`, { content });
   }
 
   async create(projectId: string, path: string) {

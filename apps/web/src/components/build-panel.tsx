@@ -1,17 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useService } from '../di/service-provider';
 import { CompileServiceToken, isActive, type LogEntry } from '../services/compile.service';
+import { FileServiceToken } from '../services/file.service';
 import { PackageServiceToken } from '../services/package.service';
 import { ProjectServiceToken } from '../services/project.service';
-import {
-  type ExportFormat,
-  type JobStatus,
-  ToolsServiceToken,
-  type WordCount,
-} from '../services/tools.service';
+import { type ExportFormat, ToolsServiceToken, type WordCount } from '../services/tools.service';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { useBuilds } from './use-builds';
+import { waitForJob } from './use-tools-job';
 
 const statusText = {
   queued: 'Na fila…',
@@ -20,8 +18,6 @@ const statusText = {
   failed: 'Falhou',
   timeout: 'Tempo esgotado',
 };
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const exportLabels: [ExportFormat, string][] = [
   ['docx', 'DOCX'],
@@ -33,6 +29,7 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   const compile = useService(CompileServiceToken);
   const projects = useService(ProjectServiceToken);
   const tools = useService(ToolsServiceToken);
+  const files = useService(FileServiceToken);
   const queryClient = useQueryClient();
   const { data: builds } = useBuilds(projectId);
   const packages = useService(PackageServiceToken);
@@ -53,15 +50,30 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
     onSuccess: (b) => queryClient.setQueryData(['builds', projectId], [b, ...(builds ?? [])]),
   });
 
-  // Polls the tools job until it ends; a failed job becomes the mutation error.
-  const waitFor = async <T,>(jobId: string): Promise<T | undefined> => {
-    for (;;) {
-      await sleep(1500);
-      const job: JobStatus<T> = await tools.jobStatus<T>(projectId, jobId);
-      if (job.state === 'completed') return job.result;
-      if (job.state === 'failed') throw new Error(job.error || 'Falhou');
-    }
-  };
+  const waitFor = <T,>(jobId: string) => waitForJob<T>(tools, projectId, jobId);
+  const [formatProgress, setFormatProgress] = useState('');
+  // Every .tex through latexindent: the open file via the editor (keeps cursors), others via PUT.
+  const formatAll = useMutation({
+    mutationFn: async () => {
+      const paths = (await files.list(projectId))
+        .map((f) => f.path)
+        .filter((p) => /\.tex$/i.test(p));
+      for (const [i, path] of paths.entries()) {
+        setFormatProgress(`Formatando ${i + 1}/${paths.length}…`);
+        const { jobId } = await tools.format(projectId, path);
+        const r = await waitFor<{ text: string }>(jobId);
+        if (!r) continue;
+        const { activePath, editorCommands } = useWorkspaceStore.getState();
+        if (editorCommands && path === (activePath ?? paths[0])) editorCommands.applyText(r.text);
+        else await files.write(projectId, path, r.text);
+      }
+    },
+    onSettled: () => {
+      setFormatProgress('');
+      queryClient.invalidateQueries({ queryKey: ['files', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['history', projectId] });
+    },
+  });
   const exportAs = useMutation({
     mutationFn: async (format: ExportFormat) => {
       const { jobId } = await tools.requestExport(projectId, format);
@@ -78,7 +90,7 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
         : `${r.words} palavras · ${r.headers} em títulos · ${r.captions} em legendas`;
     },
   });
-  const busy = exportAs.isPending || count.isPending;
+  const busy = exportAs.isPending || count.isPending || formatAll.isPending;
 
   return (
     <section className="build-panel" aria-label="Compilação">
@@ -133,6 +145,8 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
       {count.error && <p className="form-error">{count.error.message}</p>}
       {busy && <p className="status-note">Processando…</p>}
       {count.data && <p className="status-note">{count.data}</p>}
+      {formatAll.error && <p className="form-error">{formatAll.error.message}</p>}
+      {formatProgress && <p className="status-note">{formatProgress}</p>}
       {build && (
         <ul className="log-list">
           {build.errors.map((e) => (
