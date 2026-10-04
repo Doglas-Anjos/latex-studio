@@ -111,3 +111,24 @@ it('blames lines like git blame, with null for uncommitted lines', async () => {
   expect(commits[c3]?.author.name).toBe('Bruno');
   expect(commits[c1]?.author.name).toBe('Ana');
 });
+
+it('commitPaths commits only the given paths with co-author trailers', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'git-store-'));
+  dirs.push(dir);
+  const ana = { name: 'Ana', email: 'ana@example.com' };
+  const bruno = { name: 'Bruno', email: 'bruno@example.com' };
+  const repo = await GitRepository.init(dir);
+  await repo.writeFile('a.tex', '1');
+  await repo.writeFile('b.tex', '1');
+  await repo.commitAll('first', ana);
+  // Different sizes: statusMatrix misses a same-size edit within the same second (see changes()).
+  await repo.writeFile('a.tex', '22');
+  await repo.writeFile('b.tex', '22');
+  expect(await repo.commitPaths(['a.tex'], AUTOSAVE_MESSAGE, bruno, [ana])).toMatch(/^[0-9a-f]+$/);
+  expect(await repo.commitPaths(['a.tex'], AUTOSAVE_MESSAGE, bruno)).toBeNull();
+  const [head] = await repo.log(1);
+  expect(head?.author).toEqual(bruno);
+  expect(head?.message).toBe(`${AUTOSAVE_MESSAGE}\n\nCo-authored-by: Ana <ana@example.com>`);
+  expect(await repo.workingChanges(head?.sha ?? null)).toEqual([{ path: 'b.tex', type: 'modify' }]);
+  expect((await repo.baseline())?.message).toBe('first');
+});

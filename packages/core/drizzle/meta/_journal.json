@@ -57,6 +57,13 @@
       "when": 1791063342551,
       "tag": "0007_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791082912358,
+      "tag": "0008_file_edits",
+      "breakpoints": true
     }
   ]
 }

@@ -138,7 +138,29 @@ export class GitRepository {
   async baseline(limit = 200) {
     const commits = await this.log(limit);
     // ponytail: only `limit` commits are scanned; more consecutive autosaves than that yields the oldest of them.
-    return commits.find((c) => c.message !== AUTOSAVE_MESSAGE) ?? commits.at(-1) ?? null;
+    return commits.find((c) => !c.message.startsWith(AUTOSAVE_MESSAGE)) ?? commits.at(-1) ?? null;
+  }
+
+  /**
+   * Commits only `paths` (added, modified or deleted), with `Co-authored-by` trailers for
+   * `coAuthors`. Returns null when none of them differs from HEAD.
+   */
+  async commitPaths(
+    paths: string[],
+    message: string,
+    author: Author,
+    coAuthors: Author[] = [],
+  ): Promise<string | null> {
+    const rows = await git.statusMatrix({ fs, dir: this.dir, filepaths: paths });
+    const changed = rows.filter(([, head, workdir]) => !(head === 1 && workdir === 1));
+    if (changed.length === 0) return null;
+    for (const [filepath, , workdir] of changed) {
+      if (workdir === 0) await git.remove({ fs, dir: this.dir, filepath });
+      else await git.add({ fs, dir: this.dir, filepath });
+    }
+    const trailers = coAuthors.map((a) => `Co-authored-by: ${a.name} <${a.email}>`);
+    const full = trailers.length ? `${message}\n\n${trailers.join('\n')}` : message;
+    return git.commit({ fs, dir: this.dir, message: full, author, committer: author });
   }
 
   /** Files that differ between commit `fromSha` (empty tree when null) and the working tree. */

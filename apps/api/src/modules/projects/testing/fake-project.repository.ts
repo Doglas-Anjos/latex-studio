@@ -5,6 +5,7 @@ export class FakeProjects implements ProjectRepository {
   rows: Project[] = [];
   members: Array<{ projectId: string; userId: string; role: ProjectRole }> = [];
   dirtySince = new Map<string, Date>();
+  edits: Array<{ projectId: string; path: string; userId: string }> = [];
 
   async create(project: NewProject, ownerId: string) {
     const now = new Date();
@@ -54,6 +55,9 @@ export class FakeProjects implements ProjectRepository {
   async delete(id: string) {
     this.rows = this.rows.filter((p) => p.id !== id);
     this.members = this.members.filter((m) => m.projectId !== id);
+  }
+  async recordEdit(projectId: string, path: string, userId: string) {
+    this.edits.push({ projectId, path, userId });
   }
   async markDirty(id: string) {
     if (!this.dirtySince.has(id)) this.dirtySince.set(id, new Date());

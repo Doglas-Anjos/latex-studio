@@ -1,5 +1,5 @@
 import { DATABASE, type Database } from '@latex-studio/core';
-import { projectMembers, projects, users } from '@latex-studio/core/schema';
+import { fileEdits, projectMembers, projects, users } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 import type { Project, ProjectRole, ProjectWithRole } from '../domain/project';
@@ -87,5 +87,15 @@ export class DrizzleProjectRepository implements ProjectRepository {
       .update(projects)
       .set({ dirtySince: sql`now()` })
       .where(and(eq(projects.id, id), isNull(projects.dirtySince)));
+  }
+
+  async recordEdit(projectId: string, path: string, userId: string): Promise<void> {
+    await this.db
+      .insert(fileEdits)
+      .values({ projectId, path, userId })
+      .onConflictDoUpdate({
+        target: [fileEdits.projectId, fileEdits.path, fileEdits.userId],
+        set: { updatedAt: sql`now()` },
+      });
   }
 }

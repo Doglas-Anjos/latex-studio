@@ -27,6 +27,10 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
       if (typeof loaded === 'string') document.getText('content').insert(0, loaded);
       else Y.applyUpdate(document, loaded);
     },
+    async onChange({ context, documentName }) {
+      const { projectId, path } = collab.parseDocumentName(documentName);
+      await collab.recordEdit(projectId, path, context.user.id);
+    },
     async onStoreDocument({ document, documentName, instance }) {
       // DocumentSync.forget dropped this doc (file renamed or deleted): never write it back.
       if (instance.documents.get(documentName) !== document) return;
