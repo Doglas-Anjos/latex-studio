@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileText, Undo2 } from 'lucide-react';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { useService } from '../../di/service-provider';
 import { HistoryServiceToken } from '../../services/history.service';
 import { useWorkspaceStore } from '../../workspace-store';
 import { Button } from '../button';
+import { Dialog } from '../dialog';
 
 const letter = { add: 'A', modify: 'M', remove: 'D' } as const;
 
@@ -14,6 +15,8 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
   const setActivePath = useWorkspaceStore((s) => s.setActivePath);
   const openTab = useWorkspaceStore((s) => s.openTab);
   const [message, setMessage] = useState('');
+  const discardDialog = useRef<HTMLDialogElement>(null);
+  const [discardTarget, setDiscardTarget] = useState<string | null>(null);
   const { data } = useQuery({
     queryKey: ['history', projectId, 'status'],
     queryFn: () => history.status(projectId),
@@ -29,11 +32,14 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
   });
   const discard = useMutation({
     mutationFn: (path: string) => history.restore(projectId, baseline?.sha ?? '', path),
-    onSuccess: () =>
-      Promise.all([
+    onSuccess: () => {
+      discardDialog.current?.close();
+      setDiscardTarget(null);
+      return Promise.all([
         queryClient.invalidateQueries({ queryKey: ['history', projectId] }),
         queryClient.invalidateQueries({ queryKey: ['files', projectId] }),
-      ]),
+      ]);
+    },
   });
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -87,7 +93,8 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
                 title="Descartar"
                 disabled={discard.isPending}
                 onClick={() => {
-                  if (confirm(`Descartar alterações de ${c.path}?`)) discard.mutate(c.path);
+                  setDiscardTarget(c.path);
+                  discardDialog.current?.showModal();
                 }}
               >
                 <Undo2 size={14} aria-hidden />
@@ -96,7 +103,6 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
           </li>
         ))}
       </ul>
-      {discard.error && <p className="form-error">{discard.error.message}</p>}
       {canEdit && (
         <form className="change-form" onSubmit={submit}>
           <input
@@ -111,6 +117,26 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
           {save.error && <p className="form-error">{save.error.message}</p>}
         </form>
       )}
+      <Dialog ref={discardDialog} title="Descartar alterações" pending={discard.isPending}>
+        <p>Descartar alterações de "{discardTarget}"? Essa ação não pode ser desfeita.</p>
+        {discard.error && <p className="form-error">{discard.error.message}</p>}
+        <div className="actions">
+          <Button
+            variant="ghost"
+            onClick={() => discardDialog.current?.close()}
+            disabled={discard.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => discardTarget && discard.mutate(discardTarget)}
+            disabled={discard.isPending}
+          >
+            {discard.isPending ? 'Descartando…' : 'Descartar'}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

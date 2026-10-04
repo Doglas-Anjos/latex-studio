@@ -19,8 +19,12 @@ const list: Project[] = [
 ];
 
 function setup() {
-  const service = { list: vi.fn().mockResolvedValue(list) } as unknown as ProjectService;
+  const service = {
+    list: vi.fn().mockResolvedValue(list),
+    remove: vi.fn().mockResolvedValue(undefined),
+  } as unknown as ProjectService;
   renderWithApp(<ProjectsPage />, new Container().register(ProjectServiceToken, service));
+  return service;
 }
 const bodyRows = () => screen.getAllByRole('row').slice(1);
 
@@ -55,5 +59,16 @@ describe('ProjectsPage', () => {
     await userEvent.click(screen.getByText('Novo projeto', { selector: 'summary' }));
     await userEvent.click(screen.getByRole('button', { name: 'Projeto em branco' }));
     expect(screen.getByRole('dialog', { name: 'Novo projeto' })).toBeTruthy();
+  });
+
+  it('asks for confirmation before deleting a project and calls the API on confirm', async () => {
+    const service = setup();
+    await screen.findByText('Tese');
+    const row = within(bodyRows()[2] as HTMLElement); // Tese, owner
+    await userEvent.click(row.getByRole('button', { name: 'Excluir' }));
+    const dialog = screen.getByRole('dialog', { name: 'Excluir projeto' });
+    expect(within(dialog).getByText(/não pode ser desfeita/)).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Excluir' }));
+    expect(service.remove).toHaveBeenCalledWith('1');
   });
 });

@@ -1,5 +1,5 @@
 import type { Project, ProjectRole, ProjectWithRole } from '../domain/project';
-import type { NewProject, ProjectRepository } from '../domain/project.repository';
+import type { NewProject, ProjectPatch, ProjectRepository } from '../domain/project.repository';
 
 export class FakeProjects implements ProjectRepository {
   rows: Project[] = [];
@@ -55,6 +55,11 @@ export class FakeProjects implements ProjectRepository {
   async delete(id: string) {
     this.rows = this.rows.filter((p) => p.id !== id);
     this.members = this.members.filter((m) => m.projectId !== id);
+  }
+  async update(id: string, patch: ProjectPatch) {
+    const row = this.rows.find((p) => p.id === id);
+    if (!row) throw new Error('Project not found');
+    return Object.assign(row, patch);
   }
   async recordEdit(projectId: string, path: string, userId: string) {
     this.edits.push({ projectId, path, userId });

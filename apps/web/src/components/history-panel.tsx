@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { GitCompare } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { type FormEvent, useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
 import { HistoryServiceToken } from '../services/history.service';
 import { useWorkspaceStore } from '../workspace-store';
@@ -11,8 +11,11 @@ export function HistoryPanel({ projectId, canEdit }: { projectId: string; canEdi
   const service = useService(HistoryServiceToken);
   const queryClient = useQueryClient();
   const dialog = useRef<HTMLDialogElement>(null);
+  const restoreDialog = useRef<HTMLDialogElement>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [viewing, setViewing] = useState<{ path: string; text: string } | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<{ sha: string; path: string } | null>(null);
+  const [message, setMessage] = useState('');
   const { data: log = [] } = useQuery({
     queryKey: ['history', projectId],
     queryFn: () => service.log(projectId, 50),
@@ -32,12 +35,19 @@ export function HistoryPanel({ projectId, canEdit }: { projectId: string; canEdi
     ]);
   const save = useMutation({
     mutationFn: (message: string) => service.commit(projectId, message),
-    onSuccess: refresh,
+    onSuccess: () => {
+      setMessage('');
+      return refresh();
+    },
   });
   const restore = useMutation({
     mutationFn: ({ sha, path }: { sha: string; path: string }) =>
       service.restore(projectId, sha, path),
-    onSuccess: refresh,
+    onSuccess: () => {
+      restoreDialog.current?.close();
+      setRestoreTarget(null);
+      return refresh();
+    },
   });
   const openTab = useWorkspaceStore((st) => st.openTab);
   const [mark, setMark] = useState<string | null>(null);
@@ -69,18 +79,26 @@ export function HistoryPanel({ projectId, canEdit }: { projectId: string; canEdi
     },
   });
 
-  const saveVersion = () => {
-    const message = prompt('Mensagem da versão')?.trim();
-    if (message) save.mutate(message);
+  const submitMessage = (e: FormEvent) => {
+    e.preventDefault();
+    if (message.trim()) save.mutate(message.trim());
   };
-  const error = save.error ?? restore.error ?? view.error ?? compare.error;
+  const error = save.error ?? view.error ?? compare.error;
 
   return (
     <section className="history-panel" aria-label="Histórico">
       {canEdit && (
-        <Button variant="secondary" disabled={save.isPending} onClick={saveVersion}>
-          Salvar versão
-        </Button>
+        <form className="change-form" onSubmit={submitMessage}>
+          <input
+            placeholder="Mensagem da versão"
+            aria-label="Mensagem da versão"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+          />
+          <Button variant="secondary" type="submit" disabled={save.isPending || !message.trim()}>
+            Salvar versão
+          </Button>
+        </form>
       )}
       <ul className="history-list">
         {log.map((e, i) => (
@@ -127,10 +145,10 @@ export function HistoryPanel({ projectId, canEdit }: { projectId: string; canEdi
                     )}
                     {canEdit && (
                       <Button
-                        variant="ghost"
+                        variant="danger"
                         onClick={() => {
-                          if (confirm(`Restaurar ${c.path} para esta versão?`))
-                            restore.mutate({ sha: e.sha, path: c.path });
+                          setRestoreTarget({ sha: e.sha, path: c.path });
+                          restoreDialog.current?.showModal();
                         }}
                       >
                         restaurar
@@ -149,6 +167,26 @@ export function HistoryPanel({ projectId, canEdit }: { projectId: string; canEdi
         <Button variant="secondary" onClick={() => dialog.current?.close()}>
           Fechar
         </Button>
+      </Dialog>
+      <Dialog ref={restoreDialog} title="Restaurar arquivo" pending={restore.isPending}>
+        <p>Restaurar "{restoreTarget?.path}" para esta versão? Essa ação não pode ser desfeita.</p>
+        {restore.error && <p className="form-error">{restore.error.message}</p>}
+        <div className="actions">
+          <Button
+            variant="ghost"
+            onClick={() => restoreDialog.current?.close()}
+            disabled={restore.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => restoreTarget && restore.mutate(restoreTarget)}
+            disabled={restore.isPending}
+          >
+            {restore.isPending ? 'Restaurando…' : 'Restaurar'}
+          </Button>
+        </div>
       </Dialog>
     </section>
   );

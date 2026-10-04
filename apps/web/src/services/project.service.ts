@@ -27,6 +27,7 @@ export interface ProjectService {
   import(input: ImportInput): Promise<Project>;
   copy(projectId: string, name?: string): Promise<Project>;
   downloadSource(projectId: string, withHistory?: boolean): Promise<void>;
+  update(projectId: string, patch: Partial<Pick<Project, 'engine' | 'mainFile'>>): Promise<Project>;
 }
 
 export const ProjectServiceToken = createToken<ProjectService>('ProjectService');
@@ -60,6 +61,10 @@ export class HttpProjectService implements ProjectService {
 
   copy(projectId: string, name?: string) {
     return this.api.post<Project>(`/projects/${projectId}/copy`, name ? { name } : {});
+  }
+
+  update(projectId: string, patch: Partial<Pick<Project, 'engine' | 'mainFile'>>) {
+    return this.api.patch<Project>(`/projects/${projectId}`, patch);
   }
 
   downloadSource(projectId: string, withHistory = false) {

@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
+import { ArrowLeft } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef } from 'react';
 import { Link, useParams } from 'react-router';
+import { Brand } from '../components/brand';
 import { Editor } from '../components/editor';
 import { PdfViewer } from '../components/pdf-viewer';
 import { ThemeToggle } from '../components/theme-toggle';
@@ -20,6 +22,7 @@ export function ProjectPage() {
   const { projectId = '' } = useParams();
   const projects = useService(ProjectServiceToken);
   const root = useRef<HTMLDivElement>(null);
+  const sidebarDetailsRef = useRef<HTMLDetailsElement>(null);
   const activePath = useWorkspaceStore((s) => s.activePath);
   const activeTab = useWorkspaceStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const hasTabs = useWorkspaceStore((s) => s.tabs.length > 0);
@@ -31,10 +34,26 @@ export function ProjectPage() {
     isPending,
   } = useQuery({ queryKey: ['project', projectId], queryFn: () => projects.get(projectId) });
   const mainFile = project?.mainFile;
+  const openedFor = useRef<string | null>(null);
 
+  // Only on entering the project, never when the user closes the last tab on purpose.
   useEffect(() => {
-    if (mainFile && !hasTabs) openTab({ kind: 'file', path: mainFile });
-  }, [mainFile, hasTabs, openTab]);
+    if (!mainFile || openedFor.current === projectId) return;
+    if (!hasTabs) openTab({ kind: 'file', path: mainFile });
+    openedFor.current = projectId;
+  }, [projectId, mainFile, hasTabs, openTab]);
+
+  // Reopens the sidebar when the window grows past the mobile breakpoint, where
+  // the <details> toggle is hidden and a closed panel would be unreachable.
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 56.0625rem)');
+    const reopenOnDesktop = () => {
+      if (mq.matches && sidebarDetailsRef.current) sidebarDetailsRef.current.open = true;
+    };
+    reopenOnDesktop();
+    mq.addEventListener('change', reopenOnDesktop);
+    return () => mq.removeEventListener('change', reopenOnDesktop);
+  }, []);
 
   if (isPending) return <p className="status-note">Carregando…</p>;
   if (error || !project)
@@ -56,25 +75,37 @@ export function ProjectPage() {
     <div className="workspace-shell">
       <div className="workspace-title">
         <Link to="/" className="brand">
-          LaTeX Studio
+          <Brand />
         </Link>
+        <span className="workspace-sep" aria-hidden="true">
+          /
+        </span>
         <span className="workspace-name">{project.name}</span>
         <span className="workspace-title-end">
-          <Link to="/">Projetos</Link>
+          <Link to="/" className="back-link">
+            <ArrowLeft size={14} aria-hidden="true" /> Projetos
+          </Link>
           <ThemeToggle />
         </span>
       </div>
       <div className="workspace" ref={root} style={style}>
         <ActivityBar projectId={project.id} />
-        <details className="sidebar-details" open>
+        <details className="sidebar-details" ref={sidebarDetailsRef} open>
           <summary>Painel</summary>
           <Sidebar project={project} path={path} />
         </details>
         <Splitter root={root} resizes="sidebarWidth" label="Redimensionar barra lateral" />
         <div className="editor-column">
           <TabBar />
-          <section className="pane-editor" aria-label={`Editor: ${path}`}>
-            {activeTab?.kind === 'diff' ? (
+          <section
+            className="pane-editor"
+            aria-label={activeTab ? `Editor: ${path}` : 'Nenhum arquivo aberto'}
+          >
+            {!activeTab ? (
+              <p className="status-note pane-empty">
+                Nenhum arquivo aberto. Escolha um arquivo na barra lateral para editar.
+              </p>
+            ) : activeTab.kind === 'diff' ? (
               <DiffTab
                 key={activeTab.id}
                 projectId={project.id}
@@ -84,9 +115,9 @@ export function ProjectPage() {
               />
             ) : (
               <Editor
-                key={`${project.id}/${path}`}
+                key={`${project.id}/${activeTab.path}`}
                 projectId={project.id}
-                path={path}
+                path={activeTab.path}
                 role={project.role}
               />
             )}

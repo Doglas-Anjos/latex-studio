@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Post, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Inject, Patch, Post, Req } from '@nestjs/common';
 import { RouteConfig } from '@nestjs/platform-fastify';
 import type { FastifyRequest } from 'fastify';
 import { CurrentUser } from '../../auth/presentation/decorators';
@@ -8,7 +8,7 @@ import type { Project, ProjectWithRole } from '../domain/project';
 import { CurrentProject, RequireProjectRole } from './guards/project-role.guard';
 import { IMPORT_RATE_LIMIT, withParts } from './multipart';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
-import { CreateProjectDto } from './projects.dto';
+import { CreateProjectDto, UpdateProjectDto } from './projects.dto';
 
 @Controller('projects')
 export class ProjectsController {
@@ -34,6 +34,16 @@ export class ProjectsController {
   @RequireProjectRole('viewer')
   get(@Req() request: FastifyRequest, @CurrentProject() project: Project): ProjectWithRole {
     return { ...project, role: request.projectRole ?? 'viewer' };
+  }
+
+  @Patch(':projectId')
+  @RequireProjectRole('editor')
+  update(
+    @CurrentUser() user: User,
+    @CurrentProject() project: Project,
+    @Body() dto: UpdateProjectDto,
+  ): Promise<Project> {
+    return this.projects.update(project, user, dto);
   }
 
   @Delete(':projectId')

@@ -1,13 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
 import { CompileServiceToken, isActive, type LogEntry } from '../services/compile.service';
 import { FileServiceToken } from '../services/file.service';
 import { PackageServiceToken } from '../services/package.service';
-import { ProjectServiceToken } from '../services/project.service';
+import { type Project, ProjectServiceToken } from '../services/project.service';
 import { type ExportFormat, ToolsServiceToken, type WordCount } from '../services/tools.service';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
+import { Dialog } from './dialog';
 import { useBuilds } from './use-builds';
 import { waitForJob } from './use-tools-job';
 
@@ -86,6 +87,14 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
       queryClient.invalidateQueries({ queryKey: ['history', projectId] });
     },
   });
+  const { data: project } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => projects.get(projectId),
+  });
+  const setEngine = useMutation({
+    mutationFn: (engine: Project['engine']) => projects.update(projectId, { engine }),
+    onSuccess: (p) => queryClient.setQueryData(['project', projectId], p),
+  });
   const exportAs = useMutation({
     mutationFn: async (format: ExportFormat) => {
       const { jobId } = await tools.requestExport(projectId, format);
@@ -103,6 +112,11 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
     },
   });
   const busy = exportAs.isPending || count.isPending || formatAll.isPending;
+  const downloadRef = useRef<HTMLDialogElement>(null);
+  const withClose = (action: () => void) => () => {
+    action();
+    downloadRef.current?.close();
+  };
 
   return (
     <section className="build-panel" aria-label="Compilação">
@@ -114,6 +128,18 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
         >
           Compilar
         </Button>
+        <select
+          className="engine-select"
+          aria-label="Motor LaTeX"
+          title="Motor LaTeX (fontspec e polyglossia exigem XeLaTeX ou LuaLaTeX)"
+          value={project?.engine ?? 'pdflatex'}
+          disabled={!canCompile || !project || setEngine.isPending}
+          onChange={(e) => setEngine.mutate(e.target.value as Project['engine'])}
+        >
+          <option value="pdflatex">pdfLaTeX</option>
+          <option value="xelatex">XeLaTeX</option>
+          <option value="lualatex">LuaLaTeX</option>
+        </select>
         {build && (
           <span className="build-status" data-status={build.status}>
             {statusText[build.status]}
@@ -124,12 +150,16 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             ver log
           </Button>
         )}
-        <details className="menu">
-          <summary>Baixar</summary>
-          <button type="button" onClick={() => projects.downloadSource(projectId)}>
+        <Button variant="ghost" onClick={() => downloadRef.current?.showModal()}>
+          Baixar
+        </Button>
+      </div>
+      <Dialog ref={downloadRef} title="Baixar">
+        <div className="dialog-list">
+          <button type="button" onClick={withClose(() => projects.downloadSource(projectId))}>
             Fonte (.zip)
           </button>
-          <button type="button" onClick={() => projects.downloadSource(projectId, true)}>
+          <button type="button" onClick={withClose(() => projects.downloadSource(projectId, true))}>
             Fonte com histórico git (.zip)
           </button>
           {exportLabels.map(([format, label]) => (
@@ -137,25 +167,34 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
               key={format}
               type="button"
               disabled={busy}
-              onClick={() => exportAs.mutate(format)}
+              onClick={withClose(() => exportAs.mutate(format))}
             >
               {label}
             </button>
           ))}
-          <button type="button" disabled={busy} onClick={() => count.mutate()}>
+          <button type="button" disabled={busy} onClick={withClose(() => count.mutate())}>
             Contar palavras
           </button>
           {build?.status === 'succeeded' && (
-            <button type="button" onClick={() => compile.downloadPdf(projectId, build.id)}>
+            <button
+              type="button"
+              onClick={withClose(() => compile.downloadPdf(projectId, build.id))}
+            >
               PDF
             </button>
           )}
-        </details>
-      </div>
+        </div>
+        <div className="actions">
+          <Button variant="ghost" onClick={() => downloadRef.current?.close()}>
+            Fechar
+          </Button>
+        </div>
+      </Dialog>
       {start.error && <p className="form-error">{start.error.message}</p>}
       {exportAs.error && <p className="form-error">{exportAs.error.message}</p>}
       {count.error && <p className="form-error">{count.error.message}</p>}
       {busy && <p className="status-note">Processando…</p>}
+      {setEngine.error && <p className="form-error">{setEngine.error.message}</p>}
       {count.data && <p className="status-note">{count.data}</p>}
       {formatAll.error && <p className="form-error">{formatAll.error.message}</p>}
       {formatProgress && <p className="status-note">{formatProgress}</p>}

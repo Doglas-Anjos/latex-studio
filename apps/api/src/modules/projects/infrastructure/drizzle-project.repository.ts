@@ -3,7 +3,12 @@ import { fileEdits, projectMembers, projects, users } from '@latex-studio/core/s
 import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
 import type { Project, ProjectRole, ProjectWithRole } from '../domain/project';
-import type { Member, NewProject, ProjectRepository } from '../domain/project.repository';
+import type {
+  Member,
+  NewProject,
+  ProjectPatch,
+  ProjectRepository,
+} from '../domain/project.repository';
 
 @Injectable()
 export class DrizzleProjectRepository implements ProjectRepository {
@@ -76,6 +81,16 @@ export class DrizzleProjectRepository implements ProjectRepository {
       .from(projects)
       .where(eq(projects.ownerId, userId));
     return row?.n ?? 0;
+  }
+
+  async update(id: string, patch: ProjectPatch): Promise<Project> {
+    const [row] = await this.db
+      .update(projects)
+      .set({ ...patch, updatedAt: sql`now()` })
+      .where(eq(projects.id, id))
+      .returning();
+    if (!row) throw new Error('Project not found');
+    return row;
   }
 
   async delete(id: string): Promise<void> {

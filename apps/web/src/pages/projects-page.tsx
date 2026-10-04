@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Copy, Download, FolderOpen, Trash2 } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { AlertTriangle, Copy, Download, FileText, FolderOpen, Search, Trash2 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/button';
@@ -8,7 +8,9 @@ import {
   CreateDialog,
   ImportDialog,
   type ImportMode,
+  RemoveDialog,
 } from '../components/dashboard/dialogs';
+import { Menu } from '../components/menu';
 import { useService } from '../di/service-provider';
 import { type Project, ProjectServiceToken } from '../services/project.service';
 import { useWorkspaceStore } from '../workspace-store';
@@ -31,7 +33,6 @@ const fold = (s: string) =>
 
 export function ProjectsPage() {
   const projects = useService(ProjectServiceToken);
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { data, error, isPending } = useQuery({
     queryKey: ['projects'],
@@ -40,8 +41,10 @@ export function ProjectsPage() {
   const createRef = useRef<HTMLDialogElement>(null);
   const importRef = useRef<HTMLDialogElement>(null);
   const copyRef = useRef<HTMLDialogElement>(null);
+  const removeRef = useRef<HTMLDialogElement>(null);
   const [importMode, setImportMode] = useState<ImportMode>('zip');
   const [copying, setCopying] = useState<Project | null>(null);
+  const [removing, setRemoving] = useState<Project | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
 
@@ -53,10 +56,6 @@ export function ProjectsPage() {
     setImportMode(mode);
     importRef.current?.showModal();
   };
-  const remove = useMutation({
-    mutationFn: (id: string) => projects.remove(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
-  });
   const download = useMutation({ mutationFn: (id: string) => projects.downloadSource(id) });
 
   const q = fold(query.trim());
@@ -74,23 +73,26 @@ export function ProjectsPage() {
         onFilter={setFilter}
         onCreate={showCreate}
         onImport={openImport}
+        count={data?.length}
       />
       <section className="dashboard-main">
         <div className="dashboard-head">
           <h1>Projetos</h1>
-          <input
-            type="search"
-            placeholder="Buscar projeto"
-            aria-label="Buscar projeto"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <label className="search-field">
+            <Search size={16} aria-hidden="true" />
+            <input
+              type="search"
+              placeholder="Buscar projeto"
+              aria-label="Buscar projeto"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
         </div>
 
         {isPending && <p className="status-note">Carregando…</p>}
-        {error && <p className="form-error">Não foi possível carregar os projetos.</p>}
-        {remove.error && <p className="form-error">{remove.error.message}</p>}
-        {download.error && <p className="form-error">{download.error.message}</p>}
+        {error && <Alert>Não foi possível carregar os projetos.</Alert>}
+        {download.error && <Alert>{download.error.message}</Alert>}
         {data?.length === 0 && (
           <WelcomeHero onCreate={showCreate} onImport={() => openImport('zip')} />
         )}
@@ -107,8 +109,8 @@ export function ProjectsPage() {
             }}
             onDownload={(id) => download.mutate(id)}
             onRemove={(p) => {
-              if (confirm(`Excluir o projeto "${p.name}"? Isso não pode ser desfeito.`))
-                remove.mutate(p.id);
+              setRemoving(p);
+              removeRef.current?.showModal();
             }}
           />
         )}
@@ -117,6 +119,7 @@ export function ProjectsPage() {
       <CreateDialog dialogRef={createRef} onDone={open} />
       <ImportDialog dialogRef={importRef} mode={importMode} setMode={setImportMode} onDone={open} />
       <CopyDialog dialogRef={copyRef} project={copying} onDone={open} />
+      <RemoveDialog dialogRef={removeRef} project={removing} onDone={() => setRemoving(null)} />
     </div>
   );
 }
@@ -126,33 +129,27 @@ function DashboardSidebar({
   onFilter,
   onCreate,
   onImport,
+  count,
 }: {
   filter: Filter;
   onFilter: (f: Filter) => void;
   onCreate: () => void;
   onImport: (m: ImportMode) => void;
+  count: number | undefined;
 }) {
-  const menu = useRef<HTMLDetailsElement>(null);
-  const pick = (action: () => void) => () => {
-    menu.current?.removeAttribute('open');
-    action();
-  };
   return (
     <aside className="dashboard-side">
-      <details className="menu new-menu" ref={menu}>
-        <summary className="btn btn-primary">Novo projeto</summary>
-        <div className="menu-list">
-          <button type="button" onClick={pick(onCreate)}>
-            Projeto em branco
-          </button>
-          <button type="button" onClick={pick(() => onImport('zip'))}>
-            Importar .zip
-          </button>
-          <button type="button" onClick={pick(() => onImport('folder'))}>
-            Importar pasta
-          </button>
-        </div>
-      </details>
+      <Menu className="new-menu" triggerClassName="btn btn-primary" label="Novo projeto">
+        <button type="button" onClick={onCreate}>
+          Projeto em branco
+        </button>
+        <button type="button" onClick={() => onImport('zip')}>
+          Importar .zip
+        </button>
+        <button type="button" onClick={() => onImport('folder')}>
+          Importar pasta
+        </button>
+      </Menu>
       <nav className="filter-list" aria-label="Filtros">
         {filters.map(([key, label]) => (
           <button
@@ -165,6 +162,11 @@ function DashboardSidebar({
           </button>
         ))}
       </nav>
+      {count !== undefined && (
+        <p className="sidebar-count">
+          {count} {count === 1 ? 'projeto' : 'projetos'}
+        </p>
+      )}
     </aside>
   );
 }
@@ -206,7 +208,7 @@ function ProjectTable({
               {p.role !== 'owner' && <span className="muted"> {roleLabel[p.role]}</span>}
             </td>
             <td className="col-owner">{p.role === 'owner' ? 'Você' : 'Compartilhado'}</td>
-            <td>{dateFmt.format(new Date(p.updatedAt))}</td>
+            <td data-label="Última modificação">{dateFmt.format(new Date(p.updatedAt))}</td>
             <td className="row-actions">
               <IconButton label="Abrir" onClick={() => onOpen(p.id)}>
                 <FolderOpen size={16} />
@@ -249,16 +251,55 @@ function IconButton({
 function WelcomeHero({ onCreate, onImport }: { onCreate: () => void; onImport: () => void }) {
   return (
     <div className="welcome-hero">
-      <h2>Seus projetos LaTeX, com histórico git e compilação na nuvem</h2>
-      <p>Escreva em equipe, volte a qualquer versão e gere o PDF sem instalar nada.</p>
-      <div className="actions">
-        <Button variant="primary" onClick={onCreate}>
-          Criar projeto
-        </Button>
-        <Button variant="secondary" onClick={onImport}>
-          Importar
-        </Button>
+      <div className="welcome-copy">
+        <h2>Seus projetos LaTeX, com histórico git e compilação na nuvem</h2>
+        <p>Escreva em equipe, volte a qualquer versão e gere o PDF sem instalar nada.</p>
+        <div className="actions">
+          <Button variant="primary" onClick={onCreate}>
+            Criar projeto
+          </Button>
+          <Button variant="secondary" onClick={onImport}>
+            Importar
+          </Button>
+        </div>
+      </div>
+      <div className="doc-preview-card" aria-hidden="true">
+        <div className="doc-preview-head">
+          <FileText size={14} aria-hidden="true" /> main.tex
+        </div>
+        <pre className="doc-preview">
+          <code>
+            <span className="tok-cmd">\documentclass</span>
+            {'{'}
+            <span className="tok-str">article</span>
+            {'}\n'}
+            <span className="tok-cmd">\usepackage</span>
+            {'{'}
+            <span className="tok-str">amsmath</span>
+            {'}\n\n'}
+            <span className="tok-cmd">\begin</span>
+            {'{'}
+            <span className="tok-env">document</span>
+            {'}\n  '}
+            <span className="tok-cmd">\section</span>
+            {'{Introdução}\n  '}
+            {'Escrito a várias mãos.\n'}
+            <span className="tok-cmd">\end</span>
+            {'{'}
+            <span className="tok-env">document</span>
+            {'}'}
+          </code>
+        </pre>
       </div>
     </div>
+  );
+}
+
+function Alert({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="alert" role="alert">
+      <AlertTriangle size={16} aria-hidden="true" />
+      {children}
+    </p>
   );
 }

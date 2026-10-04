@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { APP_CONFIG, type AppConfig } from '@latex-studio/core';
 import {
+  detectEngine,
   findMainFile,
   type PackageManifest,
   parseManifest,
@@ -12,12 +13,22 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  NotFoundException,
   Optional,
 } from '@nestjs/common';
 import { AuditService } from '../../audit/audit.service';
 import type { User } from '../../users/domain/user';
-import { type Project, type ProjectWithRole, parseProjectName } from '../domain/project';
-import { PROJECT_REPOSITORY, type ProjectRepository } from '../domain/project.repository';
+import {
+  type Project,
+  type ProjectEngine,
+  type ProjectWithRole,
+  parseProjectName,
+} from '../domain/project';
+import {
+  PROJECT_REPOSITORY,
+  type ProjectPatch,
+  type ProjectRepository,
+} from '../domain/project.repository';
 import { PROJECT_STORAGE, type ProjectFiles, type ProjectStorage } from '../domain/project-storage';
 import {
   author,
@@ -127,14 +138,29 @@ export class ProjectsService {
           }
         }
         if (!name || !files) throw new BadRequestException('Send a "name" and at least one file');
-        const mainFile = await finishImport(files);
+        const { mainFile, engine } = await finishImport(files);
         await files.repo.commitAll('Import', author(owner));
-        return await this.projects.create({ id, name, mainFile }, owner.id);
+        return await this.projects.create(
+          { id, name, mainFile, ...(engine && { engine }) },
+          owner.id,
+        );
       } catch (e) {
         await this.storage.remove(id);
         throw e;
       }
     });
+  }
+
+  /** Engine and main file; the main file must exist in the working tree. */
+  async update(project: Project, user: User, patch: ProjectPatch): Promise<Project> {
+    if (patch.mainFile !== undefined) {
+      const files = this.storage.open(project.id);
+      checkPath(files, patch.mainFile);
+      if (!(await files.isFile(patch.mainFile))) throw new NotFoundException('Main file not found');
+    }
+    const updated = await this.projects.update(project.id, patch);
+    await this.audit?.record(user.id, 'project.update', project.id, patch);
+    return updated;
   }
 
   listForUser(user: User): Promise<ProjectWithRole[]> {
@@ -158,7 +184,9 @@ export class ProjectsService {
 }
 
 /** Validates the root manifest, (re)generates latex-packages.tex, returns the main file. */
-async function finishImport(files: ProjectFiles): Promise<string> {
+async function finishImport(
+  files: ProjectFiles,
+): Promise<{ mainFile: string; engine: ProjectEngine | null }> {
   const list = await files.repo.listFiles();
   const root = list.find((f) => f.path === MANIFEST);
   let manifest: PackageManifest = [];
@@ -178,7 +206,7 @@ async function finishImport(files: ProjectFiles): Promise<string> {
   const candidates = tex.includes('main.tex') ? ['main.tex', ...tex] : tex;
   for (const path of candidates) {
     const head = (await files.readHead(path, MAIN_FILE_SCAN_BYTES)).toString();
-    if (findMainFile([[path, head]])) return path;
+    if (findMainFile([[path, head]])) return { mainFile: path, engine: detectEngine(head) };
   }
-  return 'main.tex';
+  return { mainFile: 'main.tex', engine: null };
 }

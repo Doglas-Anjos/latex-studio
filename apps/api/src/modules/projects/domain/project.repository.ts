@@ -1,4 +1,4 @@
-import type { Project, ProjectRole, ProjectWithRole } from './project';
+import type { Project, ProjectEngine, ProjectRole, ProjectWithRole } from './project';
 
 export const PROJECT_REPOSITORY = Symbol('PROJECT_REPOSITORY');
 
@@ -7,7 +7,10 @@ export interface NewProject {
   id: string;
   name: string;
   mainFile?: string;
+  engine?: ProjectEngine;
 }
+
+export type ProjectPatch = Partial<Pick<Project, 'engine' | 'mainFile'>>;
 
 export interface Member {
   userId: string;
@@ -24,6 +27,7 @@ export interface ProjectRepository {
   /** Inserts the project and its owner membership in one transaction. */
   create(project: NewProject, ownerId: string): Promise<Project>;
   findById(id: string): Promise<Project | null>;
+  update(id: string, patch: ProjectPatch): Promise<Project>;
   /** Newest first. */
   listForUser(userId: string): Promise<ProjectWithRole[]>;
   roleOf(projectId: string, userId: string): Promise<ProjectRole | null>;

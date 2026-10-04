@@ -66,26 +66,32 @@ export function StatusBar({ projectId, role }: { projectId: string; role: Role }
   return (
     <footer className="status-bar">
       <div className="status-group" data-status={connection} role="status">
-        <span className="dot" aria-hidden="true" />
-        {connLabel[connection]}
-        {readOnly && ' · somente leitura'}
-        {peers.map((p) => (
-          <span key={p.name} className="peer">
-            <span className="dot" style={{ background: p.color }} aria-hidden="true" />
-            {p.name}
+        <span className="status-item">
+          <span className="dot" aria-hidden="true" />
+          {connLabel[connection]}
+        </span>
+        {readOnly && <span className="status-pill">Somente leitura</span>}
+        {peers.length > 0 && (
+          <span className="status-item peer-list">
+            {peers.map((p) => (
+              <span key={p.name} className="peer">
+                <span className="dot" style={{ background: p.color }} aria-hidden="true" />
+                {p.name}
+              </span>
+            ))}
           </span>
-        ))}
+        )}
       </div>
       <div className="status-group">
         {build && (
-          <span data-status={build.status}>
+          <span className="status-item status-build" data-status={build.status}>
             {(build.status === 'running' || build.status === 'queued') && (
               <span className="spinner" aria-hidden="true" />
             )}
             {buildLabel[build.status]}
           </span>
         )}
-        {wordCount !== null && <span>~{wordCount} palavras</span>}
+        {wordCount !== null && <span className="status-item">~{wordCount} palavras</span>}
         {note && <span className="status-note-inline">{note}</span>}
         <button
           type="button"

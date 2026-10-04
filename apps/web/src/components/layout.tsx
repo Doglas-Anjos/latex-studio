@@ -2,6 +2,7 @@ import { Link, Outlet } from 'react-router';
 import { useService } from '../di/service-provider';
 import type { User } from '../services/auth.service';
 import { IdentityToken } from '../services/identity';
+import { Brand } from './brand';
 import { Button } from './button';
 import { ThemeToggle } from './theme-toggle';
 import { useApplyTheme } from './use-theme';
@@ -13,7 +14,7 @@ export function Layout({ user }: { user: User }) {
     <>
       <header className="app-header">
         <Link to="/" className="brand">
-          LaTeX Studio
+          <Brand />
         </Link>
         <nav>
           <ThemeToggle />

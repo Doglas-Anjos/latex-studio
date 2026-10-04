@@ -204,6 +204,45 @@ function CopyForm({
   );
 }
 
+export function RemoveDialog({
+  dialogRef,
+  project,
+  onDone,
+}: {
+  dialogRef: DialogRef;
+  project: Named | null;
+  onDone: () => void;
+}) {
+  const projects = useService(ProjectServiceToken);
+  const queryClient = useQueryClient();
+  const remove = useMutation({
+    mutationFn: () => projects.remove(project?.id ?? ''),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      dialogRef.current?.close();
+      onDone();
+    },
+  });
+  return (
+    <Dialog ref={dialogRef} title="Excluir projeto" pending={remove.isPending}>
+      <p>Excluir o projeto "{project?.name}"? Essa ação não pode ser desfeita.</p>
+      {remove.error && <Form.Error>{errorText(remove.error)}</Form.Error>}
+      <div className="actions">
+        <Button
+          variant="ghost"
+          onClick={() => dialogRef.current?.close()}
+          disabled={remove.isPending}
+        >
+          Cancelar
+        </Button>
+        <Button variant="danger" onClick={() => remove.mutate()} disabled={remove.isPending}>
+          {remove.isPending ? 'Excluindo…' : 'Excluir'}
+        </Button>
+      </div>
+    </Dialog>
+  );
+}
+
 function errorText(e: Error) {
   const status = (e as { status?: number }).status;
   if (status === 409) return 'Limite de projetos atingido';

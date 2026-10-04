@@ -1,4 +1,4 @@
-import type { RefObject } from 'react';
+import { type RefObject, useRef } from 'react';
 import {
   type Settings,
   SYNTAX_TOKENS,
@@ -52,6 +52,7 @@ function parseAppearance(raw: unknown): Partial<Settings> {
 export function AppearanceDialog({ ref }: { ref: RefObject<HTMLDialogElement | null> }) {
   const s = useSettingsStore();
   const { set } = s;
+  const importRef = useRef<HTMLInputElement>(null);
 
   const exportJson = () => {
     const data = Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, s[k]]));
@@ -147,18 +148,20 @@ export function AppearanceDialog({ ref }: { ref: RefObject<HTMLDialogElement | n
           <Button variant="secondary" onClick={exportJson}>
             Exportar JSON
           </Button>
-          <label className="btn btn-secondary">
+          <Button variant="secondary" onClick={() => importRef.current?.click()}>
             Importar JSON
-            <input
-              type="file"
-              accept="application/json"
-              hidden
-              onChange={(e) => {
-                importJson(e.target.files?.[0]);
-                e.target.value = '';
-              }}
-            />
-          </label>
+          </Button>
+          <input
+            ref={importRef}
+            type="file"
+            accept="application/json"
+            hidden
+            aria-label="Importar JSON"
+            onChange={(e) => {
+              importJson(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
           <Button variant="primary" onClick={() => ref.current?.close()}>
             Fechar
           </Button>

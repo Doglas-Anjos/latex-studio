@@ -21,7 +21,7 @@ export function Sidebar({
     <aside className="sidebar" aria-label={viewLabels[view]}>
       <h2 className="pane-title">
         {viewLabels[view]}
-        {view === 'files' && <span className="sidebar-project"> · {project.name}</span>}
+        {view === 'files' && <span className="sidebar-project">{project.name}</span>}
       </h2>
       <div className="sidebar-body">
         {view === 'files' && (
