@@ -225,8 +225,8 @@ Imagens `docker/api` e `docker/web` construídas e a da API testada em modo prod
 
 - Dashboard estilo Overleaf (filtros, busca, tabela, hero), workspace estilo VS Code (barra de atividades, sidebar e PDF redimensionáveis, abas, painel de compilação, barra de status), tema claro/escuro/sistema e cores de sintaxe editáveis (`settings-store` persistido no navegador; `HighlightStyle` referencia variáveis CSS `--syn-*`).
 - "Mudanças": linha de base = último commit não-`Autosave` (`GET history/status`), marcas na margem via `@codemirror/merge`, diff lado a lado (`MergeView`), descartar por arquivo (`restore`); histórico compara commits.
-- Blame no servidor (`git-store` `blame`, jsdiff, cap 100 commits e 1 MB, sem cache) com gutter no editor; autosaves ainda saem como "LaTeX Studio" (autoria por editor é o passo 9b pendente).
-- Auto-indent: job `format` (`latexindent` no sandbox do worker, sem `-l`, stdout) aplicado no editor como mudanças mínimas; fallback para o indentador do CodeMirror; "Formatar projeto" grava os demais `.tex` via `PUT files/*`.
+- Blame no servidor (`git-store` `blame`, jsdiff, cap 100 commits, 1 MB e 1 s de diff; commits e textos memorizados por HEAD) com gutter no editor; autosaves são commitados em nome de quem editou (tabela `file_edits` alimentada pelo hook `onChange` do Hocuspocus; vários editores no mesmo arquivo viram `Co-authored-by`).
+- Auto-indent: job `format` (`latexindent` sobre o texto vivo enviado pelo cliente, num diretório temporário, sem `-l`, 15 s) aplicado no editor como mudanças mínimas só se o documento não mudou nesse meio-tempo; fallback para o indentador do CodeMirror; "Formatar projeto" grava os demais `.tex` via `PUT files/*`.
 - Bibliotecas: bypass real para pacote desligado que o código ainda carrega (`\ver@`/`\opt@` em `latex-packages.tex`); pacote ligado que o código já carrega não é reemitido (evita "Option clash"); pacotes detectados no código aparecem no painel.
 
 ## Fases de implementação
