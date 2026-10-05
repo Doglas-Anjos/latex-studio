@@ -15,8 +15,10 @@ export interface LatexmkResult {
 const ENGINE_FLAGS: Record<Engine, string[]> = {
   pdflatex: ['-pdf'],
   xelatex: ['-pdfxe'],
-  // --safer restricts Lua io/os calls (TeX Live); %O %S are latexmk's options/source placeholders.
-  lualatex: ['-pdflua', '-lualatex=lualatex --safer %O %S'],
+  // No `--safer`: luaotfload (so fontspec, i.e. nearly every LuaLaTeX document) refuses to run
+  // under it. Lua's io/os are still fenced by shell_escape=f and kpathsea's paranoid
+  // openin_any/openout_any (both honoured by LuaTeX), plus the container limits.
+  lualatex: ['-pdflua'],
 };
 const WINDOWS = process.platform === 'win32';
 
