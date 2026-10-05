@@ -26,13 +26,10 @@ describe('PackagesPanel', () => {
       <PackagesPanel projectId="p1" canEdit />,
       new Container().register(PackageServiceToken, service),
     );
-    const boxes = await screen.findAllByRole('checkbox');
+    const boxes = await screen.findAllByRole('switch');
     expect(boxes).toHaveLength(2);
     expect(screen.getByText('graphicx')).toBeTruthy();
-    // Two lines per entry: switch + name, then options + actions.
-    const item = (boxes[1] as HTMLElement).closest('li') as HTMLElement;
-    expect(item.querySelectorAll('.package-row, .package-meta')).toHaveLength(2);
-    expect(item.querySelector('.package-meta .package-options')).toBeTruthy();
+    expect((boxes[0] as HTMLElement).getAttribute('aria-checked')).toBe('true');
     await userEvent.click(boxes[0] as HTMLElement);
     await waitFor(() =>
       expect(service.set).toHaveBeenCalledWith('p1', [
@@ -65,5 +62,33 @@ describe('PackagesPanel', () => {
         { name: 'hyperref', options: 'colorlinks', enabled: false, order: 2 },
       ]),
     );
+  });
+
+  it('re-enables a disabled package and filters by state', async () => {
+    const off = [
+      { name: 'geometry', options: 'left=3cm', enabled: false, order: 0 },
+      { name: 'amsmath', enabled: true, order: 1 },
+    ];
+    const service: PackageService = {
+      get: vi.fn().mockResolvedValue(off),
+      set: vi.fn().mockImplementation(async (_p, next) => next),
+      migrate: vi.fn(),
+      usage: vi.fn().mockResolvedValue([]),
+    };
+    renderWithApp(
+      <PackagesPanel projectId="p1" canEdit />,
+      new Container().register(PackageServiceToken, service),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: /Desligados/ }));
+    expect(screen.queryByText('amsmath')).toBeNull();
+    await userEvent.click(screen.getByRole('switch', { name: 'Ligar geometry' }));
+    await waitFor(() =>
+      expect(service.set).toHaveBeenCalledWith('p1', [
+        { name: 'geometry', options: 'left=3cm', enabled: true, order: 0 },
+        { name: 'amsmath', enabled: true, order: 1 },
+      ]),
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Ativos/ }));
+    expect(screen.getByText('amsmath')).toBeTruthy();
   });
 });
