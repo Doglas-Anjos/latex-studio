@@ -60,3 +60,26 @@ describe('findUsepackages', () => {
     ]);
   });
 });
+
+describe('insertPackagesInput with a multi-line documentclass', () => {
+  it('goes after the closing brace, skipping commented brackets inside the options', () => {
+    const src = [
+      '% header',
+      '\\documentclass[',
+      '  12pt,  % size',
+      '  % \\RequirePackage[brazil]{babel} fixed',
+      '  main=english',
+      '  ]{abntex2}',
+      '\\usepackage{fontspec}',
+    ].join('\n');
+    const out = insertPackagesInput(src).split('\n');
+    expect(out[6]).toBe('\\input{latex-packages}');
+    expect(out[5]).toBe('  ]{abntex2}');
+    expect(insertPackagesInput(insertPackagesInput(src))).toBe(insertPackagesInput(src));
+  });
+  it('still handles the one-line form and keeps CRLF', () => {
+    expect(insertPackagesInput('\\documentclass{article}\r\nx')).toBe(
+      '\\documentclass{article}\r\n\\input{latex-packages}\r\nx',
+    );
+  });
+});

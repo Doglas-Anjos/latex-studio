@@ -14,6 +14,7 @@ const setup = () => {
     deleteForPath: async (p: string, path: string) => void deleted.push(`${p}/${path}`),
     save: async (p: string, path: string, state: Uint8Array) =>
       void saved.set(`${p}/${path}`, state),
+    load: async (p: string, path: string) => saved.get(`${p}/${path}`) ?? null,
   } as YjsDocRepository;
   const written = new Map<string, string>();
   const storage = {
@@ -57,10 +58,22 @@ describe('HocuspocusDocumentSync', () => {
     expect(deleted).toEqual([]);
   });
 
-  it('drops the saved state of a doc that is not open', async () => {
-    const { deleted, sync } = setup();
-    await sync.replaceText('p', 'main.tex', 'x');
-    expect(deleted).toEqual(['p/main.tex']);
+  it('patches the saved state of a doc that is not open, keeping its item ids', async () => {
+    const { deleted, saved, sync } = setup();
+    await sync.replaceText('p', 'none.tex', 'x'); // nothing saved: nothing to do
+    expect(saved.has('p/none.tex')).toBe(false);
+
+    const original = new Y.Doc();
+    original.getText('content').insert(0, 'hello world');
+    saved.set('p/main.tex', Y.encodeStateAsUpdate(original));
+    await sync.replaceText('p', 'main.tex', 'hello there world');
+    expect(deleted).toEqual([]);
+
+    // A client still holding the original doc merges onto the patched state without duplicating.
+    const merged = new Y.Doc();
+    Y.applyUpdate(merged, Y.encodeStateAsUpdate(original));
+    Y.applyUpdate(merged, saved.get('p/main.tex') as Uint8Array);
+    expect(merged.getText('content').toString()).toBe('hello there world');
   });
 
   it('forget unloads the open doc and drops its saved state', async () => {

@@ -5,7 +5,7 @@ export const DOCUMENT_SYNC = Symbol('DOCUMENT_SYNC');
  * inside their own `ProjectLock.run`; implementations must not take the lock.
  */
 export interface DocumentSync {
-  /** The file now holds `text`: patch the open doc, or drop the saved state so it reloads. */
+  /** The file now holds `text`: patch the open doc, or the saved state when it is not open. */
   replaceText(projectId: string, path: string, text: string): Promise<void>;
   /** The file was renamed or deleted: close the open doc and drop its saved state. */
   forget(projectId: string, path: string): Promise<void>;

@@ -1,9 +1,17 @@
-import { IsOptional, IsString, Length, MaxLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsOptional, IsString, Length, MaxLength } from 'class-validator';
 
 export class CommitDto {
   @IsString()
   @Length(1, 200)
   message!: string;
+
+  /** Only these files (Changes view selection); every change when omitted. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @IsString({ each: true })
+  @MaxLength(1024, { each: true })
+  paths?: string[];
 }
 
 export class CommitFileDto {

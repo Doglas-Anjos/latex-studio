@@ -24,8 +24,12 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
     async onLoadDocument({ document, documentName }) {
       const { projectId, path } = collab.parseDocumentName(documentName);
       const loaded = await collab.load(projectId, path);
-      if (typeof loaded === 'string') document.getText('content').insert(0, loaded);
-      else Y.applyUpdate(document, loaded);
+      if (typeof loaded === 'string') {
+        document.getText('content').insert(0, loaded);
+        // Saved now, not on the first edit: otherwise a restart before any edit rebuilds the doc
+        // from disk with new item ids, and a client still holding the old doc merges both copies.
+        await collab.saveState(projectId, path, document);
+      } else Y.applyUpdate(document, loaded);
     },
     // Server-side changes (restore, format, initial load) carry no user; a throw here would
     // bring the whole API down as an unhandled rejection, so this hook never throws.

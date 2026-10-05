@@ -89,7 +89,7 @@ export class HistoryController {
   @Post('commit')
   @RequireProjectRole('editor')
   commit(@CurrentProject() project: Project, @CurrentUser() user: User, @Body() dto: CommitDto) {
-    return this.history.commit(project, user, dto.message);
+    return this.history.commit(project, user, dto.message, dto.paths);
   }
 
   @Post('commit-file')

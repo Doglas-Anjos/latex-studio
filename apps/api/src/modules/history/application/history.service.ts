@@ -81,12 +81,27 @@ export class HistoryService {
   }
 
   /** Named commit ("Salvar versão"). */
-  commit(project: Project, user: User, message: string): Promise<{ sha: string }> {
+  commit(
+    project: Project,
+    user: User,
+    message: string,
+    paths?: string[],
+  ): Promise<{ sha: string }> {
     if (message.length < 1 || message.length > 200 || /\p{Cc}/u.test(message)) {
       throw new BadRequestException('Invalid commit message');
     }
+    const files = this.storage.open(project.id);
+    for (const path of paths ?? []) checkPath(files, path);
     return this.lock.run(project.id, async () => {
-      const sha = await this.storage.open(project.id).repo.commitAll(message, author(user));
+      if (!paths) {
+        const sha = await files.repo.commitAll(message, author(user));
+        if (!sha) throw new ConflictException('Nothing to commit');
+        return { sha };
+      }
+      if (paths.length === 0) throw new BadRequestException('Select at least one file');
+      // Open docs may hold edits younger than the 2-10s store debounce.
+      for (const path of paths) await this.sync.flush(project.id, path);
+      const sha = await files.repo.commitPaths(paths, message, author(user));
       if (!sha) throw new ConflictException('Nothing to commit');
       return { sha };
     });

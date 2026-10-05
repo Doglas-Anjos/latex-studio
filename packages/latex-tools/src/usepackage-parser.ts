@@ -57,13 +57,53 @@ export function findUsepackages(
   return found;
 }
 
+/**
+ * Index just past `\documentclass[...]{...}`, or -1. The options may span lines and carry
+ * `%` comments that themselves contain brackets and braces (`% \RequirePackage[brazil]{babel}`).
+ */
+function documentclassEnd(source: string): number {
+  const re = /\\documentclass/g;
+  for (let m = re.exec(source); m; m = re.exec(source)) {
+    const lineStart = source.lastIndexOf('\n', m.index) + 1;
+    if (COMMENT_START.test(source.slice(lineStart, m.index))) continue; // commented out
+    let i = m.index + m[0].length;
+    const skipBlank = () => {
+      for (;;) {
+        while (i < source.length && /\s/.test(source[i] as string)) i++;
+        if (source[i] !== '%') return;
+        while (i < source.length && source[i] !== '\n') i++;
+      }
+    };
+    const group = (open: string, close: string) => {
+      let depth = 0;
+      for (; i < source.length; i++) {
+        const c = source[i];
+        if (c === '\\') i++;
+        else if (c === '%') while (i < source.length && source[i] !== '\n') i++;
+        else if (c === open) depth++;
+        else if (c === close && --depth === 0) return ++i;
+      }
+      return -1;
+    };
+    skipBlank();
+    if (source[i] === '[' && group('[', ']') < 0) return -1;
+    skipBlank();
+    if (source[i] !== '{') return -1;
+    return group('{', '}');
+  }
+  return -1;
+}
+
 export function insertPackagesInput(source: string): string {
   const input = '\\input{latex-packages}';
-  const lines = source.split('\n');
   const isCode = (re: RegExp) => (l: string) => re.test(l.split(COMMENT_START)[0] ?? '');
-  if (lines.some(isCode(/\\input\s*\{latex-packages\}/))) return source;
-  const i = lines.findIndex(isCode(/\\documentclass/));
-  if (i === -1) return source;
-  lines.splice(i + 1, 0, lines[i]?.endsWith('\r') ? `${input}\r` : input);
-  return lines.join('\n');
+  if (source.split('\n').some(isCode(/\\input\s*\{latex-packages\}/))) return source;
+  const end = documentclassEnd(source);
+  if (end < 0) return source;
+  // After the line that closes the command, keeping its line ending.
+  const nl = source.indexOf('\n', end);
+  const eol = source.includes('\r\n') ? '\r\n' : '\n';
+  return nl < 0
+    ? `${source}${eol}${input}`
+    : `${source.slice(0, nl + 1)}${input}${eol}${source.slice(nl + 1)}`;
 }

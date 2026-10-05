@@ -19,6 +19,26 @@ const isLow = (s: string, i: number) => /[\uDC00-\uDFFF]/.test(s[i] ?? '');
  * For `replaceText` the follow-up debounced store rewrites the new text; for `forget` the old path
  * can reappear untracked. Upgrade: a per-document generation checked inside `CollabService.store`.
  */
+/** Replaces the doc text with `text` as one minimal prefix/suffix edit. */
+function patchText(doc: Y.Doc, text: string): void {
+  const ytext = doc.getText('content');
+  const old = ytext.toString();
+  if (old === text) return;
+  const max = Math.min(old.length, text.length);
+  let start = 0;
+  while (start < max && old[start] === text[start]) start++;
+  if (start > 0 && isHigh(old, start - 1)) start--; // never split a surrogate pair
+  let suffix = 0;
+  while (suffix < max - start && old[old.length - 1 - suffix] === text[text.length - 1 - suffix]) {
+    suffix++;
+  }
+  if (suffix > 0 && isLow(old, old.length - suffix)) suffix--;
+  doc.transact(() => {
+    ytext.delete(start, old.length - start - suffix);
+    ytext.insert(start, text.slice(start, text.length - suffix));
+  });
+}
+
 @Injectable()
 export class HocuspocusDocumentSync implements DocumentSync {
   constructor(
@@ -32,28 +52,16 @@ export class HocuspocusDocumentSync implements DocumentSync {
   /** Minimal prefix/suffix diff, so positions outside the changed span (comment anchors) survive. */
   async replaceText(projectId: string, path: string, text: string): Promise<void> {
     const doc = this.hocuspocus.documents.get(`${projectId}/${path}`);
-    // Not open: the next onLoadDocument reads the file from disk.
-    if (!doc) return this.docs.deleteForPath(projectId, path);
-
-    const ytext = doc.getText('content');
-    const old = ytext.toString();
-    if (old === text) return;
-    const max = Math.min(old.length, text.length);
-    let start = 0;
-    while (start < max && old[start] === text[start]) start++;
-    if (start > 0 && isHigh(old, start - 1)) start--; // never split a surrogate pair
-    let suffix = 0;
-    while (
-      suffix < max - start &&
-      old[old.length - 1 - suffix] === text[text.length - 1 - suffix]
-    ) {
-      suffix++;
-    }
-    if (suffix > 0 && isLow(old, old.length - suffix)) suffix--;
-    doc.transact(() => {
-      ytext.delete(start, old.length - start - suffix);
-      ytext.insert(start, text.slice(start, text.length - suffix));
-    });
+    if (doc) return patchText(doc, text);
+    // Not open: patch the saved state rather than dropping it, so a client that reconnects with
+    // the old doc merges onto the same item ids instead of appending a second copy.
+    const saved = await this.docs.load(projectId, path);
+    if (!saved) return;
+    const offline = new Y.Doc();
+    Y.applyUpdate(offline, saved);
+    patchText(offline, text);
+    await this.docs.save(projectId, path, Y.encodeStateAsUpdate(offline));
+    offline.destroy();
   }
 
   /**

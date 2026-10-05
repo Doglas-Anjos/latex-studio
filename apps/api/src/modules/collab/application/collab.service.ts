@@ -107,6 +107,10 @@ export class CollabService {
     await this.projects.recordEdit(projectId, path, userId);
   }
 
+  saveState(projectId: string, path: string, doc: Y.Doc): Promise<void> {
+    return this.docs.save(projectId, path, Y.encodeStateAsUpdate(doc));
+  }
+
   async store(projectId: string, path: string, doc: Y.Doc): Promise<void> {
     await this.lock.run(projectId, async () => {
       // Snapshot both the instant this turn starts, before any await: a store queued behind a
