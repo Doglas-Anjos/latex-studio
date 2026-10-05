@@ -1,7 +1,7 @@
 import { indentSelection } from '@codemirror/commands';
 import { syntaxHighlighting } from '@codemirror/language';
 import { diff } from '@codemirror/merge';
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, type Extension, type Transaction } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -15,13 +15,19 @@ import { useMe } from '../auth-hooks';
 import type { CommentScope } from '../comment-scope';
 import { lineRangeAt, SCOPE_LABELS, scopeEmptyReason, scopeRange } from '../comment-scope';
 import { useService } from '../di/service-provider';
+import { useHistoryStatus } from '../hooks/use-history-status';
 import { type Comment, CommentServiceToken, type NewComment } from '../services/comment.service';
 import { FileServiceToken } from '../services/file.service';
 import { HistoryServiceToken } from '../services/history.service';
 import { IdentityToken } from '../services/identity';
 import type { Role } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
-import { type CommentDraft, type Connection, useWorkspaceStore } from '../workspace-store';
+import {
+  type CommentDraft,
+  type Connection,
+  type Peer,
+  useWorkspaceStore,
+} from '../workspace-store';
 import { Button } from './button';
 import { commentGutter } from './comment-gutter';
 import { blameGutter, blameVisible, setBlame } from './editor-blame';
@@ -60,6 +66,54 @@ const SCOPE_ICON: Record<CommentScope, typeof Type> = {
   line: Rows,
   section: Heading,
 };
+
+/** Typing, deleting, undo/redo by this user: remote updates and formatting do not count. */
+export const isLocalEdit = (tr: Transaction) =>
+  ['input', 'delete', 'undo', 'redo'].some((e) => tr.isUserEvent(e));
+
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+/** Remote awareness states as peers, one per client (two tabs of one user are two peers). */
+export function peersFrom(states: Map<number, Record<string, unknown>>, self: number): Peer[] {
+  const peers: Peer[] = [];
+  for (const [id, state] of states) {
+    const u = state.user as { name?: unknown; color?: unknown } | undefined;
+    if (id === self || typeof u?.name !== 'string') continue;
+    // Remote-controlled: only a plain hex colour reaches a style attribute.
+    const color = typeof u.color === 'string' && HEX_COLOR.test(u.color) ? u.color : 'var(--muted)';
+    peers.push({ id, name: u.name, color });
+  }
+  return peers;
+}
+
+const unsynced = new Set<object>();
+const confirmLeave = (e: BeforeUnloadEvent) => e.preventDefault();
+/** One beforeunload prompt, registered only while some editor holds edits the server lacks. */
+export function markUnsynced(provider: object, dirty: boolean) {
+  const before = unsynced.size;
+  if (dirty) unsynced.add(provider);
+  else unsynced.delete(provider);
+  if (!before && unsynced.size) window.addEventListener('beforeunload', confirmLeave);
+  if (before && !unsynced.size) window.removeEventListener('beforeunload', confirmLeave);
+}
+
+type Closable = Pick<HocuspocusProvider, 'hasUnsyncedChanges' | 'on' | 'destroy'>;
+/** Destroys provider and doc once the last local edit reached the server, or after 5 s. */
+export function closeWhenSynced(provider: Closable, doc: Pick<Y.Doc, 'destroy'>) {
+  let done = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    markUnsynced(provider, false);
+    provider.destroy();
+    doc.destroy();
+  };
+  if (!provider.hasUnsyncedChanges) return finish();
+  provider.on('unsyncedChanges', ({ number }: { number: number }) => number === 0 && finish());
+  timer = setTimeout(finish, 5000);
+}
 
 export function Editor({ projectId, path, role }: { projectId: string; path: string; role: Role }) {
   const files = useService(FileServiceToken);
@@ -135,16 +189,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const comments = useService(CommentServiceToken);
   const identity = useService(IdentityToken);
   const history = useService(HistoryServiceToken);
+  const files = useService(FileServiceToken);
   const me = useMe().data;
+  const [gone, setGone] = useState(false);
   const viewRef = useRef<EditorView | null>(null);
   const providerRef = useRef<HocuspocusProvider | null>(null);
   // Baseline text for the change gutter: the file at the last saved version ('' if new).
   const changeBase = useRef<string | null>(null);
-  const { data: status } = useQuery({
-    queryKey: ['history', projectId, 'status'],
-    queryFn: () => history.status(projectId),
-    refetchInterval: 30_000,
-  });
+  const { data: status } = useHistoryStatus(projectId);
   const baseSha = status ? (status.baseline?.sha ?? '') : null;
   const { data: baseText } = useQuery({
     queryKey: ['history', projectId, 'base', baseSha, path],
@@ -260,6 +312,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     const ytext = doc.getText('content');
     ytextRef.current = ytext;
     const wrap = new Compartment();
+    const ro = new Compartment();
+    setGone(false);
     const wrapping = (on: boolean) => (on ? EditorView.lineWrapping : []);
     let wordTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -351,7 +405,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           syntaxHighlighting(latexHighlight),
           editorTheme,
           wrap.of(wrapping(useSettingsStore.getState().lineWrapping)),
-          EditorState.readOnly.of(readOnly),
+          ro.of(EditorState.readOnly.of(readOnly)),
           path.endsWith('.tex') ? latex() : [],
           yCollab(ytext, provider.awareness),
           commentHighlights(ytext, commentsRef),
@@ -364,6 +418,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
               setHasSelection(sel.from !== sel.to);
             }
             if (!u.docChanged) return;
+            if (u.transactions.some(isLocalEdit)) useWorkspaceStore.getState().bumpDocVersion();
             clearTimeout(wordTimer);
             wordTimer = setTimeout(
               () => useWorkspaceStore.getState().setWordCount(approxWords(u.state.doc.toString())),
@@ -422,26 +477,45 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
         view.dispatch({ effects: wrap.reconfigure(wrapping(s.lineWrapping)) });
     });
     const awareness = provider.awareness;
-    if (!awareness) throw new Error('awareness unavailable');
     providerRef.current = provider;
     const onAwareness = () => {
-      const byName = new Map<string, { name: string; color: string }>();
-      for (const [id, state] of awareness.getStates()) {
-        const u = state.user as { name: string; color: string } | undefined;
-        if (id !== awareness.clientID && u) byName.set(u.name, { name: u.name, color: u.color });
-      }
-      useWorkspaceStore.getState().setPeers([...byName.values()]);
+      if (awareness)
+        useWorkspaceStore.getState().setPeers(peersFrom(awareness.getStates(), doc.clientID));
     };
-    awareness.on('change', onAwareness);
+    awareness?.on('change', onAwareness);
+    provider.on('unsyncedChanges', ({ number }: { number: number }) =>
+      markUnsynced(provider, number > 0),
+    );
+    // The server refuses or drops a document whose file was deleted or renamed (here or by a
+    // collaborator): stop reconnecting and keep the text visible but frozen.
+    let closed = false;
+    const markGone = () => {
+      if (closed) return;
+      closed = true;
+      provider.disconnect();
+      markUnsynced(provider, false);
+      view.dispatch({ effects: ro.reconfigure(EditorState.readOnly.of(true)) });
+      setGone(true);
+    };
+    provider.on('authenticationFailed', markGone);
+    // A per-document close (code 1000) also happens on server shutdown; only a vanished file counts.
+    provider.on('close', ({ event }: { event: { code: number } }) => {
+      if (event.code !== 1000) return;
+      files
+        .list(projectId)
+        .then((list) => !list.some((f) => f.path === path) && markGone())
+        .catch(() => {});
+    });
     const unsubscribe = useWorkspaceStore.subscribe((s, prev) => {
       if (s.pendingLine !== null && s.pendingLine !== prev.pendingLine) revealLine(view);
       if (s.commentJump && s.commentJump !== prev.commentJump) revealComment(s.commentJump.id);
     });
     revealLine(view);
     return () => {
+      closed = true;
       unsubscribe();
       unsubWrap();
-      awareness.off('change', onAwareness);
+      awareness?.off('change', onAwareness);
       useWorkspaceStore.getState().setPeers([]);
       clearTimeout(wordTimer);
       useWorkspaceStore.getState().setEditorCommands(null);
@@ -455,10 +529,10 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       setPopup(null);
       setPopupBody('');
       view.destroy();
-      provider.destroy();
-      doc.destroy();
+      // Edits typed just before closing the tab would die with the provider.
+      closeWhenSynced(provider, doc);
     };
-  }, [projectId, path, readOnly, canComment, identity.token]);
+  }, [projectId, path, readOnly, canComment, identity.token, files]);
 
   useEffect(() => {
     const text = baseText ?? null;
@@ -511,6 +585,11 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             );
           })}
         </div>
+      )}
+      {gone && (
+        <p className="form-error" role="alert">
+          Arquivo removido ou renomeado
+        </p>
       )}
       <div ref={host} className="editor-host" data-blame={activeBlame ? '' : undefined} />
       {canComment && icon !== null && (

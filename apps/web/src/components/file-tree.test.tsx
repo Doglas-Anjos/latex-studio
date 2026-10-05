@@ -103,6 +103,42 @@ describe('FileTree', () => {
     expect(service.remove).toHaveBeenCalledWith('p1', 'main.tex');
   });
 
+  it('closes tabs under a deleted folder and moves the open tab on rename', async () => {
+    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+      this.removeAttribute('open');
+    });
+    const store = useWorkspaceStore.getState();
+    store.reset();
+    store.setActivePath('main.tex');
+    store.setActivePath('chapters/intro.tex');
+    const service = fake();
+    renderWithApp(
+      <FileTree projectId="p1" canEdit mainFile="main.tex" />,
+      new Container().register(FileServiceToken, service).register(HistoryServiceToken, history()),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Excluir chapters' }));
+    await userEvent.click(
+      within(screen.getByRole('dialog', { name: 'Excluir' })).getByRole('button', {
+        name: 'Excluir',
+      }),
+    );
+    await waitFor(() =>
+      expect(useWorkspaceStore.getState().tabs.map((t) => t.path)).toEqual(['main.tex']),
+    );
+    expect(useWorkspaceStore.getState().activePath).toBe('main.tex');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Renomear main.tex' }));
+    const dialog = screen.getByRole('dialog', { name: 'Renomear' });
+    const input = within(dialog).getByLabelText('Caminho');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'tese.tex');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Renomear' }));
+    await waitFor(() =>
+      expect(useWorkspaceStore.getState().tabs.map((t) => t.path)).toEqual(['tese.tex']),
+    );
+    expect(useWorkspaceStore.getState().activePath).toBe('tese.tex');
+  });
+
   it('uploads the files picked in the upload dialog and lets the user cancel one first', async () => {
     const service = fake();
     renderWithApp(

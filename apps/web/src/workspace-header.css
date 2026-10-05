@@ -1,7 +1,5 @@
 /* Workspace header: brand/project identity, the Código/PDF surface switch
-   and primary actions (back to projects, theme). Scoped under `.wsh-` so it
-   fully owns its own layout and responsive behavior instead of competing
-   with the legacy `.workspace-title` rules in styles.css. */
+   and primary actions (back to projects, theme). Scoped under `.wsh-`. */
 
 .wsh-header {
   display: flex;

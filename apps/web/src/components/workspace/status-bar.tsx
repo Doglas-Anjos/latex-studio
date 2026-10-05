@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlignLeft, CircleX, Save, TriangleAlert, UserPen } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useService } from '../../di/service-provider';
 import { isActive } from '../../services/compile.service';
 import { HistoryServiceToken } from '../../services/history.service';
@@ -69,6 +69,9 @@ export function StatusBar({
       setNote(e.message === 'Nothing to commit' ? 'Nada para salvar' : 'Falha ao salvar o arquivo');
     },
   });
+  // The mutation object changes every render; a ref keeps the listener bound once per path.
+  const saveRef = useRef(save);
+  saveRef.current = save;
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 's') return;
@@ -78,12 +81,12 @@ export function StatusBar({
         setNote('Somente leitura: nada para salvar');
         return;
       }
-      if (save.isPending) return;
-      save.mutate(path);
+      if (saveRef.current.isPending) return;
+      saveRef.current.mutate(path);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [path, readOnly, save]);
+  }, [path, readOnly]);
   // latexindent in the worker; without it (local dev without TeX Live) CodeMirror's indenter.
   const format = useMutation({
     mutationFn: async () => {
@@ -92,8 +95,9 @@ export function StatusBar({
       try {
         const { jobId } = await tools.format(projectId, activePath, before);
         const r = await waitForJob<{ text: string }>(tools, projectId, jobId);
-        // Someone typed meanwhile: applying would revert their edit.
-        if (r && commands.getText() !== before) throw new Error('changed');
+        // Someone typed meanwhile, or another file is open now: applying would clobber it.
+        const live = useWorkspaceStore.getState().editorCommands;
+        if (r && (live !== commands || commands.getText() !== before)) throw new Error('changed');
         if (r) commands.applyText(r.text);
       } catch (e) {
         if ((e as Error).message === 'changed') {
@@ -117,7 +121,7 @@ export function StatusBar({
         {peers.length > 0 && (
           <span className="status-item peer-list">
             {peers.map((p) => (
-              <span key={p.name} className="peer">
+              <span key={p.id} className="peer">
                 <span className="dot" style={{ background: p.color }} aria-hidden="true" />
                 {p.name}
               </span>

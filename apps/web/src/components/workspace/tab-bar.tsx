@@ -3,7 +3,7 @@ import { type KeyboardEvent, type MouseEvent, useEffect, useRef, useState } from
 import { type Tab, useWorkspaceStore } from '../../workspace-store';
 import { FileTypeIcon } from '../file-tree';
 
-const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
+export const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
 export function TabBar() {
   const tabs = useWorkspaceStore((s) => s.tabs);

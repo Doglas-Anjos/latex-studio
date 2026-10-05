@@ -11,9 +11,9 @@ import { FileServiceToken } from '../../services/file.service';
 import { HistoryServiceToken } from '../../services/history.service';
 import { DIFF_LIMITS } from '../editor-changes';
 import { editorTheme, latexHighlight } from '../editor-theme';
+import { basename } from './tab-bar';
 
 const short = (sha: string, none: string) => (sha === 'empty' ? none : sha.slice(0, 7));
-const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
 
 type ViewMode = 'split' | 'unified';
 
@@ -54,7 +54,8 @@ export function DiffTab(props: { projectId: string; path: string; from: string; 
       ]);
       return { a, b };
     },
-    staleTime: Number.POSITIVE_INFINITY,
+    // A commit never changes; the working copy does, so reopening it refetches.
+    staleTime: to === 'work' ? 0 : Number.POSITIVE_INFINITY,
   });
 
   useEffect(() => {

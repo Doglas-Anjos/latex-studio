@@ -18,6 +18,7 @@ import { type ProjectService, ProjectServiceToken } from '../services/project.se
 import { type ToolsService, ToolsServiceToken } from '../services/tools.service';
 import { useSettingsStore } from '../settings-store';
 import { renderWithApp } from '../test/render';
+import { useWorkspaceStore } from '../workspace-store';
 import { BuildPanel } from './build-panel';
 
 const fakeProject: Project = {
@@ -497,5 +498,64 @@ describe('BuildPanel engine change and permissions', () => {
 
     await userEvent.click(button);
     expect(compile.compile).toHaveBeenCalledWith('p1', expect.any(Object));
+  });
+});
+
+describe('BuildPanel compile options menu and auto compile', () => {
+  beforeEach(() => {
+    useSettingsStore.getState().reset();
+    useWorkspaceStore.getState().reset();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  function mount() {
+    const compile = {
+      builds: vi.fn().mockResolvedValue([]),
+      compile: vi.fn().mockReturnValue(new Promise(() => {})),
+    } as unknown as CompileService;
+    renderWithApp(
+      <BuildPanel projectId="p1" canCompile={true} />,
+      new Container()
+        .register(CompileServiceToken, compile)
+        .register(ProjectServiceToken, {
+          get: vi.fn().mockResolvedValue(fakeProject),
+        } as unknown as ProjectService)
+        .register(ToolsServiceToken, {} as unknown as ToolsService)
+        .register(FileServiceToken, {} as unknown as FileService)
+        .register(PackageServiceToken, {
+          get: vi.fn().mockResolvedValue([]),
+          usage: vi.fn().mockResolvedValue([]),
+        } as unknown as PackageService),
+    );
+    return { compile };
+  }
+
+  it('moves focus into the portalled menu and back to the caret on Escape', async () => {
+    mount();
+    const caret = screen.getByRole('button', { name: 'Opções de compilação' });
+    await waitFor(() => expect((caret as HTMLButtonElement).disabled).toBe(false));
+    await userEvent.click(caret);
+    expect(document.activeElement?.textContent).toContain('Ligada');
+    await userEvent.keyboard('{Escape}');
+    expect(document.activeElement).toBe(caret);
+  });
+
+  it('compiles 3 s after a local edit, once, and not on mount', async () => {
+    useSettingsStore.getState().set({ autoCompile: true });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { compile } = mount();
+    await screen.findByRole('button', { name: 'Compilar' });
+    act(() => vi.advanceTimersByTime(5000));
+    expect(compile.compile).not.toHaveBeenCalled();
+    act(() => useWorkspaceStore.getState().bumpDocVersion());
+    act(() => vi.advanceTimersByTime(3000));
+    await waitFor(() => expect(compile.compile).toHaveBeenCalledTimes(1));
+    // Still pending: another edit must not stack a second request.
+    act(() => useWorkspaceStore.getState().bumpDocVersion());
+    act(() => vi.advanceTimersByTime(3000));
+    expect(compile.compile).toHaveBeenCalledTimes(1);
   });
 });

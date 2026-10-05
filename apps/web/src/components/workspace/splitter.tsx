@@ -10,7 +10,7 @@ export function Splitter({
   resizes: ResizeKey;
   label: string;
 }) {
-  const { vertical, ...handlers } = useResize(root, resizes);
+  const { vertical, size, min, ...handlers } = useResize(root, resizes);
   return (
     // biome-ignore lint/a11y/useSemanticElements: a focusable separator is the WAI-ARIA window splitter pattern
     <div
@@ -18,7 +18,9 @@ export function Splitter({
       role="separator"
       aria-orientation={vertical ? 'horizontal' : 'vertical'}
       aria-label={label}
-      aria-valuenow={0}
+      aria-valuenow={size}
+      aria-valuemin={min}
+      aria-valuemax={vertical ? window.innerHeight : window.innerWidth}
       tabIndex={0}
       {...handlers}
     />

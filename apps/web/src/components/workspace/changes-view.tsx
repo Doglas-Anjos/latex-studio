@@ -17,11 +17,11 @@ import { useWorkspaceStore } from '../../workspace-store';
 import { Button } from '../button';
 import { Dialog } from '../dialog';
 import { FileTypeIcon } from '../file-tree';
+import { basename } from './tab-bar';
 
 const letter = { add: 'A', modify: 'M', remove: 'D' } as const;
 const typeLabel = { add: 'Adicionado', modify: 'Modificado', remove: 'Removido' } as const;
 
-const basename = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 const dirname = (path: string) => {
   const i = path.lastIndexOf('/');
   return i === -1 ? '' : path.slice(0, i);

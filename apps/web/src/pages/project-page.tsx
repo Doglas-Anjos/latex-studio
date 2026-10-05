@@ -32,16 +32,13 @@ export function ProjectPage() {
   const root = useRef<HTMLDivElement>(null);
   const activePath = useWorkspaceStore((s) => s.activePath);
   const activeTab = useWorkspaceStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
-  const hasTabs = useWorkspaceStore((s) => s.tabs.length > 0);
   const openTab = useWorkspaceStore((s) => s.openTab);
-  const {
-    sidebarWidth,
-    pdfWidth,
-    panelHeight,
-    panelOpen,
-    sidebarView,
-    set: setSettings,
-  } = useSettingsStore();
+  const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
+  const pdfWidth = useSettingsStore((s) => s.pdfWidth);
+  const panelHeight = useSettingsStore((s) => s.panelHeight);
+  const panelOpen = useSettingsStore((s) => s.panelOpen);
+  const sidebarView = useSettingsStore((s) => s.sidebarView);
+  const setSettings = useSettingsStore((s) => s.set);
   const [surface, setSurface] = useState<Surface>('editor');
   const compact = useMatchMedia(COMPACT_QUERY);
   const {
@@ -52,12 +49,18 @@ export function ProjectPage() {
   const mainFile = project?.mainFile;
   const openedFor = useRef<string | null>(null);
 
-  // Only on entering the project, never when the user closes the last tab on purpose.
+  // Tabs, peers and the active file belong to one project. The guard keeps StrictMode's second
+  // effect pass from wiping the main-file tab opened just below.
+  useEffect(() => {
+    if (openedFor.current !== projectId) useWorkspaceStore.getState().reset();
+  }, [projectId]);
+  // Only on entering the project, never when the user closes the last tab on purpose. Tabs are
+  // read from the store: the rendered value may predate the reset above.
   useEffect(() => {
     if (!mainFile || openedFor.current === projectId) return;
-    if (!hasTabs) openTab({ kind: 'file', path: mainFile });
+    if (useWorkspaceStore.getState().tabs.length === 0) openTab({ kind: 'file', path: mainFile });
     openedFor.current = projectId;
-  }, [projectId, mainFile, hasTabs, openTab]);
+  }, [projectId, mainFile, openTab]);
 
   // Below this, the workspace collapses to one flex column and the sidebar
   // becomes a <dialog> sheet instead of a fixed-width column.
@@ -265,7 +268,11 @@ export function ProjectPage() {
           </div>
         </div>
       </div>
-      <StatusBar projectId={project.id} role={project.role} path={path} />
+      <StatusBar
+        projectId={project.id}
+        role={project.role}
+        path={activeTab?.kind === 'file' ? activeTab.path : null}
+      />
     </div>
   );
 }

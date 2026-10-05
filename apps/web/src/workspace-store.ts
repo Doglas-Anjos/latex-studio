@@ -33,6 +33,8 @@ type NewTab =
   | Omit<Extract<Tab, { kind: 'diff' }>, 'id'>;
 export type Connection = 'connecting' | 'connected' | 'disconnected';
 export interface Peer {
+  /** Awareness clientID: two tabs of the same user are two peers. */
+  id: number;
   name: string;
   color: string;
 }
@@ -51,6 +53,13 @@ interface WorkspaceState {
   activeTabId: string | null;
   openTab: (tab: NewTab) => void;
   closeTab: (id: string) => void;
+  /** Closes every tab on `path` or inside the folder `path` (deleted or renamed). */
+  closeTabsUnder: (path: string) => void;
+  /** Back to a blank workspace; called when a project is entered. */
+  reset: () => void;
+  /** Bumped on each local user edit (typing, delete, undo/redo); the auto-compile signal. */
+  docVersion: number;
+  bumpDocVersion: () => void;
   connection: Connection;
   setConnection: (c: Connection) => void;
   wordCount: number | null;
@@ -96,9 +105,42 @@ function opened(s: WorkspaceState, tab: NewTab) {
   return { tabs, activeTabId: id, ...(tab.kind === 'file' ? { activePath: tab.path } : {}) };
 }
 
-export const useWorkspaceStore = create<WorkspaceState>((set) => ({
-  tabs: [],
+const initial = {
+  tabs: [] as Tab[],
   activeTabId: null,
+  docVersion: 0,
+  connection: 'connecting' as Connection,
+  wordCount: null,
+  editorCommands: null,
+  peers: [] as Peer[],
+  blameOn: false,
+  activePath: null,
+  historyScope: 'project' as const,
+  pendingLine: null,
+  commentDraft: null,
+  checkCommentAnchor: null,
+  activeCommentId: null,
+  commentJump: null,
+} satisfies Partial<WorkspaceState>;
+
+export const useWorkspaceStore = create<WorkspaceState>((set) => ({
+  ...initial,
+  reset: () => set(initial),
+  bumpDocVersion: () => set((s) => ({ docVersion: s.docVersion + 1 })),
+  closeTabsUnder: (path) =>
+    set((s) => {
+      const under = (p: string | null) => p !== null && (p === path || p.startsWith(`${path}/`));
+      const tabs = s.tabs.filter((t) => !under(t.path));
+      const activeGone = !tabs.some((t) => t.id === s.activeTabId);
+      const next = activeGone ? (tabs.at(-1) ?? null) : null;
+      return {
+        tabs,
+        ...(activeGone ? { activeTabId: next?.id ?? null } : {}),
+        ...(under(s.activePath) || activeGone
+          ? { activePath: next?.kind === 'file' ? next.path : null }
+          : {}),
+      };
+    }),
   openTab: (tab) => set((s) => opened(s, tab)),
   closeTab: (id) =>
     set((s) => {
@@ -113,26 +155,14 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
         activePath: next ? (next.kind === 'file' ? next.path : s.activePath) : null,
       };
     }),
-  connection: 'connecting',
   setConnection: (connection) => set({ connection }),
-  wordCount: null,
   setWordCount: (wordCount) => set({ wordCount }),
-  editorCommands: null,
   setEditorCommands: (editorCommands) => set({ editorCommands }),
-  peers: [],
   setPeers: (peers) => set({ peers }),
-  blameOn: false,
   toggleBlame: () => set((s) => ({ blameOn: !s.blameOn })),
-  activePath: null,
-  historyScope: 'project',
   setHistoryScope: (historyScope) => set({ historyScope }),
-  pendingLine: null,
-  commentDraft: null,
   setCommentDraft: (commentDraft) => set({ commentDraft }),
-  checkCommentAnchor: null,
   setCheckCommentAnchor: (checkCommentAnchor) => set({ checkCommentAnchor }),
-  activeCommentId: null,
-  commentJump: null,
   setActivePath: (path) =>
     set((s) => ({
       pendingLine: null,

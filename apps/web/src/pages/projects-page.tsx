@@ -23,7 +23,6 @@ import { HELP_SEEN_KEY, HelpDialog } from '../components/dashboard/help-dialog';
 import { Menu } from '../components/menu';
 import { useService } from '../di/service-provider';
 import { type Project, ProjectServiceToken } from '../services/project.service';
-import { useWorkspaceStore } from '../workspace-store';
 
 const dateFmt = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
 const roleLabel = { owner: 'Dono', editor: 'Editor', reviewer: 'Revisor', viewer: 'Leitor' };
@@ -77,10 +76,7 @@ export function ProjectsPage() {
     return () => dialog.removeEventListener('close', markSeen);
   }, [empty]);
 
-  const open = (id: string) => {
-    useWorkspaceStore.getState().setActivePath(null);
-    navigate(`/projects/${id}`);
-  };
+  const open = (id: string) => navigate(`/projects/${id}`);
   const openImport = (mode: ImportMode) => {
     setImportMode(mode);
     importRef.current?.showModal();

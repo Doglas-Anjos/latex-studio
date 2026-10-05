@@ -23,6 +23,8 @@ export function useResize(root: RefObject<HTMLElement | null>, key: ResizeKey) {
 
   return {
     vertical,
+    size,
+    min: MIN[key],
     onPointerDown(e: PointerEvent<HTMLElement>) {
       e.currentTarget.setPointerCapture(e.pointerId);
       drag.current = { start: coord(e), size, last: size };

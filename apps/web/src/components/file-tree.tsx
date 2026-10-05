@@ -350,13 +350,7 @@ export function FileTree({
         activePath={activePath}
         setActivePath={setActivePath}
       />
-      <DeleteDialog
-        dialogRef={deleteRef}
-        projectId={projectId}
-        path={deletingPath}
-        activePath={activePath}
-        setActivePath={setActivePath}
-      />
+      <DeleteDialog dialogRef={deleteRef} projectId={projectId} path={deletingPath} />
     </nav>
   );
 }
@@ -554,9 +548,12 @@ function RenameDialog({
       const renamed = to.trim();
       queryClient.invalidateQueries({ queryKey: ['files', projectId] });
       dialogRef.current?.close();
+      if (!from) return;
+      // Tabs on the old path would reconnect to a document the server no longer has.
+      useWorkspaceStore.getState().closeTabsUnder(from);
       if (activePath === from) {
         setActivePath(renamed);
-      } else if (from && activePath?.startsWith(`${from}/`)) {
+      } else if (activePath?.startsWith(`${from}/`)) {
         setActivePath(renamed + activePath.slice(from.length));
       }
     },
@@ -630,14 +627,10 @@ function DeleteDialog({
   dialogRef,
   projectId,
   path,
-  activePath,
-  setActivePath,
 }: {
   dialogRef: RefObject<HTMLDialogElement | null>;
   projectId: string;
   path: string | null;
-  activePath: string | null;
-  setActivePath: (path: string | null) => void;
 }) {
   const files = useService(FileServiceToken);
   const queryClient = useQueryClient();
@@ -646,9 +639,7 @@ function DeleteDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files', projectId] });
       dialogRef.current?.close();
-      if (activePath === path || (path && activePath?.startsWith(`${path}/`))) {
-        setActivePath(null);
-      }
+      if (path) useWorkspaceStore.getState().closeTabsUnder(path);
     },
   });
   const [lastPath, setLastPath] = useState(path);

@@ -8,7 +8,6 @@
 
 /* ---------- Buttons ---------- */
 .btn {
-  border-radius: 10px;
   letter-spacing: 0.01em;
   transition:
     background-color 0.12s,
@@ -580,13 +579,7 @@
     transform: translateX(285%);
   }
 }
-.engine-conflict-note {
-  padding: 0.1rem 0.5rem;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--warn) 14%, transparent);
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
+
 .engine-select {
   border-radius: 6px;
   transition: border-color 0.12s;
@@ -634,9 +627,6 @@
    bar already carries build status there (see styles.css), so this follows
    the same rule and drops to the details panel's title text only. */
 @media (max-width: 26rem) {
-  .engine-conflict-note {
-    display: none;
-  }
   .problem-counts {
     padding-left: 0;
     border-left: 0;

@@ -18,7 +18,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useService } from '../di/service-provider';
 import {
@@ -149,30 +149,24 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
       ),
     onError: showPanel,
   });
-  // Auto compile: the editor bumps wordCount on every change; 3 s after the last one, compile
-  // unless a build is already in flight.
-  const wordCount = useWorkspaceStore((s) => s.wordCount);
-  const armed = useRef(false);
+  // Auto compile: the editor bumps docVersion on each local edit (remote edits and loads do not);
+  // 3 s after the last one, compile unless a build is already requested or in flight.
+  const docVersion = useWorkspaceStore((s) => s.docVersion);
+  const seenVersion = useRef(docVersion);
   const autoFire = useRef(() => {});
   autoFire.current = () => {
     const latest = queryClient.getQueryData<Build[]>(['builds', projectId])?.[0];
-    if (!isActive(latest)) start.mutate();
+    if (!start.isPending && !isActive(latest)) start.mutate();
   };
-  // biome-ignore lint/correctness/useExhaustiveDependencies: wordCount is the "document changed" signal; the action lives in a ref
   useEffect(() => {
-    if (!autoCompile || !canCompile) {
-      armed.current = false;
-      return;
-    }
-    if (!armed.current) {
-      armed.current = true; // the first value is the document loading, not an edit
-      return;
-    }
+    if (!autoCompile || !canCompile || docVersion === seenVersion.current) return;
+    seenVersion.current = docVersion;
     const id = window.setTimeout(() => autoFire.current(), 3000);
     return () => window.clearTimeout(id);
-  }, [wordCount, autoCompile, canCompile]);
+  }, [docVersion, autoCompile, canCompile]);
   const [menuOpen, setMenuOpen] = useState(false);
   const caretRef = useRef<HTMLButtonElement>(null);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => projects.get(projectId),
@@ -193,6 +187,7 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   const engineUnconfirmed = !project || setEngine.isPending;
   const running = isActive(build) && !stuck;
   const compileDisabled = !canCompile || start.isPending || engineUnconfirmed;
+  const mainDisabled = running ? stop.isPending : compileDisabled;
   const compileTitle = !canCompile
     ? 'Você não tem permissão para compilar este projeto'
     : engineUnconfirmed
@@ -213,14 +208,17 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
       for (const [i, path] of paths.entries()) {
         setFormatProgress(`Formatando ${i + 1}/${paths.length}…`);
         const { activePath, editorCommands } = useWorkspaceStore.getState();
-        const live = editorCommands && path === (activePath ?? paths[0]) ? editorCommands : null;
+        const live =
+          editorCommands && path === (activePath ?? project?.mainFile) ? editorCommands : null;
         const read = async () =>
           live ? live.getText() : (await files.blob(projectId, path)).text();
         const before = await read();
         const { jobId } = await tools.format(projectId, path, before);
         const r = await waitFor<{ text: string }>(jobId);
-        // Edited meanwhile (here or by a collaborator): skip rather than revert their change.
-        if (!r || (await read()) !== before) {
+        // Edited meanwhile (here or by a collaborator), or the editor now shows another file:
+        // skip rather than revert their change or write into the wrong document.
+        const editorChanged = live && useWorkspaceStore.getState().editorCommands !== live;
+        if (!r || editorChanged || (await read()) !== before) {
           skipped++;
           continue;
         }
@@ -273,7 +271,7 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             <Button
               variant="danger"
               size="compact"
-              disabled={stop.isPending}
+              disabled={mainDisabled}
               title="Parar a compilação em andamento"
               onClick={() => stop.mutate(build.id)}
             >
@@ -283,17 +281,18 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             <Button
               variant="primary"
               size="compact"
-              disabled={compileDisabled}
+              disabled={mainDisabled}
               title={compileTitle}
               onClick={() => start.mutate()}
             >
               {stuck ? 'Tentar novamente' : 'Compilar'}
             </Button>
           )}
-          <button
+          <Button
             ref={caretRef}
-            type="button"
-            className={`split-btn-caret ${running ? 'is-danger' : ''}`}
+            variant={running ? 'danger' : 'primary'}
+            size="compact"
+            disabled={mainDisabled}
             aria-label="Opções de compilação"
             title="Opções de compilação"
             aria-haspopup="true"
@@ -301,10 +300,10 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             onClick={() => setMenuOpen((o) => !o)}
           >
             <ChevronDown size={14} aria-hidden="true" />
-          </button>
+          </Button>
         </div>
         {menuOpen && (
-          <CompileMenu anchor={caretRef} onClose={() => setMenuOpen(false)}>
+          <CompileMenu anchor={caretRef} onClose={closeMenu}>
             <MenuGroup label="Compilação automática">
               <MenuChoice checked={autoCompile} onPick={() => setSettings({ autoCompile: true })}>
                 Ligada
@@ -675,6 +674,8 @@ function MenuChoice({
 /**
  * Rendered in a portal with fixed coordinates: the build bar lives inside a clipped bottom panel,
  * so an in-flow dropdown gets cut off. Flips above the caret when there is no room below.
+ * Focus moves to the first item on open and back to the caret on any close (it sits in <body>,
+ * far from the caret in tab order).
  */
 function CompileMenu({
   anchor,
@@ -711,6 +712,11 @@ function CompileMenu({
       document.removeEventListener('keydown', onKey);
     };
   }, [anchor, onClose]);
+  useEffect(() => {
+    ref.current?.querySelector('button')?.focus();
+    const caret = anchor.current;
+    return () => caret?.focus();
+  }, [anchor]);
   return createPortal(
     <div ref={ref} className="compile-menu-body" style={pos}>
       {children}

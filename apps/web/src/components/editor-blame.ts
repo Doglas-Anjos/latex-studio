@@ -48,6 +48,10 @@ class RunMarker extends GutterMarker {
   ) {
     super();
   }
+  // Runs are cached per Blame object, so identity means same text: no DOM rebuild on each update.
+  override eq(other: GutterMarker) {
+    return other instanceof RunMarker && other.run === this.run;
+  }
   override toDOM() {
     const el = document.createElement('span');
     el.className = 'cm-blame-run';
