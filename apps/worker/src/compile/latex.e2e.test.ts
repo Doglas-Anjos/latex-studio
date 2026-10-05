@@ -31,7 +31,6 @@ const latexmkAvailable = (() => {
 const FIXTURES = join(__dirname, '../../test/fixtures');
 const runner = new LatexmkRunner({ COMPILE_TIMEOUT_MS: 240_000 } as WorkerConfig);
 const dirs: string[] = [];
-const WINDOWS = process.platform === 'win32';
 
 /** Copies a fixture to a temp dir; `edit` may rewrite files there before compiling. */
 async function project(fixture: string, edit?: (dir: string) => Promise<void>) {
@@ -192,10 +191,10 @@ describe.skipIf(!latexmkAvailable)('LaTeX compile regressions', () => {
     expect(r.errors.length).toBeGreaterThan(0);
   });
 
-  // MiKTeX's latexmk strips the backslashes and braces from -usepretex, so pdflatex runs
-  // `PassOptionsToPackagedraftgraphicx\input{main.tex}` and dies: draft is broken on Windows.
-  it.skipIf(WINDOWS)('compiles in draft mode', async () => {
+  // Was broken on MiKTeX when draft went through -usepretex (backslashes stripped).
+  it('compiles in draft mode, keeping the main file name for the outputs', async () => {
     const r = await compile(await project('glue'), 'pdflatex', { draft: true });
     expect(r.status).toBe('succeeded');
+    expect(r.errors).toEqual([]);
   });
 });

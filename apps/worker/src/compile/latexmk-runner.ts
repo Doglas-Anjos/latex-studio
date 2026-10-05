@@ -1,7 +1,7 @@
 import { type ChildProcess, execFile, spawn } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, extname, join } from 'node:path';
 import { APP_CONFIG, type WorkerConfig } from '@latex-studio/core';
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -22,6 +22,8 @@ const ENGINE_FLAGS: Record<Engine, string[]> = {
   lualatex: ['-pdflua'],
 };
 const WINDOWS = process.platform === 'win32';
+/** Written into the throwaway snapshot only; never part of the project. */
+const DRAFT_WRAPPER = 'latex-studio-draft.tex';
 
 /**
  * Runs latexmk without a shell, with a wall-clock timeout and a minimal environment.
@@ -49,6 +51,17 @@ export class LatexmkRunner {
     const { workDir, engine, mainFile, options = {}, signal } = job;
     // A main file named like an option would be parsed as one.
     if (mainFile.startsWith('-')) throw new Error(`Invalid main file: ${mainFile}`);
+    // Draft ("fast"): images as frames, like Overleaf. The TeX goes in a one-line wrapper file
+    // rather than `-usepretex`, whose backslashes MiKTeX's latexmk strips from the command line.
+    // `-jobname` keeps every output named after the real main file.
+    let target = mainFile;
+    if (options.draft) {
+      target = DRAFT_WRAPPER;
+      await writeFile(
+        join(workDir, DRAFT_WRAPPER),
+        `\\PassOptionsToPackage{draft}{graphicx}\\input{${mainFile}}\n`,
+      );
+    }
     const args = [
       ...ENGINE_FLAGS[engine],
       // A project-supplied .latexmkrc would run as Perl inside the worker.
@@ -56,8 +69,7 @@ export class LatexmkRunner {
       '-interaction=nonstopmode',
       // "Try to compile despite errors": nonstopmode without halting still yields a PDF.
       ...(options.haltOnError === false ? [] : ['-halt-on-error']),
-      // Draft: images as frames, no overfull marks; same as Overleaf's "fast" mode.
-      ...(options.draft ? [String.raw`-usepretex=\PassOptionsToPackage{draft}{graphicx}`] : []),
+      ...(options.draft ? [`-jobname=${basename(mainFile, extname(mainFile))}`] : []),
       '-no-shell-escape',
       // MiKTeX ignores the max_print_line env var below; without this its log wraps at 79
       // columns (MiKTeX's lualatex rejects the flag) and `C:\...\pkg.sty:10: Fatal ...` errors split across lines unparsed.
@@ -65,7 +77,7 @@ export class LatexmkRunner {
       '-file-line-error',
       '-synctex=1',
       '-output-directory=out',
-      mainFile,
+      target,
     ];
     // HOME and the per-user texmf trees live outside the snapshot, so project files can never be
     // picked up as a format, Lua bytecode cache or fontconfig.
