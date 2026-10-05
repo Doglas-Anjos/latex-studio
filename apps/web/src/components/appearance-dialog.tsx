@@ -9,14 +9,16 @@ import {
 import { Button } from './button';
 import { Dialog } from './dialog';
 
-const FONTS = [
-  'ui-monospace, "Cascadia Code", Consolas, monospace',
-  '"JetBrains Mono", ui-monospace, monospace',
-  '"Fira Code", ui-monospace, monospace',
-  'Menlo, Monaco, monospace',
-  '"Courier New", monospace',
+// JetBrains Mono, Fira Code and IBM Plex Mono ship with the app (main.tsx), so they look the
+// same on every machine; "Sistema" is whatever monospace the OS has (Cascadia on Windows 11).
+const FONTS: [label: string, value: string][] = [
+  ['Sistema', 'ui-monospace, "Cascadia Code", Consolas, monospace'],
+  ['JetBrains Mono', '"JetBrains Mono", ui-monospace, monospace'],
+  ['Fira Code', '"Fira Code", ui-monospace, monospace'],
+  ['IBM Plex Mono', '"IBM Plex Mono", ui-monospace, monospace'],
+  ['Courier New', '"Courier New", monospace'],
 ];
-const DEFAULT_FONT = FONTS[0] as string;
+const DEFAULT_FONT = FONTS[0]?.[1] as string;
 const THEMES = { system: 'Sistema', light: 'Claro', dark: 'Escuro' } as const;
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -34,7 +36,7 @@ function parseAppearance(raw: unknown): Partial<Settings> {
   const out: Partial<Settings> = {};
   if (typeof o.theme === 'string' && Object.hasOwn(THEMES, o.theme))
     out.theme = o.theme as Settings['theme'];
-  if (typeof o.editorFont === 'string' && FONTS.includes(o.editorFont))
+  if (typeof o.editorFont === 'string' && FONTS.some(([, v]) => v === o.editorFont))
     out.editorFont = o.editorFont;
   if (typeof o.fontSize === 'number' && o.fontSize >= 11 && o.fontSize <= 20)
     out.fontSize = Math.round(o.fontSize);
@@ -123,11 +125,10 @@ export function AppearanceDialog({ ref }: { ref: RefObject<HTMLDialogElement | n
             ))}
           </select>
         </label>
-        {/* Each choice previews itself in its own font, size and syntax colours. A font that is
-            not installed falls back to the next one, and the sample shows it. */}
+        {/* Each choice previews itself in its own font, size and syntax colours. */}
         <fieldset className="font-choices">
           <legend>Fonte do editor</legend>
-          {FONTS.map((f) => (
+          {FONTS.map(([name, f]) => (
             <label key={f} className="font-choice">
               <input
                 type="radio"
@@ -136,7 +137,7 @@ export function AppearanceDialog({ ref }: { ref: RefObject<HTMLDialogElement | n
                 checked={s.editorFont === f}
                 onChange={() => set({ editorFont: f })}
               />
-              <span className="font-choice-name">{(f.split(',')[0] ?? f).replaceAll('"', '')}</span>
+              <span className="font-choice-name">{name}</span>
               <code
                 className="font-sample"
                 aria-hidden="true"

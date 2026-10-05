@@ -16,6 +16,12 @@ import { HttpMemberService, MemberServiceToken } from './services/member.service
 import { HttpPackageService, PackageServiceToken } from './services/package.service';
 import { HttpProjectService, ProjectServiceToken } from './services/project.service';
 import { HttpToolsService, ToolsServiceToken } from './services/tools.service';
+import '@fontsource/jetbrains-mono/latin-400.css';
+import '@fontsource/jetbrains-mono/latin-700.css';
+import '@fontsource/fira-code/latin-400.css';
+import '@fontsource/fira-code/latin-700.css';
+import '@fontsource/ibm-plex-mono/latin-400.css';
+import '@fontsource/ibm-plex-mono/latin-700.css';
 import './styles.css';
 import './redesign.css';
 
