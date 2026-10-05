@@ -27,9 +27,15 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
       if (typeof loaded === 'string') document.getText('content').insert(0, loaded);
       else Y.applyUpdate(document, loaded);
     },
+    // Server-side changes (restore, format, initial load) carry no user; a throw here would
+    // bring the whole API down as an unhandled rejection, so this hook never throws.
     async onChange({ context, documentName }) {
-      const { projectId, path } = collab.parseDocumentName(documentName);
-      await collab.recordEdit(projectId, path, context.user.id);
+      const userId = context?.user?.id;
+      if (!userId) return;
+      try {
+        const { projectId, path } = collab.parseDocumentName(documentName);
+        await collab.recordEdit(projectId, path, userId);
+      } catch {}
     },
     async onStoreDocument({ document, documentName, instance }) {
       // DocumentSync.forget dropped this doc (file renamed or deleted): never write it back.
