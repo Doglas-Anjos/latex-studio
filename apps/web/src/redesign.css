@@ -837,3 +837,188 @@ button.comment-popup-scope[aria-pressed="true"] {
     transition: none;
   }
 }
+
+/* History */
+.history-panel .view-toggle {
+  margin: 0;
+}
+.hist-save {
+  display: flex;
+  gap: 0.4rem;
+  align-items: stretch;
+}
+.hist-save input {
+  flex: 1;
+  min-width: 0;
+  height: 1.9rem;
+  box-sizing: border-box;
+  padding: 0 0.5rem;
+  font: inherit;
+  font-size: 0.8rem;
+}
+.hist-save .btn {
+  height: 1.9rem;
+  box-sizing: border-box;
+  padding-block: 0;
+  white-space: nowrap;
+}
+.hist-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--primary);
+}
+.hist-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+  display: grid;
+}
+.hist-timeline::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 0.6rem;
+  bottom: 0.6rem;
+  width: 1px;
+  background: var(--line);
+}
+.hist-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.25rem 0.3rem 0.25rem 0;
+  border-radius: 4px;
+}
+.hist-row:hover,
+.hist-row[data-selected="true"] {
+  background: color-mix(in srgb, var(--line) 50%, transparent);
+}
+.hist-row[data-marked="true"] {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--primary);
+}
+.hist-dot {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: 13px;
+  height: 13px;
+  margin-top: 0.15rem;
+  display: grid;
+  place-items: center;
+}
+.hist-dot::after {
+  content: "";
+  box-sizing: border-box;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--muted);
+  background: var(--surface);
+}
+.hist-row[data-named="true"] .hist-dot::after {
+  border-color: var(--primary);
+  background: var(--primary);
+}
+.hist-main {
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 0.1rem;
+  cursor: pointer;
+}
+div.hist-main {
+  cursor: default;
+}
+.hist-main:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.hist-msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.hist-row[data-named="true"] .hist-msg {
+  color: var(--ink);
+  font-weight: 600;
+}
+.hist-meta {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.hist-actions {
+  display: none;
+  flex: none;
+  gap: 0.1rem;
+}
+.hist-row:hover .hist-actions,
+.hist-row:focus-within .hist-actions {
+  display: flex;
+}
+@media (hover: none) {
+  .hist-actions {
+    display: flex;
+  }
+}
+.hist-icon-btn {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.hist-icon-btn:hover:not(:disabled),
+.hist-icon-btn[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--line);
+}
+.hist-icon-btn[data-danger]:hover:not(:disabled) {
+  color: var(--danger);
+}
+.hist-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.hist-changes {
+  list-style: none;
+  margin: 0;
+  padding: 0.1rem 0 0.3rem 1.3rem;
+  display: grid;
+  gap: 0.15rem;
+}
+.hist-changes li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.hist-changes code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+}
+.hist-group > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.hist-group > .hist-timeline {
+  margin-left: 0.4rem;
+}

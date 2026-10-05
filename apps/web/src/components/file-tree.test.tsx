@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
 import { type FileService, FileServiceToken } from '../services/file.service';
 import { type HistoryService, HistoryServiceToken } from '../services/history.service';
+import { useSettingsStore } from '../settings-store';
 import { renderWithApp } from '../test/render';
 import { useWorkspaceStore } from '../workspace-store';
 import { buildTree, classifyFile, FileTree } from './file-tree';
@@ -32,7 +33,7 @@ describe('FileTree', () => {
   });
   afterEach(() => {
     cleanup();
-    useWorkspaceStore.setState({ activePath: null, pendingLine: null });
+    useWorkspaceStore.setState({ activePath: null, pendingLine: null, historyScope: 'project' });
   });
 
   it('classifies files by extension', () => {
@@ -56,8 +57,19 @@ describe('FileTree', () => {
       new Container().register(FileServiceToken, fake()).register(HistoryServiceToken, history()),
     );
     expect(await screen.findByRole('button', { name: /chapters/ })).toBeTruthy();
-    await userEvent.click(await screen.findByRole('button', { name: /intro\.tex/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'intro.tex' }));
     expect(useWorkspaceStore.getState().activePath).toBe('chapters/intro.tex');
+  });
+
+  it('opens the file history for a text file', async () => {
+    renderWithApp(
+      <FileTree projectId="p1" canEdit={false} mainFile="main.tex" />,
+      new Container().register(FileServiceToken, fake()).register(HistoryServiceToken, history()),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Histórico de main.tex' }));
+    expect(useWorkspaceStore.getState().activePath).toBe('main.tex');
+    expect(useWorkspaceStore.getState().historyScope).toBe('file');
+    expect(useSettingsStore.getState().sidebarView).toBe('history');
   });
 
   it('prefills the rename dialog and rejects a path with ".."', async () => {

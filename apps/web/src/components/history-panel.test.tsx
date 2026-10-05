@@ -25,6 +25,7 @@ describe('HistoryPanel', () => {
   });
   afterEach(() => {
     cleanup();
+    useWorkspaceStore.setState({ historyScope: 'project' });
     vi.unstubAllGlobals();
   });
 
@@ -49,6 +50,29 @@ describe('HistoryPanel', () => {
     await userEvent.type(screen.getByLabelText('Mensagem da versão'), 'Minha versão');
     await userEvent.click(screen.getByRole('button', { name: 'Salvar versão' }));
     await waitFor(() => expect(service.commit).toHaveBeenCalledWith('p1', 'Minha versão'));
+  });
+
+  it('collapses 3+ consecutive autosaves into one expandable row', async () => {
+    const auto = (sha: string) => ({
+      sha,
+      message: 'Autosave',
+      author,
+      date: new Date().toISOString(),
+    });
+    const service = {
+      log: vi.fn().mockResolvedValue([log[0], auto('x3'), auto('x2'), auto('x1'), log[1]]),
+      fileLog: vi.fn().mockResolvedValue([]),
+      changes: vi.fn().mockResolvedValue([]),
+    } as unknown as HistoryService;
+    renderWithApp(
+      <HistoryPanel projectId="p1" canEdit path="main.tex" />,
+      new Container().register(HistoryServiceToken, service),
+    );
+    const summary = await screen.findByText('3 salvamentos automáticos');
+    expect((summary.closest('details') as HTMLDetailsElement).open).toBe(false);
+    await userEvent.click(summary);
+    expect((summary.closest('details') as HTMLDetailsElement).open).toBe(true);
+    expect(screen.getByText('Segunda versão')).toBeTruthy();
   });
 
   it('asks for confirmation before restoring a file, and cancel keeps it unchanged', async () => {

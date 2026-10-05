@@ -1,13 +1,111 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FileText, GitCompare, RotateCcw } from 'lucide-react';
-import { type FormEvent, useRef, useState } from 'react';
+import { Columns2, Eye, FileDiff, FileText, GitCompare, RotateCcw } from 'lucide-react';
+import { type FormEvent, type ReactNode, useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
-import { HistoryServiceToken } from '../services/history.service';
+import { type HistoryEntry, HistoryServiceToken } from '../services/history.service';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { Dialog } from './dialog';
 
-type Scope = 'project' | 'file';
+// Message the worker gives to automatic commits (packages/git-store AUTOSAVE_MESSAGE).
+const AUTOSAVE = 'Autosave';
+const GROUP_MIN = 3;
+const BADGE = { add: 'A', modify: 'M', remove: 'D' } as const;
+
+function relativeTime(iso: string): string {
+  const d = new Date(iso);
+  const min = Math.floor((Date.now() - d.getTime()) / 60_000);
+  if (min < 1) return 'agora';
+  if (min < 60) return `há ${min} min`;
+  if (min < 1440) return `há ${Math.floor(min / 60)} h`;
+  if (min < 2880) return 'ontem';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+}
+
+/** Consecutive autosaves of GROUP_MIN or more collapse into one expandable row. */
+function groupAutosaves(log: HistoryEntry[]) {
+  const runs: { auto: boolean; items: { e: HistoryEntry; i: number }[] }[] = [];
+  log.forEach((e, i) => {
+    const auto = e.message === AUTOSAVE;
+    const last = runs.at(-1);
+    if (auto && last?.auto) last.items.push({ e, i });
+    else runs.push({ auto, items: [{ e, i }] });
+  });
+  return runs;
+}
+
+function IconButton({
+  label,
+  title,
+  onClick,
+  disabled,
+  pressed,
+  danger,
+  children,
+}: {
+  label: string;
+  title?: string;
+  onClick: () => void;
+  disabled?: boolean;
+  pressed?: boolean;
+  danger?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className="hist-icon-btn"
+      data-danger={danger || undefined}
+      aria-label={label}
+      title={title ?? label}
+      aria-pressed={pressed}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+}
+
+function EntryRow({
+  e,
+  selected,
+  marked,
+  onSelect,
+  actions,
+}: {
+  e: HistoryEntry;
+  selected?: boolean;
+  marked?: boolean;
+  onSelect?: () => void;
+  actions: ReactNode;
+}) {
+  const named = e.message !== AUTOSAVE;
+  const body = (
+    <>
+      <span className="hist-msg">{e.message}</span>
+      <small className="hist-meta">
+        {e.author.name} ·{' '}
+        <time dateTime={e.date} title={new Date(e.date).toLocaleString('pt-BR')}>
+          {relativeTime(e.date)}
+        </time>
+      </small>
+    </>
+  );
+  return (
+    <div className="hist-row" data-named={named} data-selected={selected} data-marked={marked}>
+      <span className="hist-dot" aria-hidden="true" />
+      {onSelect ? (
+        <button type="button" className="hist-main" aria-pressed={selected} onClick={onSelect}>
+          {body}
+        </button>
+      ) : (
+        <div className="hist-main">{body}</div>
+      )}
+      <span className="hist-actions">{actions}</span>
+    </div>
+  );
+}
 
 export function HistoryPanel({
   projectId,
@@ -23,7 +121,8 @@ export function HistoryPanel({
   const queryClient = useQueryClient();
   const dialog = useRef<HTMLDialogElement>(null);
   const restoreDialog = useRef<HTMLDialogElement>(null);
-  const [scope, setScope] = useState<Scope>('project');
+  const scope = useWorkspaceStore((st) => st.historyScope);
+  const setScope = useWorkspaceStore((st) => st.setHistoryScope);
   const [selected, setSelected] = useState<string | null>(null);
   const [viewing, setViewing] = useState<{ path: string; text: string } | null>(null);
   const [restoreTarget, setRestoreTarget] = useState<{ sha: string; path: string } | null>(null);
@@ -131,83 +230,108 @@ export function HistoryPanel({
         </button>
       </fieldset>
       {scope === 'project' && canEdit && (
-        <form className="change-form" onSubmit={submitMessage}>
+        <form className="hist-save" onSubmit={submitMessage}>
           <input
             placeholder="Mensagem da versão"
             aria-label="Mensagem da versão"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
           />
-          <Button variant="secondary" type="submit" disabled={save.isPending || !message.trim()}>
+          <Button
+            variant="primary"
+            size="compact"
+            type="submit"
+            disabled={save.isPending || !message.trim()}
+          >
             Salvar versão
           </Button>
         </form>
       )}
       {scope === 'project' ? (
-        <ul className="history-list">
-          {log.map((e, i) => (
-            <li key={e.sha}>
-              <button
-                type="button"
-                className="history-entry"
-                aria-pressed={e.sha === selected}
-                onClick={() => setSelected(e.sha === selected ? null : e.sha)}
-              >
-                <span className="history-message">{e.message}</span>
-                <small>
-                  {e.author.name} · {new Date(e.date).toLocaleString('pt-BR')}
-                </small>
-              </button>
-              <span className="history-compare">
-                <Button
-                  variant="ghost"
-                  disabled={!log[i + 1]}
-                  onClick={() => compare.mutate({ from: log[i + 1]?.sha ?? '', to: e.sha })}
-                >
-                  <GitCompare size={14} aria-hidden /> Comparar com anterior
-                </Button>
-                <Button
-                  variant="ghost"
-                  aria-pressed={mark === e.sha}
-                  onClick={() => toggleMark(e.sha)}
-                >
-                  Comparar
-                </Button>
-              </span>
-              {e.sha === selected && (
-                <ul className="history-changes">
-                  {!parent && <li className="comment-empty">Primeira versão.</li>}
-                  {changes.map((c) => (
-                    <li key={c.path}>
-                      <code>
-                        {c.type} {c.path}
-                      </code>
-                      {c.type !== 'remove' && (
-                        <Button
-                          variant="ghost"
-                          onClick={() => view.mutate({ sha: e.sha, path: c.path })}
+        <>
+          {mark !== null && <p className="hist-hint">Comparar: selecione outra versão</p>}
+          <ul className="hist-timeline">
+            {groupAutosaves(log).map((run) => {
+              const rows = run.items.map(({ e, i }) => (
+                <li key={e.sha}>
+                  <EntryRow
+                    e={e}
+                    selected={e.sha === selected}
+                    marked={mark === e.sha}
+                    onSelect={() => setSelected(e.sha === selected ? null : e.sha)}
+                    actions={
+                      <>
+                        <IconButton
+                          label="Comparar com anterior"
+                          title="Comparar com a versão anterior"
+                          disabled={!log[i + 1]}
+                          onClick={() => compare.mutate({ from: log[i + 1]?.sha ?? '', to: e.sha })}
                         >
-                          ver
-                        </Button>
-                      )}
-                      {canEdit && (
-                        <Button
-                          variant="danger"
-                          onClick={() => {
-                            setRestoreTarget({ sha: e.sha, path: c.path });
-                            restoreDialog.current?.showModal();
-                          }}
+                          <GitCompare size={14} aria-hidden="true" />
+                        </IconButton>
+                        <IconButton
+                          label="Marcar para comparar"
+                          pressed={mark === e.sha}
+                          onClick={() => toggleMark(e.sha)}
                         >
-                          restaurar
-                        </Button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </li>
-          ))}
-        </ul>
+                          <Columns2 size={14} aria-hidden="true" />
+                        </IconButton>
+                      </>
+                    }
+                  />
+                  {e.sha === selected && (
+                    <ul className="hist-changes">
+                      {!parent && <li className="comment-empty">Primeira versão.</li>}
+                      {changes.map((c) => (
+                        <li key={c.path}>
+                          <span className="change-badge" data-type={c.type} aria-hidden="true">
+                            {BADGE[c.type as keyof typeof BADGE]}
+                          </span>
+                          <code title={c.path}>{c.path}</code>
+                          {c.type !== 'remove' && (
+                            <IconButton
+                              label="ver"
+                              title="Ver conteúdo desta versão"
+                              onClick={() => view.mutate({ sha: e.sha, path: c.path })}
+                            >
+                              <Eye size={14} aria-hidden="true" />
+                            </IconButton>
+                          )}
+                          {canEdit && (
+                            <IconButton
+                              label="restaurar"
+                              title="Restaurar este arquivo para esta versão"
+                              danger
+                              onClick={() => {
+                                setRestoreTarget({ sha: e.sha, path: c.path });
+                                restoreDialog.current?.showModal();
+                              }}
+                            >
+                              <RotateCcw size={14} aria-hidden="true" />
+                            </IconButton>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ));
+              return run.auto && run.items.length >= GROUP_MIN ? (
+                <li key={run.items[0]?.e.sha}>
+                  <details className="hist-group">
+                    <summary>
+                      <span className="hist-dot" aria-hidden="true" />
+                      {run.items.length} salvamentos automáticos
+                    </summary>
+                    <ul className="hist-timeline">{rows}</ul>
+                  </details>
+                </li>
+              ) : (
+                rows
+              );
+            })}
+          </ul>
+        </>
       ) : (
         <>
           <p className="history-file-path comment-draft-scope" title={path}>
@@ -247,7 +371,7 @@ export function HistoryPanel({
           ) : (
             <p className="comment-empty">Sem alterações não salvas neste arquivo.</p>
           )}
-          <ul className="history-list">
+          <ul className="hist-timeline">
             {fileLog.length === 0 && (
               <li className="comment-empty">Nenhuma versão salva deste arquivo ainda.</li>
             )}
@@ -255,43 +379,51 @@ export function HistoryPanel({
               const previous = fileLog[i + 1];
               return (
                 <li key={e.sha}>
-                  <div className="history-entry">
-                    <span className="history-message">{e.message}</span>
-                    <small>
-                      {e.author.name} · {new Date(e.date).toLocaleString('pt-BR')}
-                    </small>
-                  </div>
-                  <span className="history-compare">
-                    <Button
-                      variant="ghost"
-                      onClick={() => openTab({ kind: 'diff', path, from: e.sha, to: 'work' })}
-                    >
-                      <GitCompare size={14} aria-hidden /> Comparar com atual
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      disabled={!previous}
-                      onClick={() =>
-                        previous && openTab({ kind: 'diff', path, from: previous.sha, to: e.sha })
-                      }
-                    >
-                      Comparar com anterior
-                    </Button>
-                    <Button variant="ghost" onClick={() => view.mutate({ sha: e.sha, path })}>
-                      ver
-                    </Button>
-                    {canEdit && (
-                      <Button
-                        variant="danger"
-                        onClick={() => {
-                          setRestoreTarget({ sha: e.sha, path });
-                          restoreDialog.current?.showModal();
-                        }}
-                      >
-                        restaurar
-                      </Button>
-                    )}
-                  </span>
+                  <EntryRow
+                    e={e}
+                    actions={
+                      <>
+                        <IconButton
+                          label="Comparar com atual"
+                          title="Comparar com a versão atual do arquivo"
+                          onClick={() => openTab({ kind: 'diff', path, from: e.sha, to: 'work' })}
+                        >
+                          <FileDiff size={14} aria-hidden="true" />
+                        </IconButton>
+                        <IconButton
+                          label="Comparar com anterior"
+                          title="Comparar com a versão anterior"
+                          disabled={!previous}
+                          onClick={() =>
+                            previous &&
+                            openTab({ kind: 'diff', path, from: previous.sha, to: e.sha })
+                          }
+                        >
+                          <GitCompare size={14} aria-hidden="true" />
+                        </IconButton>
+                        <IconButton
+                          label="ver"
+                          title="Ver conteúdo desta versão"
+                          onClick={() => view.mutate({ sha: e.sha, path })}
+                        >
+                          <Eye size={14} aria-hidden="true" />
+                        </IconButton>
+                        {canEdit && (
+                          <IconButton
+                            label="restaurar"
+                            title="Restaurar este arquivo para esta versão"
+                            danger
+                            onClick={() => {
+                              setRestoreTarget({ sha: e.sha, path });
+                              restoreDialog.current?.showModal();
+                            }}
+                          >
+                            <RotateCcw size={14} aria-hidden="true" />
+                          </IconButton>
+                        )}
+                      </>
+                    }
+                  />
                 </li>
               );
             })}

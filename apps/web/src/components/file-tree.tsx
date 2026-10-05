@@ -10,6 +10,7 @@ import {
   Folder as FolderIcon,
   FolderOpen,
   FolderPlus,
+  History,
   Pencil,
   Trash2,
   Upload as UploadIcon,
@@ -27,6 +28,7 @@ import {
 import { useService } from '../di/service-provider';
 import { useHistoryStatus } from '../hooks/use-history-status';
 import { FileServiceToken, type ProjectFile } from '../services/file.service';
+import { useSettingsStore } from '../settings-store';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { Dialog } from './dialog';
@@ -61,6 +63,8 @@ export function classifyFile(name: string): FileKind {
   const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
   return EXTENSION_KINDS[ext] ?? 'generic';
 }
+
+const isTextFile = (name: string) => /\.(tex|bib|sty|cls|txt|md|json)$/i.test(name);
 
 const KIND_ICONS: Record<FileKind, typeof FileCode2> = {
   tex: FileCode2,
@@ -130,6 +134,7 @@ export function FileTree({
   const files = useService(FileServiceToken);
   const activePath = useWorkspaceStore((s) => s.activePath) ?? mainFile;
   const setActivePath = useWorkspaceStore((s) => s.setActivePath);
+  const setHistoryScope = useWorkspaceStore((s) => s.setHistoryScope);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const uploadRef = useRef<HTMLDialogElement>(null);
   const newFileRef = useRef<HTMLDialogElement>(null);
@@ -164,6 +169,11 @@ export function FileTree({
   const remove = (path: string) => {
     setDeletingPath(path);
     deleteRef.current?.showModal();
+  };
+  const showFileHistory = (path: string) => {
+    setActivePath(path);
+    setHistoryScope('file');
+    useSettingsStore.getState().set({ sidebarView: 'history' });
   };
   const toggle = (path: string) =>
     setCollapsed((prev) => {
@@ -232,24 +242,38 @@ export function FileTree({
                   />
                 )}
               </button>
-              {canEdit && (
+              {(canEdit || (!isFolder && isTextFile(n.name))) && (
                 <span className="tree-actions">
-                  <button
-                    type="button"
-                    aria-label={`Renomear ${n.name}`}
-                    title={`Renomear ${n.name}`}
-                    onClick={() => rename(n.path)}
-                  >
-                    <Pencil size={13} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Excluir ${n.name}`}
-                    title={`Excluir ${n.name}`}
-                    onClick={() => remove(n.path)}
-                  >
-                    <Trash2 size={13} aria-hidden="true" />
-                  </button>
+                  {!isFolder && isTextFile(n.name) && (
+                    <button
+                      type="button"
+                      aria-label={`Histórico de ${n.name}`}
+                      title="Ver alterações deste arquivo"
+                      onClick={() => showFileHistory(n.path)}
+                    >
+                      <History size={13} aria-hidden="true" />
+                    </button>
+                  )}
+                  {canEdit && (
+                    <>
+                      <button
+                        type="button"
+                        aria-label={`Renomear ${n.name}`}
+                        title={`Renomear ${n.name}`}
+                        onClick={() => rename(n.path)}
+                      >
+                        <Pencil size={13} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Excluir ${n.name}`}
+                        title={`Excluir ${n.name}`}
+                        onClick={() => remove(n.path)}
+                      >
+                        <Trash2 size={13} aria-hidden="true" />
+                      </button>
+                    </>
+                  )}
                 </span>
               )}
             </div>

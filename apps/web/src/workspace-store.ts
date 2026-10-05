@@ -63,6 +63,8 @@ interface WorkspaceState {
   toggleBlame: () => void;
   /** null means "the project's main file". */
   activePath: string | null;
+  historyScope: 'project' | 'file';
+  setHistoryScope: (scope: 'project' | 'file') => void;
   /** Line the editor should reveal once the file is open (1-based). */
   pendingLine: number | null;
   /** Snapshot of the comment the user asked to write, or null once sent/cancelled. */
@@ -122,6 +124,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   blameOn: false,
   toggleBlame: () => set((s) => ({ blameOn: !s.blameOn })),
   activePath: null,
+  historyScope: 'project',
+  setHistoryScope: (historyScope) => set({ historyScope }),
   pendingLine: null,
   commentDraft: null,
   setCommentDraft: (commentDraft) => set({ commentDraft }),
