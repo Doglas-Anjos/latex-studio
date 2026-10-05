@@ -696,7 +696,10 @@ function CompileMenu({
     setPos({
       position: 'fixed',
       left: Math.max(8, Math.min(r.left, window.innerWidth - 272)),
-      ...(below ? { top: r.bottom + 4 } : { bottom: window.innerHeight - r.top + 4 }),
+      // Exactly one of top/bottom: both at once squeeze the menu to nothing.
+      ...(below
+        ? { top: r.bottom + 4, bottom: 'auto' }
+        : { top: 'auto', bottom: window.innerHeight - r.top + 4 }),
     });
     const onDown = (e: MouseEvent) => {
       const t = e.target as Node;

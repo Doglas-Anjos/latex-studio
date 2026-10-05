@@ -543,6 +543,20 @@ describe('BuildPanel compile options menu and auto compile', () => {
     expect(document.activeElement).toBe(caret);
   });
 
+  it('opens the menu upwards from a caret at the bottom with only a bottom offset', async () => {
+    mount();
+    const caret = screen.getByRole('button', { name: 'Opções de compilação' });
+    await waitFor(() => expect((caret as HTMLButtonElement).disabled).toBe(false));
+    // The build bar sits at the bottom of the window: no room below the caret.
+    caret.getBoundingClientRect = () =>
+      ({ left: 400, top: window.innerHeight - 40, bottom: window.innerHeight - 8 }) as DOMRect;
+    await userEvent.click(caret);
+    const menu = document.querySelector('.compile-menu-body') as HTMLElement;
+    // Both top and bottom set at once squeezed the real menu to a sliver below the window.
+    expect(menu.style.top).toBe('auto');
+    expect(menu.style.bottom).not.toBe('auto');
+  });
+
   it('compiles 3 s after a local edit, once, and not on mount', async () => {
     useSettingsStore.getState().set({ autoCompile: true });
     vi.useFakeTimers({ shouldAdvanceTime: true });

@@ -2816,12 +2816,14 @@ button.log-row:hover {
 .compile-menu > summary::-webkit-details-marker {
   display: none;
 }
+/* Placed by CompileMenu (fixed, in a portal): no top/left here, or a menu opened upwards would
+   carry both top and bottom and collapse to a sliver off screen. */
 .compile-menu-body {
-  position: absolute;
+  position: fixed;
   z-index: 1000;
-  top: calc(100% + 4px);
-  left: 0;
   min-width: 16rem;
+  max-height: calc(100dvh - 16px);
+  overflow: auto;
   padding: 0.35rem;
   border: 1px solid var(--line);
   border-radius: 8px;
