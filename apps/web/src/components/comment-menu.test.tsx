@@ -14,6 +14,9 @@ import { useWorkspaceStore } from '../workspace-store';
 import { CommentMenu } from './comment-menu';
 import { CommentsPanel } from './comments-panel';
 
+// A project role, not an ARIA role (a literal on the prop trips biome's a11y rule).
+const ROLE = 'editor' as const;
+
 const comment: Comment = {
   id: 'c1',
   projectId: 'p1',
@@ -41,8 +44,8 @@ const setup = (meId: string) => {
   const auth = { me: vi.fn().mockResolvedValue({ id: meId }) } as unknown as AuthService;
   renderWithApp(
     <>
-      <CommentMenu projectId="p1" role="editor" comments={[comment]} />
-      <CommentsPanel projectId="p1" path="main.tex" role="editor" />
+      <CommentMenu projectId="p1" role={ROLE} comments={[comment]} />
+      <CommentsPanel projectId="p1" path="main.tex" role={ROLE} />
     </>,
     new Container().register(CommentServiceToken, service).register(AuthServiceToken, auth),
   );
