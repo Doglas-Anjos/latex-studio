@@ -1,4 +1,4 @@
-FROM node:22-alpine AS builder
+FROM node:26-alpine AS builder
 WORKDIR /app
 RUN corepack enable pnpm
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -15,7 +15,7 @@ RUN pnpm --filter @latex-studio/api... build
 # pnpm 12 deploy needs --legacy to flatten workspace packages
 RUN pnpm --filter @latex-studio/api deploy --prod --legacy /out
 
-FROM node:22-alpine
+FROM node:26-alpine
 WORKDIR /app
 # The image ships a `node` user (uid 1000); the data volumes are created owned by it.
 # npm is not needed at runtime (CMD is plain node) and its bundled deps are what Trivy flags.
