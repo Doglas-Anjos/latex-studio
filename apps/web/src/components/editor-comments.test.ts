@@ -1,0 +1,254 @@
+// @vitest-environment jsdom
+import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { describe, expect, it, vi } from 'vitest';
+import { yCollab } from 'y-codemirror.next';
+import * as Y from 'yjs';
+import {
+  type ComposerTarget,
+  commentComposer,
+  commentHighlights,
+  refreshHighlights,
+  setComposerTarget,
+} from './editor-comments';
+import { encodeAnchorPos } from './yjs-anchor';
+
+const TEXT = '\\documentclass{article}\n\\begin{document}\n';
+const QUOTE = '\\documentclass';
+
+/** Quoted text of every comment highlight, as the reader sees it. */
+function highlights(state: EditorState) {
+  const out: string[] = [];
+  for (const source of state.facet(EditorView.decorations)) {
+    if (typeof source === 'function') continue;
+    for (const it = source.iter(); it.value; it.next())
+      out.push(state.doc.sliceString(it.from, it.to));
+  }
+  return out;
+}
+
+/** One editor on a Y.Text, with an open comment over `QUOTE`, like a second tab would see it. */
+function setup() {
+  const doc = new Y.Doc();
+  const ytext = doc.getText('content');
+  ytext.insert(0, TEXT);
+  const comments = {
+    current: [
+      {
+        id: 'c1',
+        anchor: { start: encodeAnchorPos(ytext, 0), end: encodeAnchorPos(ytext, QUOTE.length) },
+      },
+    ],
+  };
+  // Snapshot of Y.Text and of the highlights every time the extension asks for a re-resolve.
+  const refreshed: { ytext: string; highlights: string[] }[] = [];
+  const view = new EditorView({
+    state: EditorState.create({
+      doc: ytext.toString(),
+      extensions: [
+        yCollab(ytext, null, { undoManager: false }),
+        commentHighlights(ytext, comments),
+        EditorView.updateListener.of((u) => {
+          if (u.transactions.some((tr) => tr.effects.some((e) => e.is(refreshHighlights))))
+            refreshed.push({ ytext: ytext.toString(), highlights: highlights(u.state) });
+        }),
+      ],
+    }),
+  });
+  return { doc, ytext, view, comments, refreshed };
+}
+
+describe('commentHighlights', () => {
+  it('highlights the anchored text', () => {
+    const { view } = setup();
+    expect(highlights(view.state)).toEqual([QUOTE]);
+    view.destroy();
+  });
+
+  it('keeps the highlight on the quote when the local tab types before it', async () => {
+    const { view, ytext, refreshed } = setup();
+
+    view.dispatch({ changes: { from: 0, insert: 'QA ' } });
+    // y-codemirror syncs Y.Text from a view plugin, i.e. after the state fields already ran.
+    expect(ytext.toString().startsWith('QA ')).toBe(true);
+    expect(highlights(view.state)).toEqual([QUOTE]);
+
+    await Promise.resolve();
+    // The re-resolve must have seen the updated Y.Text, not the text the field saw.
+    expect(refreshed).toEqual([{ ytext: ytext.toString(), highlights: [QUOTE] }]);
+
+    await Promise.resolve();
+    expect(refreshed).toHaveLength(1); // no feedback loop: one refresh per Y.Text tick
+    view.destroy();
+  });
+
+  it('follows a remote insertion too', async () => {
+    const { view, ytext, refreshed } = setup();
+
+    ytext.insert(0, 'REMOTE ');
+    await Promise.resolve();
+
+    expect(view.state.doc.toString()).toBe(ytext.toString());
+    expect(highlights(view.state)).toEqual([QUOTE]);
+    expect(refreshed).toHaveLength(1);
+    view.destroy();
+  });
+
+  it('drops the highlight when the quote is deleted', async () => {
+    const { view } = setup();
+
+    view.dispatch({ changes: { from: 0, to: QUOTE.length, insert: '' } });
+    await Promise.resolve();
+
+    expect(highlights(view.state)).toEqual([]);
+    view.destroy();
+  });
+
+  it('coalesces a burst of edits into a single refresh', async () => {
+    const { view, refreshed } = setup();
+
+    for (const insert of ['a', 'b', 'c']) view.dispatch({ changes: { from: 0, insert } });
+    await Promise.resolve();
+
+    expect(refreshed).toHaveLength(1);
+    expect(highlights(view.state)).toEqual([QUOTE]);
+    view.destroy();
+  });
+
+  it('does not dispatch a queued refresh into a destroyed view', async () => {
+    const { view, ytext } = setup();
+
+    view.dispatch({ changes: { from: 0, insert: 'QA ' } });
+    const dispatch = vi.spyOn(view, 'dispatch');
+    view.destroy();
+    await Promise.resolve();
+
+    expect(dispatch).not.toHaveBeenCalled();
+    // And the observer is gone, so later Y.Text changes cost nothing.
+    ytext.insert(0, 'more');
+    await Promise.resolve();
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+});
+
+/** Ranges decorated with `cm-comment-draft` by the composer's target field. */
+function draftRanges(state: EditorState) {
+  const out: { from: number; to: number; cls: unknown }[] = [];
+  for (const source of state.facet(EditorView.decorations)) {
+    if (typeof source === 'function') continue;
+    for (const it = source.iter(); it.value; it.next())
+      out.push({ from: it.from, to: it.to, cls: it.value.spec.class });
+  }
+  return out;
+}
+
+function setupComposer(doc: string, isComposing: () => boolean = () => false) {
+  const calls: (ComposerTarget | null)[] = [];
+  const view = new EditorView({
+    state: EditorState.create({
+      doc,
+      extensions: [commentComposer({ isComposing, onTarget: (target) => calls.push(target) })],
+    }),
+  });
+  return { view, calls };
+}
+
+describe('commentComposer', () => {
+  it('resolves a click to the word touching the cursor', () => {
+    const { view, calls } = setupComposer('hello world');
+    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    expect(calls.at(-1)).toEqual({ scope: 'word', from: 0, to: 5 });
+    expect(draftRanges(view.state)).toEqual([{ from: 0, to: 5, cls: 'cm-comment-draft' }]);
+    view.destroy();
+  });
+
+  it('falls back to the line when the click touches no word', () => {
+    const { view, calls } = setupComposer('   \nhello');
+    view.dispatch({ selection: { anchor: 1 }, userEvent: 'select.pointer' });
+    expect(calls.at(-1)).toEqual({ scope: 'line', from: 0, to: 3 });
+    view.destroy();
+  });
+
+  it('opens nothing for a click on a genuinely empty line', () => {
+    const { view, calls } = setupComposer('\nhello');
+    view.dispatch({ selection: { anchor: 0 }, userEvent: 'select.pointer' });
+    expect(calls).toHaveLength(0);
+    view.destroy();
+  });
+
+  it('anchors a drag-selection to its exact bounds, including multi-line', () => {
+    const { view, calls } = setupComposer('aaa\nbbb\nccc');
+    view.dispatch({ selection: { anchor: 1, head: 9 }, userEvent: 'select.pointer' });
+    expect(calls.at(-1)).toEqual({ scope: 'selection', from: 1, to: 9 });
+    view.destroy();
+  });
+
+  it('ignores keyboard-driven selection (not tagged select.pointer)', () => {
+    const { view, calls } = setupComposer('hello world');
+    view.dispatch({ selection: { anchor: 0, head: 5 }, userEvent: 'select' });
+    expect(calls).toHaveLength(0);
+    view.destroy();
+  });
+
+  it('keeps the target locked while the popup is being composed', () => {
+    let composing = false;
+    const { view, calls } = setupComposer('hello world', () => composing);
+    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    composing = true;
+    view.dispatch({ selection: { anchor: 8 }, userEvent: 'select.pointer' });
+    expect(calls.at(-1)).toEqual({ scope: 'word', from: 0, to: 5 });
+    view.destroy();
+  });
+
+  it('suppresses a click that lands on an existing comment mark', () => {
+    const { view, calls } = setupComposer('hello world');
+    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    expect(calls.at(-1)).not.toBeNull();
+
+    const mark = document.createElement('span');
+    mark.setAttribute('data-comment-id', 'c1');
+    view.contentDOM.appendChild(mark);
+    // button: 2 keeps CodeMirror's own mouse-selection machinery (which needs real
+    // layout) from kicking in; only our plugin's handler, and the resulting
+    // select.pointer transaction dispatched below, are under test here.
+    mark.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2 }));
+    view.dispatch({ selection: { anchor: 8 }, userEvent: 'select.pointer' });
+
+    expect(calls.at(-1)).toBeNull();
+    view.destroy();
+  });
+
+  it('clears via the explicit setComposerTarget effect (escape/cancel)', () => {
+    const { view, calls } = setupComposer('hello world');
+    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    view.dispatch({ effects: setComposerTarget.of(null) });
+    expect(calls.at(-1)).toBeNull();
+    view.destroy();
+  });
+
+  it('rides out an edit elsewhere in the document', () => {
+    const { view, calls } = setupComposer('hello world');
+    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    view.dispatch({ changes: { from: 11, insert: '!' } });
+    expect(calls.at(-1)).toEqual({ scope: 'word', from: 0, to: 5 });
+    view.destroy();
+  });
+
+  it('clears when an edit erases the target range', () => {
+    const { view, calls } = setupComposer('hello world');
+    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    view.dispatch({ changes: { from: 0, to: 5, insert: '' } });
+    expect(calls.at(-1)).toBeNull();
+    view.destroy();
+  });
+
+  it('re-reports its position on scroll while open', () => {
+    const { view, calls } = setupComposer('hello world');
+    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    const before = calls.length;
+    view.scrollDOM.dispatchEvent(new Event('scroll'));
+    expect(calls.length).toBe(before + 1);
+    expect(calls.at(-1)).toEqual({ scope: 'word', from: 0, to: 5 });
+    view.destroy();
+  });
+});

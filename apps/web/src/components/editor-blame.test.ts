@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { ageLabel, runStarts } from './editor-blame';
+import { ageLabel, blameVisible, runStarts } from './editor-blame';
+
+describe('blameVisible', () => {
+  it('is false when blame is off, even with data loaded', () => {
+    expect(blameVisible(false, { commits: {}, lines: [] })).toBe(false);
+  });
+  it('is false when on but data has not arrived yet', () => {
+    expect(blameVisible(true, undefined)).toBe(false);
+    expect(blameVisible(true, null)).toBe(false);
+  });
+  it('is true once on and data is loaded', () => {
+    expect(blameVisible(true, { commits: {}, lines: [] })).toBe(true);
+  });
+});
 
 describe('ageLabel', () => {
   const now = new Date('2026-10-03T12:00:00Z');

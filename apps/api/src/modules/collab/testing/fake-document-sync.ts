@@ -9,4 +9,5 @@ export class FakeDocumentSync implements DocumentSync {
     this.texts.set(path, text);
   };
   forget = async (_projectId: string, path: string) => void this.calls.push(`forget ${path}`);
+  flush = async (_projectId: string, path: string) => void this.calls.push(`flush ${path}`);
 }

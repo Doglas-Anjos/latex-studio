@@ -31,15 +31,17 @@ describe('HistoryPanel', () => {
   it('lists commits and saves a version', async () => {
     const service: HistoryService = {
       log: vi.fn().mockResolvedValue(log),
+      fileLog: vi.fn().mockResolvedValue([]),
       changes: vi.fn().mockResolvedValue([]),
       file: vi.fn(),
       commit: vi.fn().mockResolvedValue({ sha: 'c' }),
+      commitFile: vi.fn(),
       restore: vi.fn(),
       status: vi.fn(),
       blame: vi.fn(),
     };
     renderWithApp(
-      <HistoryPanel projectId="p1" canEdit />,
+      <HistoryPanel projectId="p1" canEdit path="main.tex" />,
       new Container().register(HistoryServiceToken, service),
     );
     expect(await screen.findByText('Segunda versão')).toBeTruthy();
@@ -52,15 +54,17 @@ describe('HistoryPanel', () => {
   it('asks for confirmation before restoring a file, and cancel keeps it unchanged', async () => {
     const service: HistoryService = {
       log: vi.fn().mockResolvedValue(log),
+      fileLog: vi.fn().mockResolvedValue([]),
       changes: vi.fn().mockResolvedValue([{ path: 'main.tex', type: 'modify' }]),
       file: vi.fn(),
       commit: vi.fn(),
+      commitFile: vi.fn(),
       restore: vi.fn().mockResolvedValue(undefined),
       status: vi.fn(),
       blame: vi.fn(),
     };
     renderWithApp(
-      <HistoryPanel projectId="p1" canEdit />,
+      <HistoryPanel projectId="p1" canEdit path="main.tex" />,
       new Container().register(HistoryServiceToken, service),
     );
     await userEvent.click(await screen.findByText('Segunda versão'));
@@ -77,10 +81,11 @@ describe('HistoryPanel', () => {
   it('opens diff tabs when comparing with the previous commit', async () => {
     const service = {
       log: vi.fn().mockResolvedValue(log),
+      fileLog: vi.fn().mockResolvedValue([]),
       changes: vi.fn().mockResolvedValue([{ path: 'main.tex', type: 'modify' }]),
     } as unknown as HistoryService;
     renderWithApp(
-      <HistoryPanel projectId="p1" canEdit />,
+      <HistoryPanel projectId="p1" canEdit path="main.tex" />,
       new Container().register(HistoryServiceToken, service),
     );
     await screen.findByText('Segunda versão');
@@ -93,5 +98,66 @@ describe('HistoryPanel', () => {
         expect.objectContaining({ kind: 'diff', path: 'main.tex', from: 'a', to: 'b' }),
       ),
     );
+  });
+
+  describe('file scope', () => {
+    const fileLog = [
+      { sha: 'y', message: 'Update main.tex', author, date: new Date().toISOString() },
+      { sha: 'x', message: 'v1', author, date: new Date().toISOString() },
+    ];
+
+    it('shows unsaved changes and the commits that touched the active file', async () => {
+      const service = {
+        log: vi.fn().mockResolvedValue(log),
+        fileLog: vi.fn().mockResolvedValue(fileLog),
+        changes: vi.fn().mockResolvedValue([]),
+        status: vi.fn().mockResolvedValue({
+          baseline: { sha: 'y', message: 'Update main.tex', date: new Date().toISOString() },
+          changes: [{ path: 'main.tex', type: 'modify' }],
+        }),
+      } as unknown as HistoryService;
+      renderWithApp(
+        <HistoryPanel projectId="p1" canEdit path="main.tex" />,
+        new Container().register(HistoryServiceToken, service),
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Arquivo atual' }));
+      expect(await screen.findByText('Alterações não salvas.')).toBeTruthy();
+      expect(await screen.findByText('v1')).toBeTruthy();
+      expect(screen.getByText('Update main.tex')).toBeTruthy();
+      await waitFor(() => expect(service.fileLog).toHaveBeenCalledWith('p1', 'main.tex'));
+    });
+
+    it('opens a diff against the current draft and against the adjacent revision', async () => {
+      const service = {
+        log: vi.fn().mockResolvedValue(log),
+        fileLog: vi.fn().mockResolvedValue(fileLog),
+        changes: vi.fn().mockResolvedValue([]),
+        status: vi.fn().mockResolvedValue({ baseline: null, changes: [] }),
+      } as unknown as HistoryService;
+      renderWithApp(
+        <HistoryPanel projectId="p1" canEdit path="main.tex" />,
+        new Container().register(HistoryServiceToken, service),
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Arquivo atual' }));
+      await screen.findByText('v1');
+
+      await userEvent.click(
+        screen.getAllByRole('button', { name: /Comparar com atual/ })[0] as HTMLElement,
+      );
+      await waitFor(() =>
+        expect(useWorkspaceStore.getState().tabs).toContainEqual(
+          expect.objectContaining({ kind: 'diff', path: 'main.tex', from: 'y', to: 'work' }),
+        ),
+      );
+
+      await userEvent.click(
+        screen.getAllByRole('button', { name: /Comparar com anterior/ })[0] as HTMLElement,
+      );
+      await waitFor(() =>
+        expect(useWorkspaceStore.getState().tabs).toContainEqual(
+          expect.objectContaining({ kind: 'diff', path: 'main.tex', from: 'x', to: 'y' }),
+        ),
+      );
+    });
   });
 });

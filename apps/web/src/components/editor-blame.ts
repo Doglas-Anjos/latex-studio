@@ -4,6 +4,11 @@ import type { Blame, BlameRun } from '../services/history.service';
 
 export const setBlame = StateEffect.define<Blame | null>();
 
+/** Blame gutter only takes layout space once it's on and data has arrived. */
+export function blameVisible(blameOn: boolean, blame: Blame | null | undefined): boolean {
+  return blameOn && blame != null;
+}
+
 /** "agora", "5 min", "3 h", "2 d", "3 sem", "4 mês", "1 ano": the age of a date, in Portuguese. */
 export function ageLabel(date: Date, now = new Date()): string {
   const s = Math.max(0, (now.getTime() - date.getTime()) / 1000);

@@ -1,11 +1,29 @@
 import { create } from 'zustand';
+import type { CommentScope } from './comment-scope';
 
-/** Current editor selection, expressed as Yjs relative positions (base64). */
-export interface SelectionAnchor {
-  anchor: { start: string; end: string };
-  quote: string;
-  line: number;
-}
+/**
+ * A comment target captured at the moment the user asks to comment (from the
+ * editor's contextual action, margin button or keyboard shortcut) — not
+ * re-read from the editor on submit, so it survives the user moving focus to
+ * the comment panel. `valid` is false when the scope had nothing to anchor
+ * to (e.g. "word" with the cursor in whitespace); `reason` explains why.
+ */
+export type CommentDraft =
+  | {
+      valid: true;
+      path: string;
+      scope: CommentScope;
+      anchor: { start: string; end: string };
+      quote: string;
+      line: number;
+      endLine: number;
+    }
+  | {
+      valid: false;
+      path: string;
+      scope: CommentScope;
+      reason: string;
+    };
 
 export type Tab =
   | { id: string; kind: 'file'; path: string }
@@ -47,15 +65,22 @@ interface WorkspaceState {
   activePath: string | null;
   /** Line the editor should reveal once the file is open (1-based). */
   pendingLine: number | null;
-  /** Set by the open editor; null when no collaborative editor is mounted. */
-  getSelection: (() => SelectionAnchor | null) | null;
+  /** Snapshot of the comment the user asked to write, or null once sent/cancelled. */
+  commentDraft: CommentDraft | null;
+  setCommentDraft: (draft: CommentDraft | null) => void;
+  /**
+   * Set by the open collaborative editor: true if the draft's anchor still
+   * resolves in the live document (collaborative edits may have removed it).
+   * Null when no collaborative editor is mounted for the draft's file.
+   */
+  checkCommentAnchor: ((anchor: { start: string; end: string }) => boolean) | null;
+  setCheckCommentAnchor: (fn: ((anchor: { start: string; end: string }) => boolean) | null) => void;
   activeCommentId: string | null;
   /** New object per request so the editor scrolls even when the same comment is clicked twice. */
   commentJump: { id: string } | null;
   setActivePath: (path: string | null) => void;
   goToLine: (path: string, line: number) => void;
   clearPendingLine: () => void;
-  setSelectionProvider: (fn: (() => SelectionAnchor | null) | null) => void;
   /** Mark a comment active without moving the editor (click on a highlight). */
   setActiveComment: (id: string | null) => void;
   /** Mark a comment active and scroll the editor to it. */
@@ -98,7 +123,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   toggleBlame: () => set((s) => ({ blameOn: !s.blameOn })),
   activePath: null,
   pendingLine: null,
-  getSelection: null,
+  commentDraft: null,
+  setCommentDraft: (commentDraft) => set({ commentDraft }),
+  checkCommentAnchor: null,
+  setCheckCommentAnchor: (checkCommentAnchor) => set({ checkCommentAnchor }),
   activeCommentId: null,
   commentJump: null,
   setActivePath: (path) =>
@@ -110,7 +138,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   goToLine: (path, pendingLine) =>
     set((s) => ({ pendingLine, ...opened(s, { kind: 'file', path }) })),
   clearPendingLine: () => set({ pendingLine: null }),
-  setSelectionProvider: (getSelection) => set({ getSelection }),
   setActiveComment: (activeCommentId) => set({ activeCommentId }),
   revealComment: (id) => set({ activeCommentId: id, commentJump: { id } }),
 }));

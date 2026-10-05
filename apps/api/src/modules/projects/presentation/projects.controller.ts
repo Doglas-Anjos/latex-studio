@@ -36,14 +36,18 @@ export class ProjectsController {
     return { ...project, role: request.projectRole ?? 'viewer' };
   }
 
+  // Echoes the role like GET does: clients cache this response as the project, and a response
+  // without the caller's role would read as a permission loss.
   @Patch(':projectId')
   @RequireProjectRole('editor')
-  update(
+  async update(
+    @Req() request: FastifyRequest,
     @CurrentUser() user: User,
     @CurrentProject() project: Project,
     @Body() dto: UpdateProjectDto,
-  ): Promise<Project> {
-    return this.projects.update(project, user, dto);
+  ): Promise<ProjectWithRole> {
+    const updated = await this.projects.update(project, user, dto);
+    return { ...updated, role: request.projectRole ?? 'viewer' };
   }
 
   @Delete(':projectId')

@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
 import { type FileService, FileServiceToken } from '../services/file.service';
 import { renderWithApp } from '../test/render';
 import { useWorkspaceStore } from '../workspace-store';
-import { buildTree, FileTree } from './file-tree';
+import { buildTree, classifyFile, FileTree } from './file-tree';
 
 const fake = (): FileService => ({
   list: vi.fn().mockResolvedValue([{ path: 'main.tex' }, { path: 'chapters/intro.tex' }]),
@@ -16,7 +16,7 @@ const fake = (): FileService => ({
   createFolder: vi.fn(),
   remove: vi.fn().mockResolvedValue(undefined),
   rename: vi.fn().mockResolvedValue(undefined),
-  upload: vi.fn(),
+  upload: vi.fn().mockResolvedValue(undefined),
   write: vi.fn(),
 });
 
@@ -29,6 +29,15 @@ describe('FileTree', () => {
   afterEach(() => {
     cleanup();
     useWorkspaceStore.setState({ activePath: null, pendingLine: null });
+  });
+
+  it('classifies files by extension', () => {
+    expect(classifyFile('main.tex')).toBe('tex');
+    expect(classifyFile('refs.bib')).toBe('bib');
+    expect(classifyFile('thesis.cls')).toBe('style');
+    expect(classifyFile('figure.PNG')).toBe('image');
+    expect(classifyFile('paper.pdf')).toBe('pdf');
+    expect(classifyFile('Makefile')).toBe('generic');
   });
 
   it('puts folders first and nests files', () => {
@@ -76,5 +85,27 @@ describe('FileTree', () => {
     expect(within(dialog).getByText(/não pode ser desfeita/)).toBeTruthy();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Excluir' }));
     expect(service.remove).toHaveBeenCalledWith('p1', 'main.tex');
+  });
+
+  it('uploads the files picked in the upload dialog and lets the user cancel one first', async () => {
+    const service = fake();
+    renderWithApp(
+      <FileTree projectId="p1" canEdit mainFile="main.tex" />,
+      new Container().register(FileServiceToken, service),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Upload' }));
+    const dialog = screen.getByRole('dialog', { name: 'Enviar arquivos' });
+    const input = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+
+    const a = new File(['a'], 'a.png', { type: 'image/png' });
+    const b = new File(['b'], 'b.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [a, b] } });
+    expect(within(dialog).getByText('a.png')).toBeTruthy();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Remover a.png' }));
+    expect(within(dialog).queryByText('a.png')).toBeNull();
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar' }));
+    await waitFor(() => expect(service.upload).toHaveBeenCalledWith('p1', [b]));
   });
 });

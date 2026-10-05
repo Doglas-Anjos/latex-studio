@@ -17,6 +17,7 @@ import { HttpPackageService, PackageServiceToken } from './services/package.serv
 import { HttpProjectService, ProjectServiceToken } from './services/project.service';
 import { HttpToolsService, ToolsServiceToken } from './services/tools.service';
 import './styles.css';
+import './redesign.css';
 
 const identity = new FasorxIdentity({
   url: import.meta.env.VITE_FASORX_URL ?? '',

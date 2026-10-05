@@ -50,4 +50,13 @@ export class DrizzleBuildRepository implements BuildRepository {
       .where(and(eq(builds.requestedBy, userId), eq(builds.status, 'queued')));
     return row?.n ?? 0;
   }
+
+  async failStale(buildId: string, message: string): Promise<boolean> {
+    const rows = await this.db
+      .update(builds)
+      .set({ status: 'failed', errors: [{ message }], finishedAt: new Date() })
+      .where(and(eq(builds.id, buildId), inArray(builds.status, ['queued', 'running'])))
+      .returning({ id: builds.id });
+    return rows.length > 0;
+  }
 }

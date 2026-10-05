@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMe } from '../auth-hooks';
+import { SCOPE_LABELS } from '../comment-scope';
 import { useService } from '../di/service-provider';
 import { CommentServiceToken } from '../services/comment.service';
 import type { Role } from '../services/project.service';
@@ -8,6 +9,9 @@ import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 
 const who = (a: { name: string } | null) => a?.name ?? 'Anônimo';
+
+const scopeSummary = (line: number, endLine: number) =>
+  line === endLine ? `linha ${line}` : `linhas ${line}–${endLine}`;
 
 export function CommentsPanel({
   projectId,
@@ -21,11 +25,15 @@ export function CommentsPanel({
   const service = useService(CommentServiceToken);
   const queryClient = useQueryClient();
   const { data: me } = useMe();
-  const getSelection = useWorkspaceStore((s) => s.getSelection);
+  const draft = useWorkspaceStore((s) => s.commentDraft);
+  const setDraft = useWorkspaceStore((s) => s.setCommentDraft);
+  const checkAnchor = useWorkspaceStore((s) => s.checkCommentAnchor);
+  const setActivePath = useWorkspaceStore((s) => s.setActivePath);
   const activeId = useWorkspaceStore((s) => s.activeCommentId);
   const reveal = useWorkspaceStore((s) => s.revealComment);
   const [showResolved, setShowResolved] = useState(false);
   const [body, setBody] = useState('');
+  const [staleError, setStaleError] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const canComment = role !== 'viewer';
   const { data = [] } = useQuery({
@@ -39,47 +47,107 @@ export function CommentsPanel({
   const canDelete = (authorId: string | undefined) =>
     role === 'owner' || (!!me && me.id === authorId);
 
+  // A new draft (even for the same scope) is a fresh attempt: drop any earlier staleness notice.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `draft` is the trigger, not read here.
+  useEffect(() => setStaleError(false), [draft]);
+
+  const draftOnThisFile = draft !== null && draft.path === path ? draft : null;
+  const anchorStale =
+    draftOnThisFile?.valid && checkAnchor !== null && !checkAnchor(draftOnThisFile.anchor);
+  const canSubmit =
+    canComment &&
+    body.trim().length > 0 &&
+    draftOnThisFile?.valid &&
+    !anchorStale &&
+    !run.isPending;
+
   const add = () => {
-    const sel = getSelection?.();
     const text = body.trim();
-    if (!sel || !text) return;
+    if (!canSubmit || !draftOnThisFile?.valid || !text) return;
+    if (checkAnchor && !checkAnchor(draftOnThisFile.anchor)) {
+      setStaleError(true);
+      return;
+    }
     run.mutate(
       () =>
         service.create(projectId, {
           path,
-          anchor: sel.anchor,
-          quote: sel.quote,
-          line: sel.line,
+          anchor: draftOnThisFile.anchor,
+          quote: draftOnThisFile.quote,
+          line: draftOnThisFile.line,
           body: text,
         }),
-      { onSuccess: () => setBody('') },
+      {
+        onSuccess: () => {
+          setBody('');
+          setDraft(null);
+        },
+      },
     );
   };
 
   return (
     <section className="comments-panel" aria-label="Comentários">
       <form
-        className="comment-form"
+        className="comment-composer"
         onSubmit={(ev) => {
           ev.preventDefault();
           add();
         }}
       >
-        <textarea
-          aria-label="Comentário"
-          placeholder="Comentar a seleção atual"
-          rows={2}
-          maxLength={4000}
-          value={body}
-          disabled={!canComment}
-          onChange={(ev) => setBody(ev.target.value)}
-        />
-        <Button
-          variant="secondary"
-          type="submit"
-          disabled={!canComment || !body.trim() || !getSelection || run.isPending}
-        >
-          Comentar seleção
+        {!draft && (
+          <p className="comment-hint">
+            Selecione um trecho no editor, ou use os controles de palavra, linha ou seção, para
+            começar um comentário.
+          </p>
+        )}
+        {draft && draft.path !== path && (
+          <p className="comment-draft-note">
+            Rascunho de comentário em <strong>{draft.path}</strong>.{' '}
+            <Button variant="ghost" size="compact" onClick={() => setActivePath(draft.path)}>
+              Abrir arquivo
+            </Button>{' '}
+            <Button variant="ghost" size="compact" onClick={() => setDraft(null)}>
+              Descartar
+            </Button>
+          </p>
+        )}
+        {draftOnThisFile && !draftOnThisFile.valid && (
+          <p className="comment-draft-note comment-draft-error">
+            {draftOnThisFile.reason}{' '}
+            <Button variant="ghost" size="compact" onClick={() => setDraft(null)}>
+              Descartar
+            </Button>
+          </p>
+        )}
+        {draftOnThisFile?.valid && (
+          <div className="comment-draft">
+            <p className="comment-draft-meta">
+              <span className="comment-draft-scope">{SCOPE_LABELS[draftOnThisFile.scope]}</span>
+              <span>{scopeSummary(draftOnThisFile.line, draftOnThisFile.endLine)}</span>
+              <Button variant="ghost" size="compact" type="button" onClick={() => setDraft(null)}>
+                Cancelar
+              </Button>
+            </p>
+            <blockquote className="comment-draft-quote">{draftOnThisFile.quote}</blockquote>
+            {(anchorStale || staleError) && (
+              <p className="comment-draft-error">
+                O trecho selecionado não existe mais no texto atual. Refaça a seleção no editor.
+              </p>
+            )}
+            <textarea
+              aria-label="Comentário"
+              placeholder="Escrever um comentário"
+              rows={2}
+              maxLength={4000}
+              value={body}
+              disabled={!canComment}
+              onChange={(ev) => setBody(ev.target.value)}
+            />
+          </div>
+        )}
+        <Button variant="secondary" type="submit" disabled={!canSubmit}>
+          Comentar
         </Button>
       </form>
       <label className="comment-toggle">

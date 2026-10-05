@@ -1,117 +1,93 @@
 import { indentSelection } from '@codemirror/commands';
 import { syntaxHighlighting } from '@codemirror/language';
 import { diff } from '@codemirror/merge';
-import {
-  Compartment,
-  EditorState,
-  type Extension,
-  StateEffect,
-  StateField,
-} from '@codemirror/state';
-import { Decoration, type DecorationSet, EditorView } from '@codemirror/view';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { EditorView, keymap } from '@codemirror/view';
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { basicSetup } from 'codemirror';
 import { latex } from 'codemirror-lang-latex';
-import { useEffect, useRef, useState } from 'react';
+import { Heading, MessageSquarePlus, Rows, Type, X } from 'lucide-react';
+import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import { yCollab } from 'y-codemirror.next';
 import * as Y from 'yjs';
 import { useMe } from '../auth-hooks';
+import type { CommentScope } from '../comment-scope';
+import { lineRangeAt, SCOPE_LABELS, scopeEmptyReason, scopeRange } from '../comment-scope';
 import { useService } from '../di/service-provider';
-import { type Comment, CommentServiceToken } from '../services/comment.service';
+import { type Comment, CommentServiceToken, type NewComment } from '../services/comment.service';
 import { FileServiceToken } from '../services/file.service';
 import { HistoryServiceToken } from '../services/history.service';
 import { IdentityToken } from '../services/identity';
 import type { Role } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
-import { type Connection, useWorkspaceStore } from '../workspace-store';
-import { blameGutter, setBlame } from './editor-blame';
+import { type CommentDraft, type Connection, useWorkspaceStore } from '../workspace-store';
+import { Button } from './button';
+import { commentGutter } from './comment-gutter';
+import { blameGutter, blameVisible, setBlame } from './editor-blame';
 import { changeGutter, DIFF_LIMITS, setChangeBase } from './editor-changes';
+import {
+  type ComposerRect,
+  type ComposerTarget,
+  commentComposer,
+  commentHighlights,
+  refreshHighlights,
+  setComposerTarget,
+} from './editor-comments';
 import { editorTheme, latexHighlight } from './editor-theme';
 import { peerColor } from './presence';
+import { useZoom } from './use-zoom';
 import { approxWords } from './word-count';
+import { encodeAnchorPos, resolveAnchorPos } from './yjs-anchor';
+import { ZoomControls } from './zoom-controls';
 
 const COLLAB_EXT = /\.(tex|bib|sty|cls|txt|md|json)$/i;
 const IMAGE_EXT = /\.(png|jpe?g|gif|svg|webp)$/i;
 
-const toBase64 = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes));
-const fromBase64 = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-const encodePos = (ytext: Y.Text, index: number) =>
-  toBase64(Y.encodeRelativePosition(Y.createRelativePositionFromTypeIndex(ytext, index)));
+const SCOPE_SHORTCUTS: { scope: CommentScope; key: string; hint: string }[] = [
+  { scope: 'selection', key: 'Mod-Alt-1', hint: 'Ctrl/Cmd+Alt+1' },
+  { scope: 'word', key: 'Mod-Alt-2', hint: 'Ctrl/Cmd+Alt+2' },
+  { scope: 'line', key: 'Mod-Alt-3', hint: 'Ctrl/Cmd+Alt+3' },
+  { scope: 'section', key: 'Mod-Alt-4', hint: 'Ctrl/Cmd+Alt+4' },
+];
 
-/** Absolute index of a stored relative position, or null if it no longer resolves. */
-function resolvePos(ytext: Y.Text, b64: string): number | null {
-  try {
-    const abs = ytext.doc
-      ? Y.createAbsolutePositionFromRelativePosition(
-          Y.decodeRelativePosition(fromBase64(b64)),
-          ytext.doc,
-        )
-      : null;
-    return abs && abs.type === ytext ? abs.index : null;
-  } catch {
-    return null;
-  }
-}
-
-const refreshHighlights = StateEffect.define<null>();
-
-/** Highlights open comments; positions are re-resolved on every doc change so they follow edits. */
-function commentHighlights(ytext: Y.Text, comments: { current: Comment[] }): Extension {
-  const field = StateField.define<DecorationSet>({
-    create: () => Decoration.none,
-    update(deco, tr) {
-      if (!tr.docChanged && !tr.effects.some((e) => e.is(refreshHighlights))) return deco;
-      const length = tr.state.doc.length;
-      return Decoration.set(
-        comments.current.flatMap((c) => {
-          const from = resolvePos(ytext, c.anchor.start);
-          const to = resolvePos(ytext, c.anchor.end);
-          if (from === null || to === null || from >= to || to > length) return [];
-          return [
-            Decoration.mark({
-              class: 'cm-comment',
-              attributes: { 'data-comment-id': c.id },
-            }).range(from, to),
-          ];
-        }),
-        true,
-      );
-    },
-    provide: (f) => EditorView.decorations.from(f),
-  });
-  return [
-    field,
-    EditorView.domEventHandlers({
-      click(event) {
-        const id = (event.target as HTMLElement)
-          .closest?.('[data-comment-id]')
-          ?.getAttribute('data-comment-id');
-        if (id) useWorkspaceStore.getState().setActiveComment(id);
-        return false;
-      },
-    }),
-  ];
-}
+const SCOPE_ICON: Record<CommentScope, typeof Type> = {
+  selection: MessageSquarePlus,
+  word: Type,
+  line: Rows,
+  section: Heading,
+};
 
 export function Editor({ projectId, path, role }: { projectId: string; path: string; role: Role }) {
   const files = useService(FileServiceToken);
   if (COLLAB_EXT.test(path)) return <CollabEditor projectId={projectId} path={path} role={role} />;
+  if (IMAGE_EXT.test(path)) return <ImagePreview projectId={projectId} path={path} />;
   return (
     <div className="preview">
-      {IMAGE_EXT.test(path) ? (
-        <AuthImage projectId={projectId} path={path} />
-      ) : (
-        <button type="button" onClick={() => files.download(projectId, path)}>
-          Baixar {path}
-        </button>
-      )}
+      <button type="button" onClick={() => files.download(projectId, path)}>
+        Baixar {path}
+      </button>
+    </div>
+  );
+}
+
+function ImagePreview({ projectId, path }: { projectId: string; path: string }) {
+  const body = useRef<HTMLDivElement>(null);
+  const { zoom, zoomIn, zoomOut, reset } = useZoom(body);
+  return (
+    <div className="preview image-preview">
+      <div className="zoom-bar">
+        <ZoomControls zoom={zoom} zoomIn={zoomIn} zoomOut={zoomOut} reset={reset} />
+      </div>
+      <div ref={body} className="image-preview-body">
+        <AuthImage projectId={projectId} path={path} zoom={zoom} />
+      </div>
     </div>
   );
 }
 
 /** Images need the Authorization header, so they load through fetch into a blob URL. */
-function AuthImage({ projectId, path }: { projectId: string; path: string }) {
+function AuthImage({ projectId, path, zoom }: { projectId: string; path: string; zoom: number }) {
   const files = useService(FileServiceToken);
   const [src, setSrc] = useState<string>();
   useEffect(() => {
@@ -130,7 +106,9 @@ function AuthImage({ projectId, path }: { projectId: string; path: string }) {
       if (url) URL.revokeObjectURL(url);
     };
   }, [files, projectId, path]);
-  return src ? <img src={src} alt={path} /> : null;
+  return src ? (
+    <img src={src} alt={path} style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }} />
+  ) : null;
 }
 
 function revealLine(view: EditorView) {
@@ -148,6 +126,9 @@ function revealLine(view: EditorView) {
 function CollabEditor({ projectId, path, role }: { projectId: string; path: string; role: Role }) {
   const host = useRef<HTMLDivElement>(null);
   const readOnly = role === 'viewer' || role === 'reviewer';
+  const canComment = role !== 'viewer';
+  const [hasSelection, setHasSelection] = useState(false);
+  const requestCommentRef = useRef<(scope: CommentScope) => void>(() => {});
   const comments = useService(CommentServiceToken);
   const identity = useService(IdentityToken);
   const history = useService(HistoryServiceToken);
@@ -181,6 +162,49 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   });
   const commentsRef = useRef<Comment[]>([]);
   commentsRef.current = data ?? [];
+  const queryClient = useQueryClient();
+  const ytextRef = useRef<Y.Text | null>(null);
+  const editorBoxRef = useRef<HTMLDivElement | null>(null);
+  // True while the popup's own textarea has focus: a pointer selection elsewhere in the
+  // document must not steal the in-progress draft out from under the user.
+  const composingRef = useRef(false);
+  const [popup, setPopup] = useState<{
+    target: ComposerTarget;
+    left: number | null;
+    top: number | null;
+  } | null>(null);
+  const [popupBody, setPopupBody] = useState('');
+
+  const closePopup = () => {
+    viewRef.current?.dispatch({ effects: setComposerTarget.of(null) });
+    composingRef.current = false;
+    setPopup(null);
+    setPopupBody('');
+  };
+  const createComment = useMutation({
+    mutationFn: (input: NewComment) => comments.create(projectId, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['comments', projectId] });
+      closePopup();
+    },
+  });
+  const submitPopup = () => {
+    const target = popup?.target;
+    const ytext = ytextRef.current;
+    const state = viewRef.current?.state;
+    const text = popupBody.trim();
+    if (!target || !ytext || !state || !text || createComment.isPending) return;
+    createComment.mutate({
+      path,
+      anchor: {
+        start: encodeAnchorPos(ytext, target.from),
+        end: encodeAnchorPos(ytext, target.to),
+      },
+      quote: state.sliceDoc(target.from, Math.min(target.to, target.from + 500)),
+      line: state.doc.lineAt(target.from).number,
+      body: text,
+    });
+  };
 
   // External sync: Yjs doc + websocket provider + CodeMirror view live and die with the file.
   useEffect(() => {
@@ -195,9 +219,81 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       onStatus: ({ status }) => useWorkspaceStore.getState().setConnection(status as Connection),
     });
     const ytext = doc.getText('content');
+    ytextRef.current = ytext;
     const wrap = new Compartment();
     const wrapping = (on: boolean) => (on ? EditorView.lineWrapping : []);
     let wordTimer: ReturnType<typeof setTimeout> | undefined;
+
+    /** Builds a snapshot of `scope`'s target now, so it survives the user moving to the panel. */
+    const buildDraft = (
+      range: { from: number; to: number } | null,
+      scope: CommentScope,
+    ): CommentDraft => {
+      const state = view.state;
+      if (!range || range.from >= range.to) {
+        return { valid: false, path, scope, reason: scopeEmptyReason(scope) };
+      }
+      return {
+        valid: true,
+        path,
+        scope,
+        anchor: {
+          start: encodeAnchorPos(ytext, range.from),
+          end: encodeAnchorPos(ytext, range.to),
+        },
+        quote: state.sliceDoc(range.from, Math.min(range.to, range.from + 500)),
+        line: state.doc.lineAt(range.from).number,
+        endLine: state.doc.lineAt(Math.max(range.to - 1, range.from)).number,
+      };
+    };
+    const requestComment = (scope: CommentScope) => {
+      const state = view.state;
+      const sel = state.selection.main;
+      const range = scopeRange(
+        { text: state.doc.toString(), from: sel.from, to: sel.to, head: sel.head },
+        scope,
+      );
+      useWorkspaceStore.getState().setCommentDraft(buildDraft(range, scope));
+    };
+    requestCommentRef.current = requestComment;
+    const requestLineComment = (lineNumber: number) => {
+      const state = view.state;
+      const n = Math.min(Math.max(lineNumber, 1), state.doc.lines);
+      const { from } = state.doc.line(n);
+      const range = lineRangeAt(state.doc.toString(), from, from);
+      useWorkspaceStore.getState().setCommentDraft(buildDraft(range, 'line'));
+    };
+    /** Positions the floating popup near its target, relative to the `.editor` box. */
+    const handleComposerTarget = (target: ComposerTarget | null, rect: ComposerRect | null) => {
+      if (!target) {
+        composingRef.current = false;
+        setPopupBody('');
+        setPopup(null);
+        return;
+      }
+      const box = editorBoxRef.current?.getBoundingClientRect();
+      const left = rect && box ? rect.left - box.left : null;
+      const top = rect && box ? rect.bottom - box.top + 6 : null;
+      setPopup({ target, left, top });
+    };
+    const commentExtensions: Extension = canComment
+      ? [
+          commentGutter(requestLineComment),
+          keymap.of(
+            SCOPE_SHORTCUTS.map(({ scope, key }) => ({
+              key,
+              run: () => {
+                requestComment(scope);
+                return true;
+              },
+            })),
+          ),
+          commentComposer({
+            isComposing: () => composingRef.current,
+            onTarget: handleComposerTarget,
+          }),
+        ]
+      : [];
     const view = new EditorView({
       parent,
       state: EditorState.create({
@@ -213,7 +309,12 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
           blameGutter(),
+          commentExtensions,
           EditorView.updateListener.of((u) => {
+            if (u.selectionSet || u.docChanged) {
+              const sel = u.state.selection.main;
+              setHasSelection(sel.from !== sel.to);
+            }
             if (!u.docChanged) return;
             clearTimeout(wordTimer);
             wordTimer = setTimeout(
@@ -248,18 +349,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       },
       getText: () => view.state.doc.toString(),
     });
-    store.setSelectionProvider(() => {
-      const { from, to } = view.state.selection.main;
-      if (from === to) return null;
-      return {
-        anchor: { start: encodePos(ytext, from), end: encodePos(ytext, to) },
-        quote: view.state.sliceDoc(from, Math.min(to, from + 500)),
-        line: view.state.doc.lineAt(from).number,
-      };
+    store.setCheckCommentAnchor((anchor) => {
+      const from = resolveAnchorPos(ytext, anchor.start);
+      const to = resolveAnchorPos(ytext, anchor.end);
+      return from !== null && to !== null && from < to;
     });
     const revealComment = (id: string) => {
       const c = commentsRef.current.find((x) => x.id === id);
-      const pos = c ? resolvePos(ytext, c.anchor.start) : null;
+      const pos = c ? resolveAnchorPos(ytext, c.anchor.start) : null;
       if (pos !== null) {
         view.dispatch({
           selection: { anchor: Math.min(pos, view.state.doc.length) },
@@ -301,14 +398,18 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       clearTimeout(wordTimer);
       useWorkspaceStore.getState().setEditorCommands(null);
       useWorkspaceStore.getState().setWordCount(null);
-      useWorkspaceStore.getState().setSelectionProvider(null);
+      useWorkspaceStore.getState().setCheckCommentAnchor(null);
       viewRef.current = null;
       providerRef.current = null;
+      ytextRef.current = null;
+      composingRef.current = false;
+      setPopup(null);
+      setPopupBody('');
       view.destroy();
       provider.destroy();
       doc.destroy();
     };
-  }, [projectId, path, readOnly, identity.token]);
+  }, [projectId, path, readOnly, canComment, identity.token]);
 
   useEffect(() => {
     const text = baseText ?? null;
@@ -316,9 +417,11 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     viewRef.current?.dispatch({ effects: setChangeBase.of(text) });
   }, [baseText]);
 
+  const activeBlame = blameVisible(blameOn, blame) ? (blame ?? null) : null;
+
   useEffect(() => {
-    viewRef.current?.dispatch({ effects: setBlame.of(blameOn ? (blame ?? null) : null) });
-  }, [blame, blameOn]);
+    viewRef.current?.dispatch({ effects: setBlame.of(activeBlame) });
+  }, [activeBlame]);
 
   // Own cursor label; separate so a late /me answer does not rebuild the editor.
   useEffect(() => {
@@ -339,8 +442,89 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   }, [data]);
 
   return (
-    <div className="editor">
-      <div ref={host} className="editor-host" />
+    <div className="editor" ref={editorBoxRef}>
+      {canComment && (
+        <div className="comment-toolbar" role="toolbar" aria-label="Comentar no editor">
+          {SCOPE_SHORTCUTS.map(({ scope, hint }) => {
+            if (scope === 'selection' && !hasSelection) return null;
+            const Icon = SCOPE_ICON[scope];
+            return (
+              <button
+                key={scope}
+                type="button"
+                className={`comment-toolbar-btn${scope === 'selection' ? ' comment-toolbar-btn-primary' : ''}`}
+                title={`Comentar ${SCOPE_LABELS[scope].toLowerCase()} (${hint})`}
+                onClick={() => requestCommentRef.current(scope)}
+              >
+                <Icon size={14} aria-hidden="true" />
+                {SCOPE_LABELS[scope]}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div ref={host} className="editor-host" data-blame={activeBlame ? '' : undefined} />
+      {canComment && popup && (
+        <div
+          className="comment-popup"
+          style={
+            popup.left !== null && popup.top !== null
+              ? ({ '--cp-left': `${popup.left}px`, '--cp-top': `${popup.top}px` } as CSSProperties)
+              : undefined
+          }
+        >
+          <form
+            className="comment-popup-form"
+            aria-label="Novo comentário"
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              submitPopup();
+            }}
+          >
+            <div className="comment-popup-head">
+              <span className="comment-popup-scope">{SCOPE_LABELS[popup.target.scope]}</span>
+              <button
+                type="button"
+                className="comment-popup-close"
+                aria-label="Fechar"
+                onClick={closePopup}
+              >
+                <X size={12} aria-hidden="true" />
+              </button>
+            </div>
+            <textarea
+              aria-label="Comentário"
+              placeholder="Escrever um comentário"
+              rows={2}
+              maxLength={4000}
+              value={popupBody}
+              onFocus={() => {
+                composingRef.current = true;
+              }}
+              onChange={(ev) => setPopupBody(ev.target.value)}
+              onKeyDown={(ev) => {
+                if (ev.key === 'Escape') {
+                  ev.preventDefault();
+                  closePopup();
+                }
+              }}
+            />
+            <div className="comment-popup-actions">
+              <Button variant="ghost" size="compact" type="button" onClick={closePopup}>
+                Cancelar
+              </Button>
+              <Button
+                variant="secondary"
+                size="compact"
+                type="submit"
+                disabled={!popupBody.trim() || createComment.isPending}
+              >
+                Comentar
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }

@@ -21,4 +21,9 @@ export interface BuildRepository {
   /** Most recent queued or running build of the project. */
   findActive(projectId: string): Promise<Build | null>;
   countQueuedForUser(userId: string): Promise<number>;
+  /**
+   * Marks a queued/running build as failed (orphaned job or crashed worker). Returns false if it
+   * already reached a terminal status, so a late result from the original worker is not reopened.
+   */
+  failStale(buildId: string, message: string): Promise<boolean>;
 }

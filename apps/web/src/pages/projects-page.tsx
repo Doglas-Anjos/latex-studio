@@ -68,16 +68,16 @@ export function ProjectsPage() {
 
   return (
     <div className="dashboard">
-      <DashboardSidebar
-        filter={filter}
-        onFilter={setFilter}
-        onCreate={showCreate}
-        onImport={openImport}
-        count={data?.length}
-      />
-      <section className="dashboard-main">
-        <div className="dashboard-head">
+      <header className="dashboard-toolbar">
+        <div className="dashboard-heading">
           <h1>Projetos</h1>
+          {data && (
+            <span className="dashboard-count">
+              {data.length} {data.length === 1 ? 'projeto' : 'projetos'}
+            </span>
+          )}
+        </div>
+        <div className="dashboard-controls">
           <label className="search-field">
             <Search size={16} aria-hidden="true" />
             <input
@@ -88,86 +88,67 @@ export function ProjectsPage() {
               onChange={(e) => setQuery(e.target.value)}
             />
           </label>
+          <Menu
+            className="new-menu"
+            triggerClassName="btn btn-primary btn-compact"
+            label="Novo projeto"
+          >
+            <button type="button" onClick={showCreate}>
+              Projeto em branco
+            </button>
+            <button type="button" onClick={() => openImport('zip')}>
+              Importar .zip
+            </button>
+            <button type="button" onClick={() => openImport('folder')}>
+              Importar pasta
+            </button>
+          </Menu>
         </div>
+      </header>
 
-        {isPending && <p className="status-note">Carregando…</p>}
-        {error && <Alert>Não foi possível carregar os projetos.</Alert>}
-        {download.error && <Alert>{download.error.message}</Alert>}
-        {data?.length === 0 && (
-          <WelcomeHero onCreate={showCreate} onImport={() => openImport('zip')} />
-        )}
-        {data && data.length > 0 && rows.length === 0 && (
-          <p className="status-note">Nenhum projeto corresponde à busca.</p>
-        )}
-        {rows.length > 0 && (
-          <ProjectTable
-            rows={rows}
-            onOpen={open}
-            onCopy={(p) => {
-              setCopying(p);
-              copyRef.current?.showModal();
-            }}
-            onDownload={(id) => download.mutate(id)}
-            onRemove={(p) => {
-              setRemoving(p);
-              removeRef.current?.showModal();
-            }}
-          />
-        )}
-      </section>
+      <nav className="filter-tabs" aria-label="Filtros">
+        {filters.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={filter === key}
+            onClick={() => setFilter(key)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {isPending && <p className="status-note">Carregando…</p>}
+      {error && <Alert>Não foi possível carregar os projetos.</Alert>}
+      {download.error && <Alert>{download.error.message}</Alert>}
+      {data?.length === 0 && (
+        <WelcomeHero onCreate={showCreate} onImport={() => openImport('zip')} />
+      )}
+      {data && data.length > 0 && rows.length === 0 && (
+        <p className="status-note">Nenhum projeto corresponde à busca.</p>
+      )}
+      {rows.length > 0 && (
+        <ProjectTable
+          rows={rows}
+          onOpen={open}
+          onCopy={(p) => {
+            setCopying(p);
+            copyRef.current?.showModal();
+          }}
+          onDownload={(id) => download.mutate(id)}
+          onRemove={(p) => {
+            setRemoving(p);
+            removeRef.current?.showModal();
+          }}
+        />
+      )}
 
       <CreateDialog dialogRef={createRef} onDone={open} />
       <ImportDialog dialogRef={importRef} mode={importMode} setMode={setImportMode} onDone={open} />
       <CopyDialog dialogRef={copyRef} project={copying} onDone={open} />
       <RemoveDialog dialogRef={removeRef} project={removing} onDone={() => setRemoving(null)} />
     </div>
-  );
-}
-
-function DashboardSidebar({
-  filter,
-  onFilter,
-  onCreate,
-  onImport,
-  count,
-}: {
-  filter: Filter;
-  onFilter: (f: Filter) => void;
-  onCreate: () => void;
-  onImport: (m: ImportMode) => void;
-  count: number | undefined;
-}) {
-  return (
-    <aside className="dashboard-side">
-      <Menu className="new-menu" triggerClassName="btn btn-primary" label="Novo projeto">
-        <button type="button" onClick={onCreate}>
-          Projeto em branco
-        </button>
-        <button type="button" onClick={() => onImport('zip')}>
-          Importar .zip
-        </button>
-        <button type="button" onClick={() => onImport('folder')}>
-          Importar pasta
-        </button>
-      </Menu>
-      <nav className="filter-list" aria-label="Filtros">
-        {filters.map(([key, label]) => (
-          <button
-            key={key}
-            type="button"
-            aria-pressed={filter === key}
-            onClick={() => onFilter(key)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-      {count !== undefined && (
-        <p className="sidebar-count">
-          {count} {count === 1 ? 'projeto' : 'projetos'}
-        </p>
-      )}
-    </aside>
   );
 }
 
@@ -203,6 +184,7 @@ function ProjectTable({
           <tr key={p.id}>
             <td>
               <button type="button" className="project-link" onClick={() => onOpen(p.id)}>
+                <FileText size={16} className="project-link-icon" aria-hidden="true" />
                 {p.name}
               </button>
               {p.role !== 'owner' && <span className="muted"> {roleLabel[p.role]}</span>}
@@ -242,7 +224,13 @@ function IconButton({
   children: React.ReactNode;
 }) {
   return (
-    <button type="button" className="icon-btn" aria-label={label} title={label} onClick={onClick}>
+    <button
+      type="button"
+      className="icon-btn row-action-btn"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+    >
       {children}
     </button>
   );

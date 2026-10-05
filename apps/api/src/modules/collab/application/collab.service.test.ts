@@ -29,6 +29,7 @@ describe('CollabService', () => {
   let users: FakeUsers;
   let docs: FakeDocs;
   let storage: FsProjectStorage;
+  let lock: ProjectLock;
   let collab: CollabService;
   let projectId: string;
 
@@ -67,7 +68,8 @@ describe('CollabService', () => {
       },
     };
     const identity = new IdentityService(users, verifier);
-    collab = new CollabService(identity, projects, storage, docs, new ProjectLock(), config);
+    lock = new ProjectLock();
+    collab = new CollabService(identity, projects, storage, docs, lock, config);
     projectId = randomUUID();
     await projects.create({ id: projectId, name: 'P' }, randomUUID());
     const files = await storage.init(projectId);
@@ -112,5 +114,31 @@ describe('CollabService', () => {
     const loaded = new Y.Doc();
     Y.applyUpdate(loaded, (await collab.load(projectId, 'main.tex')) as Uint8Array);
     expect(loaded.getText('content').toString()).toBe('hello');
+  });
+
+  it('snapshots the doc when its lock turn actually runs, not when store was called', async () => {
+    const doc = new Y.Doc();
+    doc.getText('content').insert(0, 'A');
+
+    // Occupy the project's lock first, exactly like a `commitFile` already running: `store`'s own
+    // `lock.run` call has to queue behind it and wait its turn.
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const blocker = lock.run(projectId, () => gate);
+
+    const storeDone = collab.store(projectId, 'main.tex', doc);
+
+    // Edited after `store` was called but before its turn runs: a snapshot taken eagerly at call
+    // time (the old bug) would miss this and persist the stale "A" once the lock finally frees up.
+    doc.getText('content').insert(1, 'B');
+
+    release();
+    await blocker;
+    await storeDone;
+
+    expect(await readFile(join(dir, projectId, 'main.tex'), 'utf8')).toBe('AB');
+    const loaded = new Y.Doc();
+    Y.applyUpdate(loaded, (await collab.load(projectId, 'main.tex')) as Uint8Array);
+    expect(loaded.getText('content').toString()).toBe('AB');
   });
 });

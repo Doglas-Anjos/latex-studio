@@ -1,11 +1,35 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FilePlus, FolderPlus, Pencil, Trash2, Upload as UploadIcon } from 'lucide-react';
-import { type FormEvent, type RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronRight,
+  FileCode2,
+  File as FileIcon,
+  FileImage,
+  FilePlus,
+  FileText,
+  Folder as FolderIcon,
+  FolderOpen,
+  FolderPlus,
+  Pencil,
+  Trash2,
+  Upload as UploadIcon,
+} from 'lucide-react';
+import {
+  type FormEvent,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useService } from '../di/service-provider';
 import { FileServiceToken, type ProjectFile } from '../services/file.service';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { Dialog } from './dialog';
+import { Dropzone } from './dropzone';
 import { Form } from './form';
 
 function invalidPathReason(path: string): string | null {
@@ -15,6 +39,41 @@ function invalidPathReason(path: string): string | null {
     return 'O caminho não pode conter "..".';
   }
   return null;
+}
+
+export type FileKind = 'tex' | 'bib' | 'style' | 'image' | 'pdf' | 'generic';
+
+const EXTENSION_KINDS: Record<string, FileKind> = {
+  tex: 'tex',
+  bib: 'bib',
+  sty: 'style',
+  cls: 'style',
+  png: 'image',
+  jpg: 'image',
+  jpeg: 'image',
+  svg: 'image',
+  webp: 'image',
+  pdf: 'pdf',
+};
+
+export function classifyFile(name: string): FileKind {
+  const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+  return EXTENSION_KINDS[ext] ?? 'generic';
+}
+
+const KIND_ICONS: Record<FileKind, typeof FileCode2> = {
+  tex: FileCode2,
+  bib: FileText,
+  style: FileCode2,
+  image: FileImage,
+  pdf: FileText,
+  generic: FileIcon,
+};
+
+export function FileTypeIcon({ name }: { name: string }) {
+  const kind = classifyFile(name);
+  const Icon = KIND_ICONS[kind];
+  return <Icon size={14} className={`file-icon file-icon-${kind}`} aria-hidden="true" />;
 }
 
 interface TreeNode {
@@ -68,11 +127,10 @@ export function FileTree({
   mainFile: string;
 }) {
   const files = useService(FileServiceToken);
-  const queryClient = useQueryClient();
   const activePath = useWorkspaceStore((s) => s.activePath) ?? mainFile;
   const setActivePath = useWorkspaceStore((s) => s.setActivePath);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
-  const uploadRef = useRef<HTMLInputElement>(null);
+  const uploadRef = useRef<HTMLDialogElement>(null);
   const newFileRef = useRef<HTMLDialogElement>(null);
   const newFolderRef = useRef<HTMLDialogElement>(null);
   const renameRef = useRef<HTMLDialogElement>(null);
@@ -85,11 +143,6 @@ export function FileTree({
     queryFn: () => files.list(projectId),
   });
   const tree = useMemo(() => buildTree(data ?? []), [data]);
-
-  const run = useMutation({
-    mutationFn: (action: () => Promise<void>) => action(),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['files', projectId] }),
-  });
 
   const rename = (from: string) => {
     setRenamingPath(from);
@@ -118,9 +171,34 @@ export function FileTree({
                 type="button"
                 className="tree-label"
                 aria-expanded={isFolder ? open : undefined}
+                title={n.name}
                 onClick={() => (isFolder ? toggle(n.path) : setActivePath(n.path))}
               >
-                <span aria-hidden="true">{isFolder ? (open ? '▾' : '▸') : '·'}</span> {n.name}
+                {isFolder ? (
+                  <>
+                    {open ? (
+                      <ChevronDown size={14} className="tree-chevron" aria-hidden="true" />
+                    ) : (
+                      <ChevronRight size={14} className="tree-chevron" aria-hidden="true" />
+                    )}
+                    {open ? (
+                      <FolderOpen
+                        size={14}
+                        className="file-icon file-icon-folder"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <FolderIcon
+                        size={14}
+                        className="file-icon file-icon-folder"
+                        aria-hidden="true"
+                      />
+                    )}
+                  </>
+                ) : (
+                  <FileTypeIcon name={n.name} />
+                )}
+                <span className="tree-label-text">{n.name}</span>
               </button>
               {canEdit && (
                 <span className="tree-actions">
@@ -154,38 +232,44 @@ export function FileTree({
     <nav className="file-tree" aria-label="Arquivos do projeto">
       {canEdit && (
         <div className="tree-toolbar">
-          <button type="button" onClick={() => newFileRef.current?.showModal()}>
-            <FilePlus size={14} aria-hidden="true" /> Novo arquivo
+          <button
+            type="button"
+            className="tree-toolbar-btn tree-toolbar-btn-primary"
+            onClick={() => newFileRef.current?.showModal()}
+          >
+            <FilePlus size={14} aria-hidden="true" />
+            <span>Novo arquivo</span>
           </button>
-          <button type="button" onClick={() => newFolderRef.current?.showModal()}>
-            <FolderPlus size={14} aria-hidden="true" /> Nova pasta
+          <button
+            type="button"
+            className="tree-toolbar-btn"
+            onClick={() => newFolderRef.current?.showModal()}
+          >
+            <FolderPlus size={14} aria-hidden="true" />
+            <span>Nova pasta</span>
           </button>
-          <button type="button" onClick={() => uploadRef.current?.click()}>
-            <UploadIcon size={14} aria-hidden="true" /> Upload
+          <button
+            type="button"
+            className="tree-toolbar-btn"
+            onClick={() => uploadRef.current?.showModal()}
+          >
+            <UploadIcon size={14} aria-hidden="true" />
+            <span>Upload</span>
           </button>
-          <input
-            ref={uploadRef}
-            type="file"
-            multiple
-            hidden
-            aria-label="Enviar arquivos"
-            onChange={(e) => {
-              const picked = Array.from(e.target.files ?? []);
-              e.target.value = '';
-              if (picked.length) run.mutate(() => files.upload(projectId, picked));
-            }}
-          />
         </div>
       )}
       {isPending && <p className="status-note">Carregando…</p>}
       {error && <p className="form-error">Não foi possível listar os arquivos.</p>}
-      {run.error && <p className="form-error">{run.error.message}</p>}
       {renderNodes(tree)}
+
+      <UploadDialog dialogRef={uploadRef} projectId={projectId} />
 
       <PathDialog
         dialogRef={newFileRef}
         projectId={projectId}
         title="Novo arquivo"
+        icon={<FilePlus size={18} aria-hidden="true" />}
+        kicker="Novo item"
         description="Caminho relativo dentro do projeto."
         placeholder="capitulos/intro.tex"
         confirmLabel="Criar"
@@ -196,6 +280,8 @@ export function FileTree({
         dialogRef={newFolderRef}
         projectId={projectId}
         title="Nova pasta"
+        icon={<FolderPlus size={18} aria-hidden="true" />}
+        kicker="Novo item"
         description="Caminho relativo dentro do projeto."
         placeholder="capitulos"
         confirmLabel="Criar"
@@ -219,10 +305,82 @@ export function FileTree({
   );
 }
 
+function UploadDialog({
+  dialogRef,
+  projectId,
+}: {
+  dialogRef: RefObject<HTMLDialogElement | null>;
+  projectId: string;
+}) {
+  const files = useService(FileServiceToken);
+  const queryClient = useQueryClient();
+  const [picked, setPicked] = useState<File[]>([]);
+  const mutation = useMutation({
+    mutationFn: () => files.upload(projectId, picked),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['files', projectId] });
+      dialogRef.current?.close();
+    },
+  });
+  useResetOnClose(dialogRef, () => {
+    setPicked([]);
+    mutation.reset();
+  });
+  const formId = useId();
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (picked.length === 0 || mutation.isPending) return;
+    mutation.mutate();
+  };
+  return (
+    <Dialog
+      ref={dialogRef}
+      title="Enviar arquivos"
+      icon={<UploadIcon size={18} aria-hidden="true" />}
+      kicker="Arquivos do projeto"
+      pending={mutation.isPending}
+      footer={
+        <div className="actions">
+          <Button
+            variant="ghost"
+            onClick={() => dialogRef.current?.close()}
+            disabled={mutation.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            form={formId}
+            disabled={mutation.isPending || picked.length === 0}
+            loading={mutation.isPending}
+          >
+            {mutation.isPending ? 'Enviando…' : 'Enviar'}
+          </Button>
+        </div>
+      }
+    >
+      <Form id={formId} onSubmit={submit}>
+        <Dropzone
+          multiple
+          label="Arraste os arquivos aqui"
+          hint="ou selecione do seu computador"
+          browseLabel="Selecionar arquivos"
+          files={picked}
+          onFiles={setPicked}
+        />
+        {mutation.error && <Form.Error>{mutation.error.message}</Form.Error>}
+      </Form>
+    </Dialog>
+  );
+}
+
 function PathDialog({
   dialogRef,
   projectId,
   title,
+  icon,
+  kicker,
   description,
   placeholder,
   confirmLabel,
@@ -232,6 +390,8 @@ function PathDialog({
   dialogRef: RefObject<HTMLDialogElement | null>;
   projectId: string;
   title: string;
+  icon: ReactNode;
+  kicker: string;
   description: string;
   placeholder: string;
   confirmLabel: string;
@@ -239,6 +399,8 @@ function PathDialog({
   onDone?: (path: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const formId = useId();
+  const hintId = useId();
   const [path, setPath] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
   const mutation = useMutation({
@@ -268,9 +430,25 @@ function PathDialog({
   };
   const cancel = () => dialogRef.current?.close();
   return (
-    <Dialog ref={dialogRef} title={title} pending={mutation.isPending}>
-      <Form onSubmit={submit}>
-        <p>{description}</p>
+    <Dialog
+      ref={dialogRef}
+      title={title}
+      icon={icon}
+      kicker={kicker}
+      description={description}
+      pending={mutation.isPending}
+      footer={
+        <div className="actions">
+          <Button variant="ghost" onClick={cancel} disabled={mutation.isPending}>
+            Cancelar
+          </Button>
+          <Button variant="primary" type="submit" form={formId} disabled={mutation.isPending}>
+            {mutation.isPending ? 'Salvando…' : confirmLabel}
+          </Button>
+        </div>
+      }
+    >
+      <Form id={formId} onSubmit={submit}>
         <Form.Field
           label="Caminho"
           value={path}
@@ -279,20 +457,16 @@ function PathDialog({
             setLocalError(null);
           }}
           placeholder={placeholder}
+          aria-describedby={hintId}
           autoFocus
           required
         />
+        <p id={hintId} className="field-hint">
+          Exemplo: <code>{placeholder}</code>
+        </p>
         {(localError || mutation.error) && (
           <Form.Error>{localError ?? mutation.error?.message}</Form.Error>
         )}
-        <div className="actions">
-          <Button variant="ghost" onClick={cancel} disabled={mutation.isPending}>
-            Cancelar
-          </Button>
-          <Button variant="primary" type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Salvando…' : confirmLabel}
-          </Button>
-        </div>
       </Form>
     </Dialog>
   );
@@ -313,6 +487,7 @@ function RenameDialog({
 }) {
   const files = useService(FileServiceToken);
   const queryClient = useQueryClient();
+  const formId = useId();
   const [to, setTo] = useState(from ?? '');
   const [localError, setLocalError] = useState<string | null>(null);
   // `from` changes before the dialog repaints (showModal is called synchronously
@@ -354,9 +529,29 @@ function RenameDialog({
     mutation.mutate();
   };
   return (
-    <Dialog ref={dialogRef} title="Renomear" pending={mutation.isPending}>
-      <Form onSubmit={submit}>
-        <p>Novo caminho para "{from}".</p>
+    <Dialog
+      ref={dialogRef}
+      title="Renomear"
+      icon={<Pencil size={18} aria-hidden="true" />}
+      kicker={from ? <code>{from}</code> : undefined}
+      description={`Novo caminho para "${from}".`}
+      pending={mutation.isPending}
+      footer={
+        <div className="actions">
+          <Button
+            variant="ghost"
+            onClick={() => dialogRef.current?.close()}
+            disabled={mutation.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button variant="primary" type="submit" form={formId} disabled={mutation.isPending}>
+            {mutation.isPending ? 'Salvando…' : 'Renomear'}
+          </Button>
+        </div>
+      }
+    >
+      <Form id={formId} onSubmit={submit}>
         <Form.Field
           label="Caminho"
           value={to}
@@ -370,18 +565,6 @@ function RenameDialog({
         {(localError || mutation.error) && (
           <Form.Error>{localError ?? mutation.error?.message}</Form.Error>
         )}
-        <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={mutation.isPending}
-          >
-            Cancelar
-          </Button>
-          <Button variant="primary" type="submit" disabled={mutation.isPending}>
-            {mutation.isPending ? 'Salvando…' : 'Renomear'}
-          </Button>
-        </div>
       </Form>
     </Dialog>
   );
@@ -418,25 +601,34 @@ function DeleteDialog({
     mutation.reset();
   }
   return (
-    <Dialog ref={dialogRef} title="Excluir" pending={mutation.isPending}>
-      <p>Excluir "{path}"? Essa ação não pode ser desfeita.</p>
+    <Dialog
+      ref={dialogRef}
+      title="Excluir"
+      icon={<Trash2 size={18} aria-hidden="true" />}
+      kicker={path ? <code>{path}</code> : undefined}
+      description={`Excluir "${path}"? Essa ação não pode ser desfeita.`}
+      tone="danger"
+      pending={mutation.isPending}
+      footer={
+        <div className="actions">
+          <Button
+            variant="ghost"
+            onClick={() => dialogRef.current?.close()}
+            disabled={mutation.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            onClick={() => !mutation.isPending && mutation.mutate()}
+            disabled={mutation.isPending}
+          >
+            {mutation.isPending ? 'Excluindo…' : 'Excluir'}
+          </Button>
+        </div>
+      }
+    >
       {mutation.error && <Form.Error>{mutation.error.message}</Form.Error>}
-      <div className="actions">
-        <Button
-          variant="ghost"
-          onClick={() => dialogRef.current?.close()}
-          disabled={mutation.isPending}
-        >
-          Cancelar
-        </Button>
-        <Button
-          variant="danger"
-          onClick={() => !mutation.isPending && mutation.mutate()}
-          disabled={mutation.isPending}
-        >
-          {mutation.isPending ? 'Excluindo…' : 'Excluir'}
-        </Button>
-      </div>
     </Dialog>
   );
 }

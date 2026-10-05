@@ -136,11 +136,12 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
     }
   }
 
+  /** Skips rows the API already failed as stale, so a late result can't reopen them. */
   private async finish(buildId: string, values: Partial<typeof builds.$inferInsert>) {
     await this.db
       .update(builds)
       .set({ ...values, finishedAt: new Date() })
-      .where(eq(builds.id, buildId));
+      .where(and(eq(builds.id, buildId), inArray(builds.status, ['queued', 'running'])));
   }
 
   /** Keeps the newest KEEP_BUILDS finished builds of the project, on disk and in the table. */

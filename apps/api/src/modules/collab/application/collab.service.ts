@@ -108,9 +108,17 @@ export class CollabService {
   }
 
   async store(projectId: string, path: string, doc: Y.Doc): Promise<void> {
-    await this.docs.save(projectId, path, Y.encodeStateAsUpdate(doc));
-    const text = doc.getText('content').toString();
-    await this.lock.run(projectId, () => this.storage.open(projectId).write(path, text));
+    await this.lock.run(projectId, async () => {
+      // Snapshot both the instant this turn starts, before any await: a store queued behind a
+      // `commitFile` (or another store) must persist what the doc holds right now, never a value
+      // captured earlier while waiting its turn, which could by now be older than what an earlier
+      // turn already wrote. Taking both from the same instant also keeps the Yjs row and the
+      // working tree text in step with each other.
+      const state = Y.encodeStateAsUpdate(doc);
+      const text = doc.getText('content').toString();
+      await this.docs.save(projectId, path, state);
+      await this.storage.open(projectId).write(path, text);
+    });
     await this.projects.markDirty(projectId);
   }
 

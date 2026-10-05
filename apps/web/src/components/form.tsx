@@ -1,4 +1,10 @@
-import { type FormHTMLAttributes, type InputHTMLAttributes, type ReactNode, useId } from 'react';
+import {
+  type FormHTMLAttributes,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type Ref,
+  useId,
+} from 'react';
 
 export function Form({ children, ...props }: FormHTMLAttributes<HTMLFormElement>) {
   return (
@@ -10,13 +16,17 @@ export function Form({ children, ...props }: FormHTMLAttributes<HTMLFormElement>
 
 function Field({
   label,
+  ref,
   ...input
-}: { label: string } & Omit<InputHTMLAttributes<HTMLInputElement>, 'id'>) {
+}: { label: string; ref?: Ref<HTMLInputElement> } & Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'id'
+>) {
   const id = useId();
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input id={id} {...input} />
+      <input id={id} ref={ref} {...input} />
     </div>
   );
 }

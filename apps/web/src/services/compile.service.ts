@@ -26,6 +26,20 @@ export interface Build {
 
 export const isActive = (b?: Build) => b?.status === 'queued' || b?.status === 'running';
 
+/**
+ * A queued/running build older than this looks stuck (orphaned job or crashed worker). Kept in
+ * the same ballpark as the API's COMPILE_TIMEOUT_MS + buffer (compile.service.ts), but doesn't
+ * need to match exactly: this only decides when to offer retrying, and the API re-validates and
+ * fails the stale build for real before accepting a new one.
+ */
+export const STALE_BUILD_MS = 5 * 60_000;
+
+export const isStale = (b?: Build) => {
+  if (!isActive(b) || !b) return false;
+  const since = b.startedAt ?? b.createdAt;
+  return Date.now() - new Date(since).getTime() > STALE_BUILD_MS;
+};
+
 export interface CompileService {
   compile(projectId: string): Promise<Build>;
   /** Most recent first. */

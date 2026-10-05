@@ -150,6 +150,31 @@ export class GitRepository {
     return result;
   }
 
+  /**
+   * Commits that changed `path`, newest first: compares its blob at each commit against its
+   * parent, like `changedFiles`. (isomorphic-git's own `log({ filepath })` resolves the mode from
+   * the index entry it last saw and can misreport an unrelated commit as a change after a path has
+   * been rewritten through a temp-file-plus-rename, which `ProjectFiles.write` always does.)
+   * ponytail: only `limit` commits are scanned; the oldest one is reported as a change if its
+   * state before that window is unknown.
+   */
+  async fileLog(
+    path: string,
+    limit = 50,
+  ): Promise<Array<{ sha: string; message: string; author: Author; date: Date }>> {
+    const commits = await this.log(limit);
+    const blobOid = (sha: string) =>
+      git.readBlob({ fs, dir: this.dir, oid: sha, filepath: path }).then(
+        (r) => r.oid,
+        (e: { code?: string }) => {
+          if (e.code === 'NotFoundError') return null;
+          throw e;
+        },
+      );
+    const oids = await Promise.all(commits.map((c) => blobOid(c.sha)));
+    return commits.filter((_, i) => oids[i] !== (oids[i + 1] ?? null));
+  }
+
   /** Newest non-autosave commit; the oldest fetched one if all are autosaves. */
   async baseline(limit = 200) {
     const head = await this.head();

@@ -13,12 +13,19 @@ import type { User } from '../../users/domain/user';
 import { BUILD_REPOSITORY, type Build, type BuildRepository } from '../domain/build.repository';
 
 export const MAX_QUEUED_PER_USER = 3;
+/**
+ * Extra time on top of COMPILE_TIMEOUT_MS before a queued/running build is treated as orphaned
+ * (job lost before BullMQ ever ran it, or the worker process died mid-build without updating the
+ * row). latexmk itself is killed by COMPILE_TIMEOUT_MS; this only covers what that can't.
+ */
+export const STALE_BUILD_BUFFER_MS = 2 * 60_000;
 
 export type CompileQueue = Pick<Queue<CompileJobData>, 'add'>;
 
 @Injectable()
 export class CompileService {
   private readonly buildsDir: SafePath;
+  private readonly staleAfterMs: number;
 
   constructor(
     @Inject(BUILD_REPOSITORY) private readonly builds: BuildRepository,
@@ -26,15 +33,35 @@ export class CompileService {
     @Inject(APP_CONFIG) config: AppConfig,
   ) {
     this.buildsDir = new SafePath(config.BUILDS_DIR);
+    this.staleAfterMs = config.COMPILE_TIMEOUT_MS + STALE_BUILD_BUFFER_MS;
+  }
+
+  private isStale(build: Build): boolean {
+    const since = build.startedAt ?? build.createdAt;
+    return Date.now() - new Date(since).getTime() > this.staleAfterMs;
   }
 
   /**
-   * Reuses the project's queued build if there is one (concurrent requests are settled by the
-   * repository's unique index); a running build gets one queued behind it.
+   * Reuses the project's queued build if there is one and it still targets the engine being
+   * requested (concurrent requests are settled by the repository's unique index); a running build
+   * gets one queued behind it. A stale queued or running build (orphaned job, crashed worker) is
+   * failed instead of being reused or blocking a fresh one. A queued build with a different engine
+   * is never silently reused or retargeted: the caller gets a clear conflict and can retry once it
+   * finishes, so the response always matches the engine it was requested with.
    */
   async request(project: Project, user: User): Promise<Build> {
     const active = await this.builds.findActive(project.id);
-    let build = active?.status === 'queued' ? active : null;
+    if (active && this.isStale(active)) {
+      await this.builds.failStale(active.id, 'Compilação interrompida: o processo não respondeu');
+    }
+    const reusable = active && !this.isStale(active) ? active : null;
+    if (reusable?.status === 'queued' && reusable.engine !== project.engine) {
+      throw new HttpException(
+        'A queued build with a different engine is already in progress; try again once it finishes',
+        HttpStatus.CONFLICT,
+      );
+    }
+    let build = reusable?.status === 'queued' ? reusable : null;
     if (!build) {
       if ((await this.builds.countQueuedForUser(user.id)) >= MAX_QUEUED_PER_USER) {
         throw new HttpException(

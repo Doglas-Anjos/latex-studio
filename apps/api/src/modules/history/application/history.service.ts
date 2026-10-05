@@ -1,3 +1,4 @@
+import { basename } from 'node:path/posix';
 import {
   BadRequestException,
   ConflictException,
@@ -29,6 +30,14 @@ export class HistoryService {
 
   log(project: Project, limit = 50) {
     return this.storage.open(project.id).repo.log(limit);
+  }
+
+  /** Commits that touched `path`, newest first. */
+  fileLog(project: Project, path: string, limit = 50) {
+    const files = this.storage.open(project.id);
+    if (!path) throw new BadRequestException('Missing path');
+    checkPath(files, path);
+    return files.repo.fileLog(path, limit);
   }
 
   changes(project: Project, fromSha: string, toSha: string) {
@@ -78,6 +87,34 @@ export class HistoryService {
     }
     return this.lock.run(project.id, async () => {
       const sha = await this.storage.open(project.id).repo.commitAll(message, author(user));
+      if (!sha) throw new ConflictException('Nothing to commit');
+      return { sha };
+    });
+  }
+
+  /**
+   * Commits only `path` ("Ctrl+S" on a single file). Flushes the open Y.Doc to the working tree
+   * first, so a just-typed edit is included despite Hocuspocus's 2-10s store debounce.
+   */
+  async commitFile(
+    project: Project,
+    user: User,
+    path: string,
+    message?: string,
+  ): Promise<{ sha: string }> {
+    const files = this.storage.open(project.id);
+    checkPath(files, path);
+    const trimmed = (message ?? '').trim();
+    if (trimmed.length > 200 || /\p{Cc}/u.test(trimmed)) {
+      throw new BadRequestException('Invalid commit message');
+    }
+    return this.lock.run(project.id, async () => {
+      await this.sync.flush(project.id, path);
+      const sha = await files.repo.commitPaths(
+        [path],
+        trimmed || `Update ${basename(path)}`,
+        author(user),
+      );
       if (!sha) throw new ConflictException('Nothing to commit');
       return { sha };
     });

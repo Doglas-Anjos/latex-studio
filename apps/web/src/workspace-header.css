@@ -1,0 +1,204 @@
+/* Workspace header: brand/project identity, the Código/PDF surface switch
+   and primary actions (back to projects, theme). Scoped under `.wsh-` so it
+   fully owns its own layout and responsive behavior instead of competing
+   with the legacy `.workspace-title` rules in styles.css. */
+
+.wsh-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 3.25rem;
+  padding: 0 1rem;
+  background: linear-gradient(180deg, var(--chrome-bg-raised), var(--chrome-bg));
+  color: var(--chrome-ink);
+  border-bottom: 1px solid var(--chrome-line);
+  font-size: 0.85rem;
+}
+
+.wsh-start {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.wsh-brand {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    transform 0.1s ease;
+}
+.wsh-brand:hover {
+  background: var(--chrome-line);
+}
+.wsh-brand:active {
+  transform: scale(0.97);
+}
+.wsh-brand:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.wsh-brand .brand-mark {
+  font-size: 1.05rem;
+}
+
+.wsh-sep {
+  flex: none;
+  color: var(--chrome-muted);
+  opacity: 0.6;
+}
+
+.wsh-project-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--chrome-ink);
+  letter-spacing: 0.01em;
+}
+
+/* Código/PDF segmented control: only rendered once the shell has switched to
+   single-surface mode (<=75rem, the same COMPACT_QUERY the page already
+   tracks), so there's no need to duplicate that breakpoint here. */
+.wsh-segmented {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
+  margin: 0 0.25rem;
+  padding: 3px;
+  background: rgb(0 0 0 / 0.2);
+  border: 1px solid var(--chrome-line);
+  border-radius: 999px;
+}
+.wsh-segmented-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 0;
+  border-radius: 999px;
+  padding: 0.32rem 0.75rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--chrome-muted);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.wsh-segmented-btn:hover:not([aria-pressed="true"]) {
+  color: var(--chrome-ink);
+  background: rgb(255 255 255 / 0.08);
+}
+.wsh-segmented-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.wsh-segmented-btn[aria-pressed="true"] {
+  color: var(--chrome-bg);
+  background: var(--chrome-accent);
+}
+
+.wsh-end {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 0.35rem;
+  margin-left: auto;
+}
+
+.wsh-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 0.5rem;
+  color: var(--chrome-muted);
+  text-decoration: none;
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+.wsh-back:hover {
+  color: var(--chrome-ink);
+  background: var(--chrome-line);
+}
+.wsh-back:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.wsh-divider {
+  flex: none;
+  width: 1px;
+  height: 1.3rem;
+  background: var(--chrome-line);
+}
+
+/* ThemeToggle renders a plain .btn-ghost, styled for the light paper surface
+   by default; restyle it for the dark chrome bar it actually sits in. */
+.wsh-end .btn-ghost {
+  color: var(--chrome-muted);
+}
+.wsh-end .btn-ghost:hover:not(:disabled) {
+  color: var(--chrome-ink);
+  background: var(--chrome-line);
+}
+
+/* Tablet and down: trim padding/gaps so the brand, project name, surface
+   switch and actions keep to one row instead of crowding each other. */
+@media (max-width: 48rem) {
+  .wsh-header {
+    gap: 0.4rem;
+    padding: 0 0.65rem;
+  }
+  .wsh-segmented {
+    margin: 0 0.1rem;
+  }
+}
+
+/* Phone (down to ~320px): the brand suffix and back-link label are the first
+   things to drop so the project name, surface switch and theme action keep
+   to one row without pushing the header wider than the viewport. The
+   surface switch goes icon-only too; each button keeps an aria-label/title
+   so its accessible name and hover tooltip survive losing the visible text. */
+@media (max-width: 26rem) {
+  .wsh-header {
+    gap: 0.3rem;
+    padding: 0 0.5rem;
+  }
+  .wsh-brand .brand-suffix {
+    display: none;
+  }
+  .wsh-back span {
+    display: none;
+  }
+  .wsh-back {
+    padding: 0.4rem;
+  }
+  .wsh-segmented-btn span {
+    display: none;
+  }
+  .wsh-segmented-btn {
+    padding: 0.4rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wsh-brand,
+  .wsh-segmented-btn,
+  .wsh-back {
+    transition: none;
+  }
+}

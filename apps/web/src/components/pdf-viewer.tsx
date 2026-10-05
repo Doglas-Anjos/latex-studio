@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
 import { CompileServiceToken } from '../services/compile.service';
 import { useBuilds } from './use-builds';
+import { useZoom } from './use-zoom';
+import { ZoomControls } from './zoom-controls';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -14,7 +16,9 @@ export function PdfViewer({ projectId }: { projectId: string }) {
   const { data: builds } = useBuilds(projectId);
   const buildId = builds?.find((b) => b.status === 'succeeded')?.id;
   const host = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
   const [error, setError] = useState(false);
+  const { zoom, zoomIn, zoomOut, reset } = useZoom(body);
 
   // External sync: PDF.js renders into canvases outside React's tree.
   useEffect(() => {
@@ -50,9 +54,20 @@ export function PdfViewer({ projectId }: { projectId: string }) {
 
   return (
     <div className="pdf-viewer">
-      {!buildId && <p className="status-note">Compile o projeto para ver o PDF.</p>}
-      {error && <p className="form-error">Não foi possível exibir o PDF.</p>}
-      <div ref={host} className="pdf-pages" />
+      {buildId && !error && (
+        <div className="zoom-bar">
+          <ZoomControls zoom={zoom} zoomIn={zoomIn} zoomOut={zoomOut} reset={reset} />
+        </div>
+      )}
+      <div ref={body} className="pdf-viewer-body">
+        {!buildId && <p className="status-note">Compile o projeto para ver o PDF.</p>}
+        {error && <p className="form-error">Não foi possível exibir o PDF.</p>}
+        <div
+          ref={host}
+          className="pdf-pages"
+          style={{ transform: `scale(${zoom})`, transformOrigin: '0 0' }}
+        />
+      </div>
     </div>
   );
 }

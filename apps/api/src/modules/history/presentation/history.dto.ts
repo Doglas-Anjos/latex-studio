@@ -1,9 +1,20 @@
-import { IsString, Length, MaxLength } from 'class-validator';
+import { IsOptional, IsString, Length, MaxLength } from 'class-validator';
 
 export class CommitDto {
   @IsString()
   @Length(1, 200)
   message!: string;
+}
+
+export class CommitFileDto {
+  @IsString()
+  @MaxLength(1024)
+  path!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  message?: string;
 }
 
 export class RestoreDto {

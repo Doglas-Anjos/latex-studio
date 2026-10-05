@@ -23,7 +23,7 @@ export const viewLabels: Record<SidebarView, string> = {
   history: 'Histórico',
   members: 'Membros',
 };
-const icons: Record<SidebarView, LucideIcon> = {
+export const sidebarViewIcons: Record<SidebarView, LucideIcon> = {
   files: Files,
   changes: GitCompare,
   packages: Package,
@@ -32,7 +32,13 @@ const icons: Record<SidebarView, LucideIcon> = {
   members: Users,
 };
 
-export function ActivityBar({ projectId }: { projectId: string }) {
+export function ActivityBar({
+  projectId,
+  onSelect,
+}: {
+  projectId: string;
+  onSelect?: (view: SidebarView) => void;
+}) {
   const appearance = useRef<HTMLDialogElement>(null);
   const view = useSettingsStore((s) => s.sidebarView);
   const set = useSettingsStore((s) => s.set);
@@ -46,7 +52,7 @@ export function ActivityBar({ projectId }: { projectId: string }) {
   return (
     <nav className="activity-bar" aria-label="Painéis">
       {(Object.keys(viewLabels) as SidebarView[]).map((v) => {
-        const Icon = icons[v];
+        const Icon = sidebarViewIcons[v];
         return (
           <button
             key={v}
@@ -55,7 +61,10 @@ export function ActivityBar({ projectId }: { projectId: string }) {
             aria-pressed={view === v}
             aria-label={viewLabels[v]}
             title={viewLabels[v]}
-            onClick={() => set({ sidebarView: v })}
+            onClick={() => {
+              set({ sidebarView: v });
+              onSelect?.(v);
+            }}
           >
             <Icon size={20} aria-hidden="true" />
             {v === 'changes' && changed > 0 && <span className="activity-badge">{changed}</span>}

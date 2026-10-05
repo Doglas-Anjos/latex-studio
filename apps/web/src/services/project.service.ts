@@ -14,6 +14,13 @@ export interface Project {
   role: Role;
 }
 
+/**
+ * What a write to a project echoes back: the project, with `role` optional because the caller's
+ * own role is not part of what was written. Callers merge it onto what they already know instead
+ * of replacing it, so a response without a role never reads as a permission loss.
+ */
+export type UpdatedProject = Omit<Project, 'role'> & { role?: Role };
+
 /** Either a single .zip or a list of files with their relative paths. */
 export type ImportInput =
   | { name: string; archive: File }
@@ -27,7 +34,10 @@ export interface ProjectService {
   import(input: ImportInput): Promise<Project>;
   copy(projectId: string, name?: string): Promise<Project>;
   downloadSource(projectId: string, withHistory?: boolean): Promise<void>;
-  update(projectId: string, patch: Partial<Pick<Project, 'engine' | 'mainFile'>>): Promise<Project>;
+  update(
+    projectId: string,
+    patch: Partial<Pick<Project, 'engine' | 'mainFile'>>,
+  ): Promise<UpdatedProject>;
 }
 
 export const ProjectServiceToken = createToken<ProjectService>('ProjectService');
@@ -64,7 +74,7 @@ export class HttpProjectService implements ProjectService {
   }
 
   update(projectId: string, patch: Partial<Pick<Project, 'engine' | 'mainFile'>>) {
-    return this.api.patch<Project>(`/projects/${projectId}`, patch);
+    return this.api.patch<UpdatedProject>(`/projects/${projectId}`, patch);
   }
 
   downloadSource(projectId: string, withHistory = false) {

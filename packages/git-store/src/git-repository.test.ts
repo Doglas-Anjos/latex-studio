@@ -132,3 +132,28 @@ it('commitPaths commits only the given paths with co-author trailers', async () 
   expect(await repo.workingChanges(head?.sha ?? null)).toEqual([{ path: 'b.tex', type: 'modify' }]);
   expect((await repo.baseline())?.message).toBe('first');
 });
+
+it('fileLog lists only the commits that changed a given file', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'git-store-'));
+  dirs.push(dir);
+  const author = { name: 'Ana', email: 'ana@example.com' };
+  const repo = await GitRepository.init(dir);
+  await repo.writeFile('a.tex', '1');
+  await repo.writeFile('b.tex', '1');
+  await repo.commitAll('first', author);
+  // Different sizes: statusMatrix misses a same-size edit within the same second (see changes()).
+  await repo.writeFile('b.tex', '22');
+  await repo.commitAll('second', author);
+  await repo.writeFile('a.tex', '222');
+  await repo.commitAll('third', author);
+  await repo.deleteFile('b.tex');
+  await repo.commitAll('fourth', author);
+
+  expect((await repo.fileLog('a.tex')).map((c) => c.message)).toEqual(['third', 'first']);
+  expect((await repo.fileLog('b.tex')).map((c) => c.message)).toEqual([
+    'fourth',
+    'second',
+    'first',
+  ]);
+  expect(await repo.fileLog('nope.tex')).toEqual([]);
+});

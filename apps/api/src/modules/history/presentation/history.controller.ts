@@ -22,7 +22,7 @@ import {
 import type { User } from '../../users/domain/user';
 import { HistoryService } from '../application/history.service';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
-import { CommitDto, RestoreDto } from './history.dto';
+import { CommitDto, CommitFileDto, RestoreDto } from './history.dto';
 
 @Controller('projects/:projectId/history')
 export class HistoryController {
@@ -47,6 +47,16 @@ export class HistoryController {
   @RequireProjectRole('viewer')
   status(@CurrentProject() project: Project) {
     return this.history.status(project);
+  }
+
+  @Get('file-log')
+  @RequireProjectRole('viewer')
+  fileLog(
+    @CurrentProject() project: Project,
+    @Query('path') path = '',
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+  ) {
+    return this.history.fileLog(project, path, Math.min(Math.max(limit, 1), 200));
   }
 
   @Get('blame')
@@ -80,6 +90,16 @@ export class HistoryController {
   @RequireProjectRole('editor')
   commit(@CurrentProject() project: Project, @CurrentUser() user: User, @Body() dto: CommitDto) {
     return this.history.commit(project, user, dto.message);
+  }
+
+  @Post('commit-file')
+  @RequireProjectRole('editor')
+  commitFile(
+    @CurrentProject() project: Project,
+    @CurrentUser() user: User,
+    @Body() dto: CommitFileDto,
+  ) {
+    return this.history.commitFile(project, user, dto.path, dto.message);
   }
 
   @Post('restore')

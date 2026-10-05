@@ -61,7 +61,7 @@ const defaults: Settings = {
   pdfWidth: 480,
   panelHeight: 220,
   sidebarView: 'files',
-  panelOpen: true,
+  panelOpen: false,
 };
 
 export const resolveTheme = (theme: ThemeSetting, prefersDark: boolean): 'light' | 'dark' =>

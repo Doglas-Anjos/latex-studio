@@ -1,3 +1,4 @@
+import { Palette } from 'lucide-react';
 import { type RefObject, useRef } from 'react';
 import {
   type Settings,
@@ -74,7 +75,40 @@ export function AppearanceDialog({ ref }: { ref: RefObject<HTMLDialogElement | n
   };
 
   return (
-    <Dialog ref={ref} title="Aparência">
+    <Dialog
+      ref={ref}
+      title="Aparência"
+      icon={<Palette size={18} aria-hidden="true" />}
+      kicker="Preferências locais"
+      description="Tema, fonte do editor e cores de sintaxe, salvos neste navegador."
+      footer={
+        <div className="actions">
+          <Button
+            variant="ghost"
+            onClick={() =>
+              set({
+                theme: 'system',
+                syntax: {},
+                editorFont: DEFAULT_FONT,
+                fontSize: 14,
+                lineWrapping: true,
+              })
+            }
+          >
+            Restaurar padrão
+          </Button>
+          <Button variant="secondary" onClick={exportJson}>
+            Exportar JSON
+          </Button>
+          <Button variant="secondary" onClick={() => importRef.current?.click()}>
+            Importar JSON
+          </Button>
+          <Button variant="primary" onClick={() => ref.current?.close()}>
+            Fechar
+          </Button>
+        </div>
+      }
+    >
       <div className="appearance-dialog">
         <label className="field">
           <span>Tema</span>
@@ -130,42 +164,17 @@ export function AppearanceDialog({ ref }: { ref: RefObject<HTMLDialogElement | n
             </label>
           ))}
         </div>
-        <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() =>
-              set({
-                theme: 'system',
-                syntax: {},
-                editorFont: DEFAULT_FONT,
-                fontSize: 14,
-                lineWrapping: true,
-              })
-            }
-          >
-            Restaurar padrão
-          </Button>
-          <Button variant="secondary" onClick={exportJson}>
-            Exportar JSON
-          </Button>
-          <Button variant="secondary" onClick={() => importRef.current?.click()}>
-            Importar JSON
-          </Button>
-          <input
-            ref={importRef}
-            type="file"
-            accept="application/json"
-            hidden
-            aria-label="Importar JSON"
-            onChange={(e) => {
-              importJson(e.target.files?.[0]);
-              e.target.value = '';
-            }}
-          />
-          <Button variant="primary" onClick={() => ref.current?.close()}>
-            Fechar
-          </Button>
-        </div>
+        <input
+          ref={importRef}
+          type="file"
+          accept="application/json"
+          hidden
+          aria-label="Importar JSON"
+          onChange={(e) => {
+            importJson(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
       </div>
     </Dialog>
   );

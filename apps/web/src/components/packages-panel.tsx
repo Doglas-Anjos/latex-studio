@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
 import { useState } from 'react';
 import { useService } from '../di/service-provider';
 import { LATEX_CATALOG } from '../latex-catalog';
@@ -13,6 +14,7 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
   const service = useService(PackageServiceToken);
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
+  const [search, setSearch] = useState('');
   const [moved, setMoved] = useState<number | null>(null);
   const { data } = useQuery({
     queryKey: ['packages', projectId],
@@ -69,93 +71,160 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
   const busy = save.isPending || migrate.isPending;
   const error = save.error ?? migrate.error;
 
+  const normalizedSearch = search.trim().toLowerCase();
+  const matches = (n: string) => !normalizedSearch || n.toLowerCase().includes(normalizedSearch);
+  const visibleList = list.map((e, i) => ({ e, i })).filter(({ e }) => matches(e.name));
+  const visibleDetected = detected.filter((u) => matches(u.name));
+  const enabledCount = list.filter((e) => e.enabled).length;
+  const disabledCount = list.length - enabledCount;
+
   return (
     <section className="packages-panel" aria-label="Bibliotecas">
+      {(list.length > 0 || detected.length > 0) && (
+        <div className="packages-overview">
+          <span className="packages-stat">
+            <strong>{list.length}</strong> {list.length === 1 ? 'pacote' : 'pacotes'}
+          </span>
+          {enabledCount > 0 && (
+            <span className="packages-stat packages-stat-ok">
+              <strong>{enabledCount}</strong> ativos
+            </span>
+          )}
+          {disabledCount > 0 && (
+            <span className="packages-stat packages-stat-off">
+              <strong>{disabledCount}</strong> desativados
+            </span>
+          )}
+          {detected.length > 0 && (
+            <span className="packages-stat packages-stat-detected">
+              <strong>{detected.length}</strong> detectados
+            </span>
+          )}
+        </div>
+      )}
+      {(list.length > 3 || detected.length > 3) && (
+        <div className="packages-search">
+          <Search size={14} aria-hidden="true" className="packages-search-icon" />
+          <input
+            type="search"
+            aria-label="Buscar pacotes"
+            placeholder="Buscar pacotes"
+            value={search}
+            onChange={(ev) => setSearch(ev.target.value)}
+          />
+        </div>
+      )}
       <ul className="package-list">
-        {list.map((e, i) => (
-          <li key={e.name} className="package-item">
-            <label className="package-name">
+        {visibleList.map(({ e, i }) => (
+          <li key={e.name} className="package-item" data-enabled={e.enabled}>
+            <div className="package-row">
+              <label className="package-name">
+                <input
+                  type="checkbox"
+                  checked={e.enabled}
+                  disabled={!canEdit || busy}
+                  onChange={(ev) => patch(i, { enabled: ev.target.checked })}
+                />
+                <span className="package-name-text">{e.name}</span>
+              </label>
+              {!e.enabled && usedBy(e.name).length > 0 && (
+                <span className="badge">bypass ativo</span>
+              )}
+              {canEdit && (
+                <span className="package-actions">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Subir ${e.name}`}
+                    disabled={busy || i === 0}
+                    onClick={() => move(i, -1)}
+                  >
+                    <ChevronUp size={14} aria-hidden="true" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Descer ${e.name}`}
+                    disabled={busy || i === list.length - 1}
+                    onClick={() => move(i, 1)}
+                  >
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remover ${e.name}`}
+                    disabled={busy}
+                    onClick={() => commit(list.filter((_, j) => j !== i))}
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </Button>
+                </span>
+              )}
+            </div>
+            <div className="package-meta">
+              {usedBy(e.name).length > 0 && (
+                <small className="package-usage">
+                  {usedBy(e.name)
+                    .map((u) => `${u.path}:${u.line}`)
+                    .join(', ')}
+                </small>
+              )}
               <input
-                type="checkbox"
-                checked={e.enabled}
+                className="package-options"
+                aria-label={`Opções de ${e.name}`}
+                placeholder="opções"
+                defaultValue={e.options ?? ''}
                 disabled={!canEdit || busy}
-                onChange={(ev) => patch(i, { enabled: ev.target.checked })}
+                maxLength={200}
+                onBlur={(ev) => {
+                  const options = ev.target.value.trim();
+                  if (options !== (e.options ?? '')) patch(i, { options });
+                }}
               />
-              {e.name}
-            </label>
-            {usedBy(e.name).length > 0 && (
-              <small className="package-usage">
-                {usedBy(e.name)
-                  .map((u) => `${u.path}:${u.line}`)
-                  .join(', ')}
-              </small>
-            )}
-            {!e.enabled && usedBy(e.name).length > 0 && <span className="badge">bypass ativo</span>}
-            <input
-              className="package-options"
-              aria-label={`Opções de ${e.name}`}
-              placeholder="opções"
-              defaultValue={e.options ?? ''}
-              disabled={!canEdit || busy}
-              maxLength={200}
-              onBlur={(ev) => {
-                const options = ev.target.value.trim();
-                if (options !== (e.options ?? '')) patch(i, { options });
-              }}
-            />
-            {canEdit && (
-              <span className="package-actions">
-                <Button
-                  variant="ghost"
-                  aria-label={`Subir ${e.name}`}
-                  disabled={busy || i === 0}
-                  onClick={() => move(i, -1)}
-                >
-                  ↑
-                </Button>
-                <Button
-                  variant="ghost"
-                  aria-label={`Descer ${e.name}`}
-                  disabled={busy || i === list.length - 1}
-                  onClick={() => move(i, 1)}
-                >
-                  ↓
-                </Button>
-                <Button
-                  variant="ghost"
-                  aria-label={`Remover ${e.name}`}
-                  disabled={busy}
-                  onClick={() => commit(list.filter((_, j) => j !== i))}
-                >
-                  ×
-                </Button>
-              </span>
-            )}
+            </div>
           </li>
         ))}
       </ul>
-      {detected.length > 0 && (
+      {list.length > 0 && visibleList.length === 0 && (
+        <p className="muted">Nenhum pacote corresponde à busca.</p>
+      )}
+      {detected.length > 0 && visibleDetected.length > 0 && (
         <>
           <h3>Detectados no código</h3>
           <ul className="detected-list">
-            {detected.map((u) => (
+            {visibleDetected.map((u) => (
               <li key={u.name} className="package-item">
-                <span className="package-name">{u.name}</span>
+                <div className="package-row">
+                  <span className="package-name-text">{u.name}</span>
+                  {canEdit && (
+                    <span className="package-actions">
+                      <Button
+                        variant="ghost"
+                        size="compact"
+                        title={`Desligar ${u.name} sem adicioná-lo ao gerenciador`}
+                        disabled={busy}
+                        onClick={() => addDetected(u, false)}
+                      >
+                        Desligar
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="compact"
+                        title={`Mover ${u.name} para o gerenciador de pacotes`}
+                        disabled={busy}
+                        onClick={() => addDetected(u, true)}
+                      >
+                        Mover
+                      </Button>
+                    </span>
+                  )}
+                </div>
                 <small className="package-usage">
                   {usedBy(u.name)
                     .map((x) => `${x.path}:${x.line}`)
                     .join(', ')}
                 </small>
-                {canEdit && (
-                  <span className="package-actions">
-                    <Button variant="ghost" disabled={busy} onClick={() => addDetected(u, false)}>
-                      Desligar
-                    </Button>
-                    <Button variant="ghost" disabled={busy} onClick={() => addDetected(u, true)}>
-                      Mover para o gerenciador
-                    </Button>
-                  </span>
-                )}
               </li>
             ))}
           </ul>
@@ -184,11 +253,21 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
                 </option>
               ))}
             </datalist>
-            <Button variant="secondary" type="submit" disabled={busy || !name.trim()}>
+            <Button
+              variant="secondary"
+              size="compact"
+              type="submit"
+              disabled={busy || !name.trim()}
+            >
               Adicionar
             </Button>
           </form>
-          <Button variant="secondary" disabled={busy} onClick={() => migrate.mutate()}>
+          <Button
+            variant="secondary"
+            size="compact"
+            disabled={busy}
+            onClick={() => migrate.mutate()}
+          >
             Mover \usepackage do arquivo principal
           </Button>
         </>

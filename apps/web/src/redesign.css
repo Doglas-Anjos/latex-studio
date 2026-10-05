@@ -1,0 +1,644 @@
+/* Redesign layer — compiler panel, shared Dialog, FileTree create/upload
+   toolbar and PackagesPanel only. Loaded after styles.css (see main.tsx) and
+   relies on the cascade for same-specificity overrides: selectors that must
+   win over an existing compound rule in styles.css are restated verbatim
+   here rather than fighting it with extra specificity. All color/spacing
+   values reuse the tokens defined in styles.css, so this file stays correct
+   in both themes without redefining them. */
+
+/* ---------- Buttons ---------- */
+.btn {
+  border-radius: 10px;
+  letter-spacing: 0.01em;
+  transition:
+    background-color 0.12s,
+    border-color 0.12s,
+    color 0.12s,
+    box-shadow 0.12s,
+    transform 0.08s;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-icon {
+  border-radius: 999px;
+}
+.btn-primary {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 100%, white 8%),
+    var(--primary)
+  );
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 0.14),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 92%, white 6%),
+    color-mix(in srgb, var(--primary) 88%, black)
+  );
+  box-shadow:
+    0 2px 8px rgb(0 0 0 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
+}
+.btn-primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 70%, black);
+  box-shadow: none;
+}
+.btn-secondary:hover:not(:disabled),
+.btn-ghost:hover:not(:disabled) {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn {
+    transition: none;
+  }
+}
+
+/* ---------- Dialog (shared modal surface) ---------- */
+.dialog {
+  display: flex;
+  border-radius: 14px;
+  border-color: color-mix(in srgb, var(--line) 70%, transparent);
+  box-shadow:
+    0 24px 60px rgb(10 12 18 / 0.28),
+    0 2px 10px rgb(10 12 18 / 0.1);
+  animation: redesign-dialog-pop 0.16s ease-out;
+  /* Clips the header/footer backgrounds below to the dialog's own rounded
+     corners instead of each needing to restate a matching border-radius. */
+  overflow: hidden;
+}
+@keyframes redesign-dialog-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dialog {
+    animation: none;
+  }
+}
+.dialog::backdrop {
+  background: rgb(10 12 18 / 0.55);
+  backdrop-filter: blur(3px);
+}
+.dialog-header {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  margin-bottom: 0.25rem;
+  padding-bottom: 1rem;
+}
+.dialog-header-main {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.dialog-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary);
+}
+.dialog[data-tone="danger"] .dialog-icon {
+  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+  color: var(--danger);
+}
+.dialog-heading {
+  min-width: 0;
+}
+.dialog-kicker {
+  margin: 0 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.dialog[data-tone="danger"] .dialog-kicker {
+  color: var(--danger);
+}
+.dialog-kicker code {
+  font-family: ui-monospace, monospace;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.dialog-description {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.dialog-body:has(+ .dialog-footer) {
+  padding-bottom: 1rem;
+}
+.dialog-close:hover:not(:disabled) {
+  background: var(--line);
+}
+.dialog-footer {
+  flex: none;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
+  background: color-mix(in srgb, var(--paper) 45%, transparent);
+}
+/* Footers with more than two actions (e.g. appearance) wrap at any width
+   instead of only below styles.css's 26rem breakpoint. */
+.dialog-footer .actions {
+  flex-wrap: wrap;
+}
+@media (max-width: 26rem) {
+  .dialog-footer {
+    padding: 0.85rem 1rem;
+  }
+}
+.dialog-list button {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  border-radius: 8px;
+  transition: background-color 0.12s;
+}
+.dialog-list button svg {
+  flex: none;
+  color: var(--muted);
+}
+.dialog-list-heading {
+  margin: 0.5rem 0 0.1rem;
+  padding: 0 0.1rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.dialog-list-heading:first-child {
+  margin-top: 0;
+}
+
+/* ---------- Role picker (members invite) ---------- */
+.role-options {
+  display: grid;
+  gap: 0.5rem;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.role-options legend {
+  padding: 0;
+  margin-bottom: 0.3rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+.role-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    background-color 0.12s;
+}
+.role-option:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--line));
+}
+.role-option[data-selected="true"] {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+.role-option input {
+  margin: 0.2rem 0 0;
+  flex: none;
+}
+.role-option-main {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.role-option-label {
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+.role-option-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+/* ---------- Shared form hint (example path below a field) ---------- */
+.field-hint {
+  margin: -0.15rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.field-hint code {
+  font-family: ui-monospace, monospace;
+  background: color-mix(in srgb, var(--line) 55%, transparent);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  color: var(--ink);
+}
+
+/* ---------- FileTree: create/upload toolbar ---------- */
+.tree-toolbar {
+  gap: 0.4rem;
+  padding: 0.6rem;
+}
+.tree-toolbar button.tree-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    border-color 0.12s,
+    color 0.12s,
+    box-shadow 0.12s,
+    transform 0.08s;
+}
+.tree-toolbar button.tree-toolbar-btn:hover {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--line));
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  color: var(--primary);
+}
+.tree-toolbar button.tree-toolbar-btn:active {
+  transform: translateY(1px);
+}
+/* The one action worth reaching for first stands out; "Nova pasta" and
+   "Upload" stay as quiet outline pills so the row doesn't read as three
+   equally loud buttons. */
+.tree-toolbar button.tree-toolbar-btn-primary {
+  border-color: transparent;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 100%, white 8%),
+    var(--primary)
+  );
+  color: var(--primary-ink);
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 0.18),
+    inset 0 1px 0 rgb(255 255 255 / 0.12);
+}
+.tree-toolbar button.tree-toolbar-btn-primary:hover {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--primary) 92%, white 6%),
+    color-mix(in srgb, var(--primary) 88%, black)
+  );
+  color: var(--primary-ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.2);
+}
+/* Below ~240px the three pills with labels no longer fit one line; icons
+   alone (title text still carries the full label for a screen reader or a
+   hover) keep the toolbar to its usual height instead of wrapping to three
+   rows and pushing the tree down. */
+@media (max-width: 15rem) {
+  .tree-toolbar button.tree-toolbar-btn span {
+    display: none;
+  }
+  .tree-toolbar button.tree-toolbar-btn {
+    padding: 0.4rem;
+  }
+}
+
+/* ---------- PackagesPanel ---------- */
+/* styles.css caps this at max-height:16rem with its own overflow:auto, which
+   traps scrolling in a tiny nested box when there are many packages/detected
+   items. Let the ancestor `.sidebar-body` (styles.css) own the full-height
+   scroll instead, at both desktop and mobile widths. */
+.packages-panel {
+  gap: 0.65rem;
+  max-height: none;
+  overflow: visible;
+}
+.packages-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.packages-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 50%, transparent);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.packages-stat strong {
+  font-weight: 700;
+  color: var(--ink);
+}
+.packages-stat-ok {
+  background: color-mix(in srgb, var(--ok) 16%, transparent);
+  color: var(--ok);
+}
+.packages-stat-ok strong {
+  color: var(--ok);
+}
+.packages-stat-off {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: var(--danger);
+}
+.packages-stat-off strong {
+  color: var(--danger);
+}
+.packages-stat-detected {
+  background: color-mix(in srgb, var(--mark) 16%, transparent);
+  color: var(--mark);
+}
+.packages-stat-detected strong {
+  color: var(--mark);
+}
+.packages-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.packages-search-icon {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+.packages-search input {
+  width: 100%;
+  min-height: 2rem;
+  padding: 0.35rem 0.6rem 0.35rem 1.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.82rem;
+}
+.packages-search input:focus-visible {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent);
+}
+.package-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem 0.4rem 0.6rem;
+  border-left: 3px solid transparent;
+  border-radius: 8px;
+  min-width: 0;
+  transition:
+    opacity 0.12s,
+    background-color 0.12s;
+}
+.package-item:hover {
+  background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+.package-item[data-enabled="true"] {
+  border-left-color: color-mix(in srgb, var(--ok) 55%, transparent);
+}
+.package-item[data-enabled="false"] {
+  border-left-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  opacity: 0.72;
+}
+.package-item[data-enabled="false"]:hover {
+  opacity: 1;
+}
+.package-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.package-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: ui-monospace, monospace;
+}
+.package-name-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, monospace;
+}
+.package-actions {
+  display: flex;
+  flex: none;
+  gap: 0.1rem;
+}
+/* The detected-list actions carry text buttons (not just icons), which can
+   outgrow the 260px sidebar; let them wrap onto a second row instead of
+   clipping against `flex: none` above. */
+.detected-list .package-actions {
+  flex: 1 1 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.package-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.package-meta .package-usage {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.package-options {
+  flex: 1 1 8rem;
+  min-width: 0;
+  width: auto;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+}
+.package-options:focus-visible {
+  border-color: var(--focus);
+}
+.detected-list .package-item {
+  background: color-mix(in srgb, var(--mark) 6%, transparent);
+}
+.package-add {
+  flex-wrap: wrap;
+}
+.package-add input {
+  flex: 1 1 10rem;
+  min-width: 0;
+  min-height: 2rem;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+}
+.package-note {
+  font-size: 0.8rem;
+}
+
+/* ---------- Compiler panel ---------- */
+.build-bar {
+  gap: 0.5rem;
+  background: color-mix(in srgb, var(--paper) 55%, var(--surface));
+  border-bottom: 1px solid var(--line);
+}
+.build-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 600;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+}
+.build-status[data-status="queued"],
+.build-status[data-status="running"] {
+  background: color-mix(in srgb, var(--warn) 16%, transparent);
+}
+.build-status[data-status="succeeded"] {
+  background: color-mix(in srgb, var(--ok) 15%, transparent);
+}
+.build-status[data-status="failed"],
+.build-status[data-status="timeout"] {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+}
+.build-status[data-stuck="true"] {
+  background: color-mix(in srgb, var(--danger) 20%, transparent);
+}
+.build-status-spin {
+  animation: redesign-spin 0.9s linear infinite;
+}
+@keyframes redesign-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+/* Indeterminate strip under the toolbar while a build is queued or running;
+   the toggle, status pill and problem counts already say so in words, this
+   is the glanceable version that doesn't need to be read. */
+.build-progress {
+  height: 2px;
+  flex: none;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--line) 60%, transparent);
+  position: relative;
+}
+.build-progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 35%;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent);
+  animation: redesign-progress-sweep 1.3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .build-status-spin {
+    animation: none;
+  }
+  .build-progress::after {
+    animation: none;
+    width: 100%;
+    background: var(--primary);
+    opacity: 0.5;
+  }
+}
+@keyframes redesign-progress-sweep {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(285%);
+  }
+}
+.engine-conflict-note {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.engine-select {
+  border-radius: 6px;
+  transition: border-color 0.12s;
+}
+.engine-select:hover:not(:disabled) {
+  border-color: var(--primary);
+}
+.problem-counts {
+  padding-left: 0.6rem;
+  border-left: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+}
+.problem-count {
+  transition:
+    background-color 0.12s,
+    border-color 0.12s;
+}
+.problem-count:not(:disabled):hover {
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+.log-group {
+  border-radius: 8px;
+  padding: 0 0.4rem;
+}
+.log-group:hover {
+  background: color-mix(in srgb, var(--primary) 4%, transparent);
+}
+.log-item {
+  border-radius: 0 6px 6px 0;
+}
+.log-row {
+  border-radius: 0 6px 6px 0;
+  transition: background-color 0.12s;
+}
+.log-row:hover {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.icon-btn.build-toggle {
+  border-radius: 999px;
+}
+.icon-btn.build-toggle:hover {
+  background: var(--line);
+}
+/* The note's own pill would otherwise be the one element wide enough to push
+   Compilar/motor/Baixar/toggle onto a second row at phone widths; the status
+   bar already carries build status there (see styles.css), so this follows
+   the same rule and drops to the details panel's title text only. */
+@media (max-width: 26rem) {
+  .engine-conflict-note {
+    display: none;
+  }
+  .problem-counts {
+    padding-left: 0;
+    border-left: 0;
+  }
+}
