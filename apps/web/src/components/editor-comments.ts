@@ -18,6 +18,9 @@ type Anchored = Pick<Comment, 'id' | 'anchor'> & Partial<Pick<Comment, 'quote' |
 
 export const refreshHighlights = StateEffect.define<null>();
 
+const commentIdAt = (event: Event) =>
+  (event.target as HTMLElement).closest?.('[data-comment-id]')?.getAttribute('data-comment-id');
+
 /**
  * Where a comment whose Yjs anchor no longer resolves (the document was rebuilt from the file, so
  * its item ids changed) sits now: the occurrence of its quote closest to the line it was made on.
@@ -111,11 +114,23 @@ export function commentHighlights(ytext: Y.Text, comments: { current: Anchored[]
     resolveAfterSync,
     EditorView.domEventHandlers({
       click(event) {
-        const id = (event.target as HTMLElement)
-          .closest?.('[data-comment-id]')
-          ?.getAttribute('data-comment-id');
+        const id = commentIdAt(event);
         if (id) useWorkspaceStore.getState().setActiveComment(id);
         return false;
+      },
+      // Double click: open the comments panel on this comment.
+      dblclick(event) {
+        const id = commentIdAt(event);
+        if (id) useWorkspaceStore.getState().focusComment(id);
+        return false;
+      },
+      // Right click on a highlight: the comment's own menu instead of the browser's.
+      contextmenu(event) {
+        const id = commentIdAt(event);
+        if (!id) return false;
+        event.preventDefault();
+        useWorkspaceStore.getState().setCommentMenu({ id, x: event.clientX, y: event.clientY });
+        return true;
       },
     }),
   ];

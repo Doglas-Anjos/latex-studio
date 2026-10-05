@@ -48,6 +48,24 @@ export class CommentsService {
     return updated;
   }
 
+  /** Anyone who can comment resolves; only the author rewrites the text. */
+  async update(
+    project: Project,
+    user: User,
+    id: string,
+    patch: { resolved?: boolean; body?: string },
+  ): Promise<Comment> {
+    const comment = await this.find(project, id);
+    if (patch.body !== undefined) {
+      if (comment.author?.id !== user.id) {
+        throw new ForbiddenException('Only the author can edit a comment');
+      }
+      await this.comments.setBody(project.id, id, patch.body.trim());
+    }
+    if (patch.resolved !== undefined) return this.setResolved(project, id, patch.resolved);
+    return this.find(project, id);
+  }
+
   async remove(project: Project, user: User, id: string): Promise<void> {
     const comment = await this.find(project, id);
     if (comment.author?.id !== user.id && project.ownerId !== user.id) {

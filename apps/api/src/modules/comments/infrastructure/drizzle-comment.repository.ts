@@ -43,6 +43,13 @@ export class DrizzleCommentRepository implements CommentRepository {
     return this.findById(projectId, id);
   }
 
+  async setBody(projectId: string, id: string, body: string): Promise<void> {
+    await this.db
+      .update(comments)
+      .set({ body })
+      .where(and(eq(comments.projectId, projectId), eq(comments.id, id)));
+  }
+
   async delete(projectId: string, id: string): Promise<void> {
     await this.db
       .delete(comments)

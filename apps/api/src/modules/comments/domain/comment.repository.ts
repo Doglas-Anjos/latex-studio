@@ -8,6 +8,7 @@ export interface CommentRepository {
   create(comment: NewComment): Promise<Comment>;
   findById(projectId: string, id: string): Promise<Comment | null>;
   setResolved(projectId: string, id: string, resolved: boolean): Promise<Comment | null>;
+  setBody(projectId: string, id: string, body: string): Promise<void>;
   delete(projectId: string, id: string): Promise<void>;
   addReply(commentId: string, authorId: string, body: string): Promise<Reply>;
   deleteReply(commentId: string, replyId: string): Promise<void>;

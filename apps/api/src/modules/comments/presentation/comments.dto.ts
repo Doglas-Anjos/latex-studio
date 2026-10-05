@@ -57,7 +57,15 @@ export class ReplyDto {
   body!: string;
 }
 
-export class ResolveCommentDto {
+/** Resolve/reopen, edit the text, or both. */
+export class UpdateCommentDto {
+  @IsOptional()
   @IsBoolean()
-  resolved!: boolean;
+  resolved?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(5000)
+  body?: string;
 }

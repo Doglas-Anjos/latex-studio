@@ -21,7 +21,7 @@ import type { User } from '../../users/domain/user';
 import { CommentsService } from '../application/comments.service';
 import type { Comment, Reply } from '../domain/comment';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
-import { CreateCommentDto, ReplyDto, ResolveCommentDto } from './comments.dto';
+import { CreateCommentDto, ReplyDto, UpdateCommentDto } from './comments.dto';
 
 @Controller('projects/:projectId/comments')
 export class CommentsController {
@@ -49,12 +49,13 @@ export class CommentsController {
 
   @Patch(':id')
   @RequireProjectRole('reviewer')
-  setResolved(
+  update(
     @CurrentProject() project: Project,
+    @CurrentUser() user: User,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ResolveCommentDto,
+    @Body() dto: UpdateCommentDto,
   ): Promise<Comment> {
-    return this.comments.setResolved(project, id, dto.resolved);
+    return this.comments.update(project, user, id, dto);
   }
 
   @Delete(':id')

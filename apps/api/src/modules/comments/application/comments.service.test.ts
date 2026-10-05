@@ -43,6 +43,10 @@ class FakeComments implements CommentRepository {
   async findById(_projectId: string, id: string) {
     return this.rows.find((c) => c.id === id) ?? null;
   }
+  async setBody(_projectId: string, id: string, body: string) {
+    const row = this.rows.find((c) => c.id === id);
+    if (row) row.body = body;
+  }
   async setResolved(_projectId: string, id: string, resolved: boolean) {
     const row = this.rows.find((c) => c.id === id);
     if (row) row.resolved = resolved;
@@ -94,6 +98,16 @@ describe('CommentsService', () => {
     expect((await service.setResolved(project, comment.id, true)).resolved).toBe(true);
     expect(await service.list(project, 'main.tex', false)).toHaveLength(0);
     expect((await service.setResolved(project, comment.id, false)).resolved).toBe(false);
+  });
+
+  it('lets only the author edit the text; anyone resolves', async () => {
+    const service = setup();
+    const own = await service.create(project, reviewer, input);
+    expect((await service.update(project, reviewer, own.id, { body: ' novo ' })).body).toBe('novo');
+    await expect(service.update(project, editor, own.id, { body: 'x' })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect((await service.update(project, editor, own.id, { resolved: true })).resolved).toBe(true);
   });
 
   it('lets the author or the owner delete, but not another editor', async () => {

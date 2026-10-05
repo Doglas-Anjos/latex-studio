@@ -87,6 +87,12 @@ export function ProjectPage() {
   // A comment started from the editor (contextual action, margin button or
   // shortcut) always lands in the comments panel, even over another sidebar
   // view or a sidebar collapsed on mobile.
+  const commentFocus = useWorkspaceStore((s) => s.commentFocus);
+  useEffect(() => {
+    if (!commentFocus) return;
+    setSettings({ sidebarView: 'comments' });
+    setSidebarOpen(true);
+  }, [commentFocus, setSidebarOpen, setSettings]);
   const commentDraft = useWorkspaceStore((s) => s.commentDraft);
   useEffect(() => {
     if (!commentDraft) return;

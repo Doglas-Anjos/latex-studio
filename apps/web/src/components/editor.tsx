@@ -29,6 +29,7 @@ import {
 } from '../workspace-store';
 import { Button } from './button';
 import { commentGutter } from './comment-gutter';
+import { CommentMenu } from './comment-menu';
 import { blameGutter, blameVisible, setBlame } from './editor-blame';
 import { changeGutter, DIFF_LIMITS, setChangeBase } from './editor-changes';
 import {
@@ -606,6 +607,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
         </p>
       )}
       <div ref={host} className="editor-host" data-blame={activeBlame ? '' : undefined} />
+      <CommentMenu projectId={projectId} role={role} comments={data ?? []} />
       {canComment && icon !== null && (
         <button
           type="button"

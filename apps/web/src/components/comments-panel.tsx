@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMe } from '../auth-hooks';
 import { SCOPE_LABELS } from '../comment-scope';
 import { useService } from '../di/service-provider';
@@ -35,6 +35,9 @@ export function CommentsPanel({
   const [body, setBody] = useState('');
   const [staleError, setStaleError] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const focus = useWorkspaceStore((s) => s.commentFocus);
   const canComment = role !== 'viewer';
   const { data = [] } = useQuery({
     queryKey: ['comments', projectId, path, showResolved],
@@ -46,6 +49,19 @@ export function CommentsPanel({
   });
   const canDelete = (authorId: string | undefined) =>
     role === 'owner' || (!!me && me.id === authorId);
+  const canEdit = (authorId: string | undefined) => canComment && !!me && me.id === authorId;
+
+  // Double click / "Editar" in the editor: bring that comment into view, highlighted.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs per focus request, once the list is in
+  useEffect(() => {
+    if (!focus) return;
+    const target = data.find((c) => c.id === focus.id);
+    if (!target) return;
+    listRef.current
+      ?.querySelector(`[data-comment-id="${CSS.escape(focus.id)}"]`)
+      ?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    if (focus.edit && canEdit(target.author?.id)) setEditing({ id: target.id, text: target.body });
+  }, [focus, data.length]);
 
   // A new draft (even for the same scope) is a fresh attempt: drop any earlier staleness notice.
   // biome-ignore lint/correctness/useExhaustiveDependencies: `draft` is the trigger, not read here.
@@ -158,17 +174,58 @@ export function CommentsPanel({
         />
         Mostrar resolvidos
       </label>
-      <ul className="comment-list">
+      <ul className="comment-list" ref={listRef}>
         {data.map((c) => (
           <li
             key={c.id}
+            data-comment-id={c.id}
             className={`comment${c.id === activeId ? ' comment-active' : ''}${c.resolved ? ' comment-done' : ''}`}
           >
             <button type="button" className="comment-head" onClick={() => reveal(c.id)}>
               <strong>{who(c.author)}</strong>
               <blockquote className="comment-quote">{c.quote}</blockquote>
             </button>
-            <p className="comment-body">{c.body}</p>
+            {editing?.id === c.id ? (
+              <form
+                className="comment-edit"
+                onSubmit={(ev) => {
+                  ev.preventDefault();
+                  const text = editing.text.trim();
+                  if (!text) return;
+                  run.mutate(() => service.edit(projectId, c.id, text), {
+                    onSuccess: () => setEditing(null),
+                  });
+                }}
+              >
+                <textarea
+                  aria-label="Editar comentário"
+                  rows={3}
+                  maxLength={4000}
+                  // biome-ignore lint/a11y/noAutofocus: the user just asked to edit this comment
+                  autoFocus
+                  value={editing.text}
+                  onChange={(ev) => setEditing({ id: c.id, text: ev.target.value })}
+                  onKeyDown={(ev) => {
+                    if (ev.key === 'Escape') setEditing(null);
+                  }}
+                />
+                <div className="comment-actions">
+                  <Button
+                    variant="primary"
+                    size="compact"
+                    type="submit"
+                    disabled={!editing.text.trim()}
+                  >
+                    Salvar
+                  </Button>
+                  <Button variant="ghost" size="compact" onClick={() => setEditing(null)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <p className="comment-body">{c.body}</p>
+            )}
             <ul className="comment-replies">
               {c.replies.map((r) => (
                 <li key={r.id}>
@@ -214,6 +271,11 @@ export function CommentsPanel({
                   }
                 >
                   {c.resolved ? 'Reabrir' : 'Resolver'}
+                </Button>
+              )}
+              {canEdit(c.author?.id) && editing?.id !== c.id && (
+                <Button variant="ghost" onClick={() => setEditing({ id: c.id, text: c.body })}>
+                  Editar
                 </Button>
               )}
               {canDelete(c.author?.id) && (

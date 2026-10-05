@@ -41,6 +41,8 @@ export interface CommentService {
   list(projectId: string, path: string, includeResolved: boolean): Promise<Comment[]>;
   create(projectId: string, input: NewComment): Promise<Comment>;
   setResolved(projectId: string, id: string, resolved: boolean): Promise<Comment>;
+  /** Rewrites the text; only the author may. */
+  edit(projectId: string, id: string, body: string): Promise<Comment>;
   remove(projectId: string, id: string): Promise<void>;
   reply(projectId: string, id: string, body: string): Promise<Reply>;
   removeReply(projectId: string, id: string, replyId: string): Promise<void>;
@@ -63,6 +65,10 @@ export class HttpCommentService implements CommentService {
 
   setResolved(projectId: string, id: string, resolved: boolean) {
     return this.api.patch<Comment>(`/projects/${projectId}/comments/${id}`, { resolved });
+  }
+
+  edit(projectId: string, id: string, body: string) {
+    return this.api.patch<Comment>(`/projects/${projectId}/comments/${id}`, { body });
   }
 
   remove(projectId: string, id: string) {

@@ -3217,3 +3217,52 @@ button.log-row:hover {
   min-width: 16rem;
   max-width: 95vw;
 }
+
+/* Comment right-click menu and inline edit */
+.comment-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 11rem;
+  padding: 0.3rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 18%, transparent);
+  font-size: 0.85rem;
+}
+.comment-menu button {
+  display: block;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.comment-menu button:hover,
+.comment-menu button:focus-visible {
+  background: color-mix(in srgb, var(--line) 50%, transparent);
+}
+.comment-menu .danger {
+  color: var(--danger);
+}
+.comment-edit {
+  display: grid;
+  gap: 0.4rem;
+}
+.comment-edit textarea {
+  width: 100%;
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--focus);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.comment-active {
+  outline: 2px solid var(--focus);
+  outline-offset: -1px;
+}

@@ -33,5 +33,15 @@ const language = latexLanguage.configure({ props: [argumentStyles] });
 
 /** `latex()` with argument-aware highlighting; completion and auto-close stay the stock ones. */
 export function latexSupport(): LanguageSupport {
-  return new LanguageSupport(language, latex().support);
+  // Multi-file projects: a chapter has no \begin{document}, and its \ref/\cite targets live in
+  // other files, so those checks only produce false alarms; the compiler reports the real ones.
+  const support = latex({
+    linter: {
+      checkMissingDocumentEnv: false,
+      checkMissingReferences: false,
+      checkCitesWithoutBibliography: false,
+      checkMissingPackages: false,
+    },
+  }).support;
+  return new LanguageSupport(language, support);
 }

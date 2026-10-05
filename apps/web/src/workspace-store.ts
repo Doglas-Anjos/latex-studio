@@ -96,6 +96,12 @@ interface WorkspaceState {
   setActiveComment: (id: string | null) => void;
   /** Mark a comment active and scroll the editor to it. */
   revealComment: (id: string) => void;
+  /** Open the comments panel on a comment (double click); `edit` opens its text for editing. */
+  commentFocus: { id: string; edit: boolean; at: number } | null;
+  focusComment: (id: string, edit?: boolean) => void;
+  /** Right-click menu on a comment highlight, in viewport coordinates. */
+  commentMenu: { id: string; x: number; y: number } | null;
+  setCommentMenu: (menu: { id: string; x: number; y: number } | null) => void;
 }
 
 /** Tab list + active ids after opening a tab; activePath follows an active file tab. */
@@ -121,6 +127,8 @@ const initial = {
   checkCommentAnchor: null,
   activeCommentId: null,
   commentJump: null,
+  commentFocus: null,
+  commentMenu: null,
 } satisfies Partial<WorkspaceState>;
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -174,4 +182,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   clearPendingLine: () => set({ pendingLine: null }),
   setActiveComment: (activeCommentId) => set({ activeCommentId }),
   revealComment: (id) => set({ activeCommentId: id, commentJump: { id } }),
+  focusComment: (id, edit = false) =>
+    set({ activeCommentId: id, commentMenu: null, commentFocus: { id, edit, at: Date.now() } }),
+  setCommentMenu: (commentMenu) => set({ commentMenu }),
 }));
