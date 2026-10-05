@@ -56,7 +56,8 @@ describe('FileTree', () => {
       <FileTree projectId="p1" canEdit={false} mainFile="main.tex" />,
       new Container().register(FileServiceToken, fake()).register(HistoryServiceToken, history()),
     );
-    expect(await screen.findByRole('button', { name: /chapters/ })).toBeTruthy();
+    // First render of the file pays the cold imports; the default 1 s fails under the full suite.
+    expect(await screen.findByRole('button', { name: /chapters/ }, { timeout: 5000 })).toBeTruthy();
     await userEvent.click(await screen.findByRole('button', { name: 'intro.tex' }));
     expect(useWorkspaceStore.getState().activePath).toBe('chapters/intro.tex');
   });
