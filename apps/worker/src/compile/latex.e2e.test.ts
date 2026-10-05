@@ -174,7 +174,9 @@ describe.skipIf(!latexmkAvailable)('LaTeX compile regressions', () => {
     // Live 2026 does not, MiKTeX does); when it does, it must land in warnings. The parser's unit
     // test pins the classification itself.
     if (!r.log.includes('Infinite glue shrinkage')) return;
-    expect(r.warnings).toContainEqual(
+    const raw = r.log.split('
+').filter((l) => l.includes('Infinite glue')).slice(0, 3);
+    expect(r.warnings, `raw log lines: ${JSON.stringify(raw)}`).toContainEqual(
       expect.objectContaining({
         message: expect.stringContaining('Infinite glue shrinkage found in box being split'),
       }),
