@@ -16,4 +16,11 @@ export interface DocumentSync {
    * still in-flight store cannot be trusted to be current). A no-op only when the doc is not open.
    */
   flush(projectId: string, path: string): Promise<void>;
+  /** `flush` for every open doc of the project (full commit, compile). */
+  flushProject(projectId: string): Promise<void>;
+  /**
+   * Closes the project's doc connections of `userId`, or of everyone when omitted, so access is
+   * re-checked (and `readOnly` re-decided) by `onAuthenticate` when the client reconnects.
+   */
+  revoke(projectId: string, userId?: string): void;
 }

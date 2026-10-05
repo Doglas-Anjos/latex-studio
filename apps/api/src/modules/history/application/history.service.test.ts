@@ -68,6 +68,15 @@ describe('HistoryService', () => {
     expect(await service.log(project)).toHaveLength(3);
   });
 
+  it('flushes every open doc before a full commit, not before a path commit', async () => {
+    await storage.open(project.id).write('a.tex', 'one');
+    await service.commit(project, ana, 'v1');
+    expect(sync.calls).toEqual(['flushProject']);
+    await storage.open(project.id).write('a.tex', 'two-longer');
+    await service.commit(project, ana, 'v2', ['a.tex']);
+    expect(sync.calls).toEqual(['flushProject', 'flush a.tex']);
+  });
+
   it('reports status against the last named commit and blames uncommitted lines', async () => {
     const files = storage.open(project.id);
     await files.write('a.tex', 'one\n');

@@ -1,3 +1,4 @@
+import { extname } from 'node:path/posix';
 import { APP_CONFIG, type AppConfig } from '@latex-studio/core';
 import {
   BadRequestException,
@@ -6,6 +7,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { TEXT_EXTENSIONS } from '../../collab/application/collab.service';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import {
   assertQuota,
@@ -167,6 +169,12 @@ export class FilesService {
       }
       if (written.size === 0) throw new BadRequestException('No files uploaded');
       await files.repo.commitAll(`Upload ${written.size} files`, author(user));
+      // An open doc (or its saved state) would otherwise write the old text back over the upload.
+      for (const path of written) {
+        if (!TEXT_EXTENSIONS.has(extname(path).toLowerCase())) continue;
+        const text = Buffer.from(await files.repo.readFile(path)).toString('utf8');
+        await this.sync.replaceText(project.id, path, text);
+      }
       return [...written];
     });
   }

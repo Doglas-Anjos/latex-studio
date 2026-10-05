@@ -6,6 +6,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { AuditService } from '../../audit/audit.service';
+import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import type { Project, ProjectRole } from '../../projects/domain/project';
 import {
   type Member,
@@ -19,6 +20,7 @@ export class MembersService {
   constructor(
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
+    @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
     @Optional() @Inject(AuditService) private readonly audit?: AuditService,
   ) {}
 
@@ -51,12 +53,15 @@ export class MembersService {
       throw new NotFoundException('Not a member');
     }
     await this.projects.setMember(project.id, userId, role);
+    // Open sockets keep the role decided at connect time; reconnecting picks up the new one.
+    this.sync.revoke(project.id, userId);
     return this.list(project);
   }
 
   async remove(project: Project, actorId: string, userId: string): Promise<void> {
     if (userId === project.ownerId) throw new BadRequestException('The owner cannot be removed');
     await this.projects.removeMember(project.id, userId);
+    this.sync.revoke(project.id, userId);
     await this.audit?.record(actorId, 'member.remove', project.id, { userId });
   }
 }

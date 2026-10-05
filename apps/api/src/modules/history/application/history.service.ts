@@ -94,6 +94,7 @@ export class HistoryService {
     for (const path of paths ?? []) checkPath(files, path);
     return this.lock.run(project.id, async () => {
       if (!paths) {
+        await this.sync.flushProject(project.id);
         const sha = await files.repo.commitAll(message, author(user));
         if (!sha) throw new ConflictException('Nothing to commit');
         return { sha };

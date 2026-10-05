@@ -139,4 +139,38 @@ describe('HocuspocusDocumentSync', () => {
     expect(saved.has('p/main.tex')).toBe(true);
     expect(dirty).toEqual(['p']);
   });
+
+  it('flushProject flushes only the open docs of that project', async () => {
+    const { hocuspocus, sync, written } = setup();
+    for (const name of ['p/a.tex', 'p/sub/b.tex', 'q/c.tex']) {
+      const doc = new Document(name);
+      doc.getText('content').insert(0, name);
+      hocuspocus.documents.set(name, doc);
+    }
+    await sync.flushProject('p');
+    expect([...written.keys()].sort()).toEqual(['p/a.tex', 'p/sub/b.tex']);
+  });
+
+  it('revoke closes the matching user connections on that project only', () => {
+    const { hocuspocus, sync } = setup();
+    const closed: string[] = [];
+    const open = (name: string, userId: string) => {
+      const doc = hocuspocus.documents.get(name) ?? new Document(name);
+      hocuspocus.documents.set(name, doc);
+      const connection = {
+        context: { user: { id: userId } },
+        close: () => void closed.push(`${name} ${userId}`),
+      };
+      doc.connections.set(connection as never, { clients: new Set() });
+    };
+    open('p/a.tex', 'ana');
+    open('p/a.tex', 'bob');
+    open('q/a.tex', 'ana');
+
+    sync.revoke('p', 'ana');
+    expect(closed).toEqual(['p/a.tex ana']);
+    closed.length = 0;
+    sync.revoke('p');
+    expect(closed).toEqual(['p/a.tex ana', 'p/a.tex bob']);
+  });
 });

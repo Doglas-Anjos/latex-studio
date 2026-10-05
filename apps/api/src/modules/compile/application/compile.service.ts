@@ -16,6 +16,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import type { Queue } from 'bullmq';
+import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
+import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
 import type { User } from '../../users/domain/user';
 import { BUILD_REPOSITORY, type Build, type BuildRepository } from '../domain/build.repository';
@@ -39,6 +41,8 @@ export class CompileService {
     @Inject(BUILD_REPOSITORY) private readonly builds: BuildRepository,
     @InjectQueue(COMPILE_QUEUE) private readonly queue: CompileQueue,
     @Inject(APP_CONFIG) config: AppConfig,
+    @Inject(ProjectLock) private readonly lock: ProjectLock,
+    @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
   ) {
     this.buildsDir = new SafePath(config.BUILDS_DIR);
     this.staleAfterMs = config.COMPILE_TIMEOUT_MS + STALE_BUILD_BUFFER_MS;
@@ -52,33 +56,38 @@ export class CompileService {
   /**
    * One build at a time per project: while one is queued or running the caller must stop it
    * first (409). A stale one (orphaned job, crashed worker) is failed and replaced instead.
+   * Open docs are flushed first under the project lock, so the build sees the last seconds of
+   * typing that the 2-10s store debounce has not written yet.
    */
-  async request(project: Project, user: User, options: BuildOptions = {}): Promise<Build> {
-    const active = await this.builds.findActive(project.id);
-    if (active && this.isStale(active)) {
-      await this.builds.failStale(active.id, 'Compilação interrompida: o processo não respondeu');
-    } else if (active) {
-      throw new ConflictException('Já há uma compilação em andamento; pare-a para iniciar outra');
-    }
-    if ((await this.builds.countQueuedForUser(user.id)) >= MAX_QUEUED_PER_USER) {
-      throw new HttpException(
-        `At most ${MAX_QUEUED_PER_USER} queued builds per user`,
-        HttpStatus.TOO_MANY_REQUESTS,
+  request(project: Project, user: User, options: BuildOptions = {}): Promise<Build> {
+    return this.lock.run(project.id, async () => {
+      await this.sync.flushProject(project.id);
+      const active = await this.builds.findActive(project.id);
+      if (active && this.isStale(active)) {
+        await this.builds.failStale(active.id, 'Compilação interrompida: o processo não respondeu');
+      } else if (active) {
+        throw new ConflictException('Já há uma compilação em andamento; pare-a para iniciar outra');
+      }
+      if ((await this.builds.countQueuedForUser(user.id)) >= MAX_QUEUED_PER_USER) {
+        throw new HttpException(
+          `At most ${MAX_QUEUED_PER_USER} queued builds per user`,
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
+      }
+      const build = await this.builds.create({
+        projectId: project.id,
+        requestedBy: user.id,
+        engine: project.engine,
+        mainFile: project.mainFile,
+        options,
+      });
+      await this.queue.add(
+        'compile',
+        { buildId: build.id, projectId: project.id },
+        { jobId: build.id, removeOnComplete: true, removeOnFail: true },
       );
-    }
-    const build = await this.builds.create({
-      projectId: project.id,
-      requestedBy: user.id,
-      engine: project.engine,
-      mainFile: project.mainFile,
-      options,
+      return build;
     });
-    await this.queue.add(
-      'compile',
-      { buildId: build.id, projectId: project.id },
-      { jobId: build.id, removeOnComplete: true, removeOnFail: true },
-    );
-    return build;
   }
 
   /** Stops a queued (dropped from the queue) or running (the worker kills latexmk) build. */

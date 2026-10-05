@@ -65,6 +65,6 @@ export class FakeProjects implements ProjectRepository {
     this.edits.push({ projectId, path, userId });
   }
   async markDirty(id: string) {
-    if (!this.dirtySince.has(id)) this.dirtySince.set(id, new Date());
+    this.dirtySince.set(id, new Date());
   }
 }

@@ -1,5 +1,5 @@
 import type { Hocuspocus } from '@hocuspocus/server';
-import { type BeforeApplicationShutdown, Inject, Module } from '@nestjs/common';
+import { type BeforeApplicationShutdown, forwardRef, Inject, Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { ProjectsModule } from '../projects/projects.module';
 import { CollabService } from './application/collab.service';
@@ -10,7 +10,7 @@ import { createHocuspocus, HOCUSPOCUS } from './infrastructure/hocuspocus.server
 import { HocuspocusDocumentSync } from './infrastructure/hocuspocus-document-sync';
 
 @Module({
-  imports: [AuthModule, ProjectsModule],
+  imports: [AuthModule, forwardRef(() => ProjectsModule)],
   providers: [
     CollabService,
     { provide: YJS_DOC_REPOSITORY, useClass: DrizzleYjsDocRepository },

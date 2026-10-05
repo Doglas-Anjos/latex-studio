@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import type { AppConfig } from '@latex-studio/core';
 import { HttpException } from '@nestjs/common';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
+import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
 import type { User } from '../../users/domain/user';
 import type { Build, BuildRepository, NewBuild } from '../domain/build.repository';
@@ -85,8 +87,10 @@ describe('CompileService.request', () => {
   let added: Array<{ name: string; data: unknown; opts: unknown }>;
   let removed: string[];
   let service: CompileService;
+  let sync: FakeDocumentSync;
 
   beforeEach(() => {
+    sync = new FakeDocumentSync();
     builds = new FakeBuilds();
     added = [];
     removed = [];
@@ -100,10 +104,27 @@ describe('CompileService.request', () => {
         return 1;
       },
     } as unknown as CompileQueue;
-    service = new CompileService(builds, queue, {
-      BUILDS_DIR: '/builds',
-      COMPILE_TIMEOUT_MS: 180_000,
-    } as AppConfig);
+    service = new CompileService(
+      builds,
+      queue,
+      {
+        BUILDS_DIR: '/builds',
+        COMPILE_TIMEOUT_MS: 180_000,
+      } as AppConfig,
+      new ProjectLock(),
+      sync,
+    );
+  });
+
+  it('flushes open docs before creating the build', async () => {
+    let flushedBeforeCreate = false;
+    const create = builds.create.bind(builds);
+    builds.create = async (b) => {
+      flushedBeforeCreate = sync.calls.includes('flushProject');
+      return create(b);
+    };
+    await service.request(project(), ana);
+    expect(flushedBeforeCreate).toBe(true);
   });
 
   it('creates a queued build and enqueues it with jobId = buildId', async () => {

@@ -1,7 +1,7 @@
 import { DATABASE, type Database } from '@latex-studio/core';
 import { fileEdits, projectMembers, projects, users } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, getTableColumns, isNull, sql } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, sql } from 'drizzle-orm';
 import type { Project, ProjectRole, ProjectWithRole } from '../domain/project';
 import type {
   Member,
@@ -98,10 +98,7 @@ export class DrizzleProjectRepository implements ProjectRepository {
   }
 
   async markDirty(id: string): Promise<void> {
-    await this.db
-      .update(projects)
-      .set({ dirtySince: sql`now()` })
-      .where(and(eq(projects.id, id), isNull(projects.dirtySince)));
+    await this.db.update(projects).set({ dirtySince: sql`now()` }).where(eq(projects.id, id));
   }
 
   async recordEdit(projectId: string, path: string, userId: string): Promise<void> {

@@ -60,7 +60,7 @@ export class CompileController {
   }
 
   @Post('builds/:buildId/cancel')
-  @RequireProjectRole('viewer')
+  @RequireProjectRole('editor')
   @HttpCode(200)
   cancel(
     @CurrentProject() project: Project,

@@ -17,6 +17,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import { AuditService } from '../../audit/audit.service';
+import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import type { User } from '../../users/domain/user';
 import {
   type Project,
@@ -64,6 +65,8 @@ export class ProjectsService {
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Optional() @Inject(AuditService) private readonly audit?: AuditService,
+    // Optional only so tests that never delete can skip it; CollabModule always provides it.
+    @Optional() @Inject(DOCUMENT_SYNC) private readonly sync?: DocumentSync,
   ) {}
 
   create(owner: User, name: string): Promise<Project> {
@@ -172,6 +175,7 @@ export class ProjectsService {
       throw new ForbiddenException('Only the owner can delete a project');
     }
     await this.projects.delete(project.id);
+    this.sync?.revoke(project.id);
     await this.storage.remove(project.id);
     await this.audit?.record(user.id, 'project.delete', project.id, { name: project.name });
   }

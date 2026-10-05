@@ -20,7 +20,7 @@ import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/proj
 import type { User } from '../../users/domain/user';
 import { YJS_DOC_REPOSITORY, type YjsDocRepository } from '../domain/yjs-doc.repository';
 
-const TEXT_EXTENSIONS = new Set(['.tex', '.bib', '.sty', '.cls', '.txt', '.md', '.json']);
+export const TEXT_EXTENSIONS = new Set(['.tex', '.bib', '.sty', '.cls', '.txt', '.md', '.json']);
 const EDIT_THROTTLE_MS = 10_000;
 
 export interface CollabSession {

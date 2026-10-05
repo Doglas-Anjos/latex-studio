@@ -27,6 +27,7 @@ describe('ProjectsService', () => {
   let storage: FsProjectStorage;
   let service: ProjectsService;
   let filesService: FilesService;
+  let sync: FakeDocumentSync;
   const ana = user('00000000-0000-4000-8000-000000000001', 'Ana');
   const bob = user('00000000-0000-4000-8000-000000000002', 'Bob');
 
@@ -41,7 +42,8 @@ describe('ProjectsService', () => {
     const lock = new ProjectLock();
     projects = new FakeProjects();
     storage = new FsProjectStorage(config);
-    service = new ProjectsService(projects, storage, lock, config);
+    sync = new FakeDocumentSync();
+    service = new ProjectsService(projects, storage, lock, config, undefined, sync);
     filesService = new FilesService(storage, lock, config, new FakeDocumentSync());
   });
 
@@ -73,7 +75,9 @@ describe('ProjectsService', () => {
     expect(existsSync(join(dir, project.id))).toBe(true);
 
     await mkdir(join(dir, 'builds', project.id, 'b1'), { recursive: true });
+    expect(sync.calls).toEqual([]);
     await service.remove(project, ana);
+    expect(sync.calls).toEqual(['revoke all']);
     expect(projects.rows).toHaveLength(0);
     expect(existsSync(join(dir, project.id))).toBe(false);
     expect(existsSync(join(dir, 'builds', project.id))).toBe(false);

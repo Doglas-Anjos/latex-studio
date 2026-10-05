@@ -6,9 +6,13 @@ import {
   type ProjectRepository,
 } from '../../projects/domain/project.repository';
 import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/project-storage';
+import type { CollabSession } from '../application/collab.service';
 import type { DocumentSync } from '../domain/document-sync';
 import { YJS_DOC_REPOSITORY, type YjsDocRepository } from '../domain/yjs-doc.repository';
 import { HOCUSPOCUS } from './hocuspocus.server';
+
+/** `ResetConnection` from @hocuspocus/common, as `closeConnections` sends it. */
+const RESET = { code: 4205, reason: 'Reset Connection' };
 
 const isHigh = (s: string, i: number) => /[\uD800-\uDBFF]/.test(s[i] ?? '');
 const isLow = (s: string, i: number) => /[\uDC00-\uDFFF]/.test(s[i] ?? '');
@@ -87,6 +91,25 @@ export class HocuspocusDocumentSync implements DocumentSync {
     await this.docs.save(projectId, path, state);
     await this.storage.open(projectId).write(path, text);
     await this.projects.markDirty(projectId);
+  }
+
+  async flushProject(projectId: string): Promise<void> {
+    for (const name of [...this.hocuspocus.documents.keys()]) {
+      if (name.startsWith(`${projectId}/`)) {
+        await this.flush(projectId, name.slice(projectId.length + 1));
+      }
+    }
+  }
+
+  revoke(projectId: string, userId?: string): void {
+    for (const [name, doc] of this.hocuspocus.documents) {
+      if (!name.startsWith(`${projectId}/`)) continue;
+      for (const connection of doc.getConnections()) {
+        if (!userId || (connection.context as CollabSession | undefined)?.user?.id === userId) {
+          connection.close(RESET);
+        }
+      }
+    }
   }
 
   async forget(projectId: string, path: string): Promise<void> {

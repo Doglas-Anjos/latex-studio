@@ -1,5 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
 import type { Project } from '../../projects/domain/project';
 import { FakeProjects } from '../../projects/testing/fake-project.repository';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
@@ -11,11 +12,13 @@ describe('MembersService', () => {
   let service: MembersService;
   let project: Project;
   let anaId: string;
+  let sync: FakeDocumentSync;
 
   beforeEach(async () => {
     projects = new FakeProjects();
     users = new FakeUsers();
-    service = new MembersService(projects, users);
+    sync = new FakeDocumentSync();
+    service = new MembersService(projects, users, sync);
     project = await projects.create({ id: 'p1', name: 'P' }, 'owner-1');
     const ana = await users.upsert({
       issuer: 'i',
@@ -47,6 +50,8 @@ describe('MembersService', () => {
     expect(await projects.roleOf('p1', anaId)).toBe('editor');
     await service.remove(project, 'owner-1', anaId);
     expect(await projects.roleOf('p1', anaId)).toBeNull();
+    // Both close Ana's open doc sockets, so the new role (or no access) applies on reconnect.
+    expect(sync.calls).toEqual([`revoke ${anaId}`, `revoke ${anaId}`]);
     await expect(service.remove(project, 'owner-1', 'owner-1')).rejects.toThrow(
       BadRequestException,
     );
