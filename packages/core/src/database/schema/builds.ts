@@ -19,7 +19,11 @@ export const buildStatus = pgEnum('build_status', [
   'succeeded',
   'failed',
   'timeout',
+  'cancelled',
 ]);
+
+/** Per-build compile options chosen by the requester. */
+export type BuildOptions = { draft?: boolean; haltOnError?: boolean };
 
 export type LogEntry = { file?: string; line?: number; message: string };
 
@@ -39,6 +43,9 @@ export const builds = pgTable(
     exitCode: integer('exit_code'),
     errors: jsonb('errors').$type<LogEntry[]>().notNull().default([]),
     warnings: jsonb('warnings').$type<LogEntry[]>().notNull().default([]),
+    /** Over/underfull boxes and other typographic notes. */
+    info: jsonb('info').$type<LogEntry[]>().notNull().default([]),
+    options: jsonb('options').$type<BuildOptions>().notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     startedAt: timestamp('started_at', { withTimezone: true }),
     finishedAt: timestamp('finished_at', { withTimezone: true }),

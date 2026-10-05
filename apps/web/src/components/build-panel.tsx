@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Archive,
+  Ban,
+  Check,
   ChevronDown,
   ChevronUp,
   CircleCheck,
@@ -10,9 +12,12 @@ import {
   FileText,
   GitBranch,
   Hash,
+  Info,
   Loader2,
+  Square,
   TriangleAlert,
 } from 'lucide-react';
+import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
 import {
@@ -39,6 +44,7 @@ const statusText = {
   succeeded: 'Compilado com sucesso',
   failed: 'Falhou',
   timeout: 'Tempo esgotado',
+  cancelled: 'Cancelada',
 };
 
 const statusIcons: Record<Build['status'], typeof CircleCheck> = {
@@ -47,6 +53,7 @@ const statusIcons: Record<Build['status'], typeof CircleCheck> = {
   succeeded: CircleCheck,
   failed: CircleX,
   timeout: CircleX,
+  cancelled: Ban,
 };
 
 const exportLabels: [ExportFormat, string][] = [
@@ -127,13 +134,46 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   };
   const nErrors = build?.errors.length ?? 0;
   const nWarnings = build?.warnings.length ?? 0;
+  const nInfo = build?.info?.length ?? 0;
+  const autoCompile = useSettingsStore((s) => s.autoCompile);
+  const draftMode = useSettingsStore((s) => s.draftMode);
+  const stopOnFirstError = useSettingsStore((s) => s.stopOnFirstError);
   const failureNote = build ? unexplainedFailure(build) : null;
   const groups = build ? groupByFile(build, filter) : [];
   const start = useMutation({
-    mutationFn: () => compile.compile(projectId),
+    mutationFn: () =>
+      compile.compile(projectId, { draft: draftMode, haltOnError: stopOnFirstError }),
     onSuccess: (b) => queryClient.setQueryData(['builds', projectId], [b, ...(builds ?? [])]),
     onError: showPanel,
   });
+  const stop = useMutation({
+    mutationFn: (buildId: string) => compile.cancel(projectId, buildId),
+    onSuccess: (b) =>
+      queryClient.setQueryData<Build[]>(['builds', projectId], (prev) =>
+        (prev ?? []).map((x) => (x.id === b.id ? b : x)),
+      ),
+    onError: showPanel,
+  });
+  // Auto compile: the editor bumps wordCount on every change; 3 s after the last one, compile
+  // unless a build is already in flight.
+  const wordCount = useWorkspaceStore((s) => s.wordCount);
+  const armed = useRef(false);
+  useEffect(() => {
+    if (!autoCompile || !canCompile) {
+      armed.current = false;
+      return;
+    }
+    if (!armed.current) {
+      armed.current = true; // the first value is the document loading, not an edit
+      return;
+    }
+    const id = window.setTimeout(() => {
+      const latest = queryClient.getQueryData<Build[]>(['builds', projectId])?.[0];
+      if (!isActive(latest)) start.mutate();
+    }, 3000);
+    return () => window.clearTimeout(id);
+    // biome-ignore lint/correctness/useExhaustiveDependencies: wordCount is the edit signal
+  }, [wordCount, autoCompile, canCompile]);
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => projects.get(projectId),
@@ -152,29 +192,15 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   // decides when to stop blocking the button on a build that looks orphaned.
   const stuck = isStale(build);
   const engineUnconfirmed = !project || setEngine.isPending;
-  // The most recent build may target an engine the project no longer uses (the user switched it
-  // after that build started). A running build like that never blocks a new one: the API queues
-  // the new engine behind it. A queued one does block, because the API rejects it with a 409
-  // instead of silently retargeting or stacking it — so the honest reason is "already queued for
-  // the old engine", not "compiling".
-  const engineChanged = !!build && !!project && build.engine !== project.engine;
-  const queuedConflict = build?.status === 'queued' && engineChanged;
-  const compileDisabled =
-    !canCompile ||
-    start.isPending ||
-    engineUnconfirmed ||
-    (isActive(build) && !stuck && (!engineChanged || queuedConflict));
+  const running = isActive(build) && !stuck;
+  const compileDisabled = !canCompile || start.isPending || engineUnconfirmed;
   const compileTitle = !canCompile
     ? 'Você não tem permissão para compilar este projeto'
     : engineUnconfirmed
       ? 'Aguarde: salvando o motor LaTeX escolhido'
       : stuck && build
         ? `Sem resposta há ${elapsedSeconds(build)}s; clique para tentar novamente`
-        : queuedConflict && build
-          ? `Uma compilação com ${engineLabels[build.engine as Project['engine']]} já está na fila; aguarde terminar para compilar com ${engineLabels[project?.engine ?? 'pdflatex']}`
-          : build && isActive(build) && !engineChanged
-            ? `Aguarde: ${statusText[build.status]} (${elapsedSeconds(build)}s)`
-            : undefined;
+        : undefined;
 
   const waitFor = <T,>(jobId: string) => waitForJob<T>(tools, projectId, jobId);
   const [formatProgress, setFormatProgress] = useState('');
@@ -243,15 +269,86 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   return (
     <section className="build-panel" aria-label="Compilação">
       <div className="build-bar">
-        <Button
-          variant="primary"
-          size="compact"
-          disabled={compileDisabled}
-          title={compileTitle}
-          onClick={() => start.mutate()}
-        >
-          {stuck ? 'Tentar novamente' : 'Compilar'}
-        </Button>
+        {running && build ? (
+          <Button
+            variant="danger"
+            size="compact"
+            disabled={stop.isPending}
+            title="Parar a compilação em andamento"
+            onClick={() => stop.mutate(build.id)}
+          >
+            <Square size={12} aria-hidden="true" /> Parar
+          </Button>
+        ) : (
+          <Button
+            variant="primary"
+            size="compact"
+            disabled={compileDisabled}
+            title={compileTitle}
+            onClick={() => start.mutate()}
+          >
+            {stuck ? 'Tentar novamente' : 'Compilar'}
+          </Button>
+        )}
+        <details className="menu compile-menu">
+          <summary
+            className="icon-btn"
+            aria-label="Opções de compilação"
+            title="Opções de compilação"
+          >
+            <ChevronDown size={16} aria-hidden="true" />
+          </summary>
+          <div className="compile-menu-body" role="menu">
+            <MenuGroup label="Compilação automática">
+              <MenuChoice checked={autoCompile} onPick={() => setSettings({ autoCompile: true })}>
+                Ligada
+              </MenuChoice>
+              <MenuChoice checked={!autoCompile} onPick={() => setSettings({ autoCompile: false })}>
+                Desligada
+              </MenuChoice>
+            </MenuGroup>
+            <MenuGroup label="Modo">
+              <MenuChoice checked={!draftMode} onPick={() => setSettings({ draftMode: false })}>
+                Normal
+              </MenuChoice>
+              <MenuChoice checked={draftMode} onPick={() => setSettings({ draftMode: true })}>
+                Rápido (rascunho: imagens como molduras)
+              </MenuChoice>
+            </MenuGroup>
+            <MenuGroup label="Erros">
+              <MenuChoice
+                checked={stopOnFirstError}
+                onPick={() => setSettings({ stopOnFirstError: true })}
+              >
+                Parar no primeiro erro
+              </MenuChoice>
+              <MenuChoice
+                checked={!stopOnFirstError}
+                onPick={() => setSettings({ stopOnFirstError: false })}
+              >
+                Tentar compilar mesmo com erros
+              </MenuChoice>
+            </MenuGroup>
+            <div className="compile-menu-actions">
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!running || !build || stop.isPending}
+                onClick={() => build && stop.mutate(build.id)}
+              >
+                Parar compilação
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                disabled={compileDisabled || running}
+                onClick={() => start.mutate()}
+              >
+                Recompilar
+              </button>
+            </div>
+          </div>
+        </details>
         <select
           className="engine-select"
           aria-label="Motor LaTeX"
@@ -280,12 +377,6 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
                 : statusText[build.status]}
           </span>
         )}
-        {queuedConflict && build && (
-          <span className="status-note-inline engine-conflict-note" role="status">
-            fila com {engineLabels[build.engine as Project['engine']]}; aguarda para{' '}
-            {engineLabels[project?.engine ?? 'pdflatex']}
-          </span>
-        )}
         {build && !isActive(build) && (
           <fieldset className="problem-counts">
             <legend className="sr-only">Problemas da compilação</legend>
@@ -310,6 +401,17 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             >
               <TriangleAlert size={14} aria-hidden="true" />
               {nWarnings} {nWarnings === 1 ? 'aviso' : 'avisos'}
+            </button>
+            <button
+              type="button"
+              className="problem-count"
+              data-kind="info"
+              aria-pressed={filter === 'info'}
+              disabled={nInfo === 0}
+              onClick={() => pick('info')}
+            >
+              <Info size={14} aria-hidden="true" />
+              {nInfo} info
             </button>
             {/* Only a build that actually succeeded earns the green badge: on a failure the two
                 zeroed counts stay as they are, and the details panel explains them. */}
@@ -454,7 +556,7 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   );
 }
 
-type Kind = 'error' | 'warning';
+type Kind = 'error' | 'warning' | 'info';
 type Item = { kind: Kind; entry: LogEntry };
 type Group = { file: string; items: Item[]; errors: number; warnings: number };
 
@@ -492,7 +594,7 @@ function LogItem({
   entry,
   disabledUsed,
 }: {
-  kind: 'error' | 'warning';
+  kind: Kind;
   entry: LogEntry;
   disabledUsed?: string | undefined;
 }) {
@@ -504,7 +606,7 @@ function LogItem({
     if (entry.line) goToLine(file, entry.line);
     else setActivePath(file);
   };
-  const Icon = kind === 'error' ? CircleX : TriangleAlert;
+  const Icon = kind === 'error' ? CircleX : kind === 'warning' ? TriangleAlert : Info;
   const body = (
     <>
       <Icon size={14} aria-hidden="true" />
@@ -531,3 +633,31 @@ function LogItem({
 }
 
 const logKey = (kind: string, e: LogEntry) => `${kind}|${e.file}|${e.line}|${e.message}`;
+
+function MenuGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="compile-menu-group" role="group" aria-label={label}>
+      <span className="compile-menu-label">{label}</span>
+      {children}
+    </div>
+  );
+}
+
+function MenuChoice({
+  checked,
+  onPick,
+  children,
+}: {
+  checked: boolean;
+  onPick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button type="button" role="menuitemradio" aria-checked={checked} onClick={onPick}>
+      <span className="compile-menu-check" aria-hidden="true">
+        {checked && <Check size={14} />}
+      </span>
+      {children}
+    </button>
+  );
+}

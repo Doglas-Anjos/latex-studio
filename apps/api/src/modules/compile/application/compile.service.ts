@@ -5,8 +5,16 @@ import {
   type CompileJobData,
   SafePath,
 } from '@latex-studio/core';
+import type { BuildOptions } from '@latex-studio/core/schema';
 import { InjectQueue } from '@nestjs/bullmq';
-import { HttpException, HttpStatus, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import type { Project } from '../../projects/domain/project';
 import type { User } from '../../users/domain/user';
@@ -20,7 +28,7 @@ export const MAX_QUEUED_PER_USER = 3;
  */
 export const STALE_BUILD_BUFFER_MS = 2 * 60_000;
 
-export type CompileQueue = Pick<Queue<CompileJobData>, 'add'>;
+export type CompileQueue = Pick<Queue<CompileJobData>, 'add' | 'remove'>;
 
 @Injectable()
 export class CompileService {
@@ -42,48 +50,46 @@ export class CompileService {
   }
 
   /**
-   * Reuses the project's queued build if there is one and it still targets the engine being
-   * requested (concurrent requests are settled by the repository's unique index); a running build
-   * gets one queued behind it. A stale queued or running build (orphaned job, crashed worker) is
-   * failed instead of being reused or blocking a fresh one. A queued build with a different engine
-   * is never silently reused or retargeted: the caller gets a clear conflict and can retry once it
-   * finishes, so the response always matches the engine it was requested with.
+   * One build at a time per project: while one is queued or running the caller must stop it
+   * first (409). A stale one (orphaned job, crashed worker) is failed and replaced instead.
    */
-  async request(project: Project, user: User): Promise<Build> {
+  async request(project: Project, user: User, options: BuildOptions = {}): Promise<Build> {
     const active = await this.builds.findActive(project.id);
     if (active && this.isStale(active)) {
       await this.builds.failStale(active.id, 'Compilação interrompida: o processo não respondeu');
+    } else if (active) {
+      throw new ConflictException('Já há uma compilação em andamento; pare-a para iniciar outra');
     }
-    const reusable = active && !this.isStale(active) ? active : null;
-    if (reusable?.status === 'queued' && reusable.engine !== project.engine) {
+    if ((await this.builds.countQueuedForUser(user.id)) >= MAX_QUEUED_PER_USER) {
       throw new HttpException(
-        'A queued build with a different engine is already in progress; try again once it finishes',
-        HttpStatus.CONFLICT,
+        `At most ${MAX_QUEUED_PER_USER} queued builds per user`,
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
-    let build = reusable?.status === 'queued' ? reusable : null;
-    if (!build) {
-      if ((await this.builds.countQueuedForUser(user.id)) >= MAX_QUEUED_PER_USER) {
-        throw new HttpException(
-          `At most ${MAX_QUEUED_PER_USER} queued builds per user`,
-          HttpStatus.TOO_MANY_REQUESTS,
-        );
-      }
-      build = await this.builds.create({
-        projectId: project.id,
-        requestedBy: user.id,
-        engine: project.engine,
-        mainFile: project.mainFile,
-      });
-    }
-    // Also re-sent for a reused build: BullMQ ignores a duplicate jobId, and this recovers a row
-    // whose first add failed (Redis down) instead of leaving it queued forever.
+    const build = await this.builds.create({
+      projectId: project.id,
+      requestedBy: user.id,
+      engine: project.engine,
+      mainFile: project.mainFile,
+      options,
+    });
     await this.queue.add(
       'compile',
       { buildId: build.id, projectId: project.id },
       { jobId: build.id, removeOnComplete: true, removeOnFail: true },
     );
     return build;
+  }
+
+  /** Stops a queued (dropped from the queue) or running (the worker kills latexmk) build. */
+  async cancel(project: Project, buildId: string): Promise<Build> {
+    const build = await this.get(project, buildId);
+    if (!(await this.builds.cancel(build.id))) {
+      throw new ConflictException('Esta compilação já terminou');
+    }
+    // A job that is already active is not removable; the worker notices the row and stops.
+    await this.queue.remove(build.id).catch(() => {});
+    return this.get(project, buildId);
   }
 
   async get(project: Project, buildId: string): Promise<Build> {

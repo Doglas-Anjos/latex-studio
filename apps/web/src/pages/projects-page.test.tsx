@@ -71,4 +71,12 @@ describe('ProjectsPage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Excluir' }));
     expect(service.remove).toHaveBeenCalledWith('1');
   });
+
+  it('opens the help dialog from the button', async () => {
+    setup();
+    await screen.findByText('Tese');
+    await userEvent.click(screen.getByRole('button', { name: /Como funciona/ }));
+    expect(HTMLDialogElement.prototype.showModal).toHaveBeenCalled();
+    expect(screen.getByText('Como o LaTeX Studio funciona', { selector: 'h2' })).toBeTruthy();
+  });
 });

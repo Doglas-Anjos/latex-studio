@@ -20,6 +20,7 @@ class FakeBuilds implements BuildRepository {
       exitCode: null,
       errors: [],
       warnings: [],
+      info: [],
       createdAt: new Date(Date.now() + this.rows.length),
       startedAt: null,
       finishedAt: null,
@@ -44,6 +45,13 @@ class FakeBuilds implements BuildRepository {
   }
   async countQueuedForUser(userId: string) {
     return this.rows.filter((b) => b.requestedBy === userId && b.status === 'queued').length;
+  }
+  async cancel(buildId: string) {
+    const row = this.rows.find((b) => b.id === buildId);
+    if (!row || (row.status !== 'queued' && row.status !== 'running')) return false;
+    row.status = 'cancelled';
+    row.finishedAt = new Date();
+    return true;
   }
   async failStale(buildId: string, message: string) {
     const row = this.rows.find((b) => b.id === buildId);
@@ -75,15 +83,21 @@ const ana: User = {
 describe('CompileService.request', () => {
   let builds: FakeBuilds;
   let added: Array<{ name: string; data: unknown; opts: unknown }>;
+  let removed: string[];
   let service: CompileService;
 
   beforeEach(() => {
     builds = new FakeBuilds();
     added = [];
+    removed = [];
     const queue = {
       add: async (name: string, data: unknown, opts: unknown) => {
         added.push({ name, data, opts });
         return {};
+      },
+      remove: async (id: string) => {
+        removed.push(id);
+        return 1;
       },
     } as unknown as CompileQueue;
     service = new CompileService(builds, queue, {
@@ -111,18 +125,17 @@ describe('CompileService.request', () => {
     ]);
   });
 
-  it('returns the queued build of the project instead of creating another', async () => {
+  it('refuses a second build while one is queued or running (409) until it is cancelled', async () => {
     const p = project();
-    const first = await service.request(p, ana);
-    const second = await service.request(p, ana);
-    expect(second.id).toBe(first.id);
-    expect(builds.rows).toHaveLength(1);
-  });
-
-  it('queues one build behind a running one', async () => {
-    const p = project();
-    const first = await service.request(p, ana);
-    first.status = 'running';
+    const first = await service.request(p, ana, { draft: true });
+    expect(first.options).toEqual({ draft: true });
+    await expect(service.request(p, ana)).rejects.toMatchObject({ status: 409 });
+    (builds.rows[0] as Build).status = 'running';
+    await expect(service.request(p, ana)).rejects.toMatchObject({ status: 409 });
+    const cancelled = await service.cancel(p, first.id);
+    expect(cancelled.status).toBe('cancelled');
+    expect(removed).toEqual([first.id]);
+    await expect(service.cancel(p, first.id)).rejects.toMatchObject({ status: 409 });
     const second = await service.request(p, ana);
     expect(second.id).not.toBe(first.id);
   });
@@ -151,51 +164,15 @@ describe('CompileService.request', () => {
     expect(builds.rows.find((b) => b.id === first.id)?.status).toBe('failed');
   });
 
-  it('does not touch a running build that is merely slow, not stale', async () => {
+  it('refuses while a build is merely slow, not stale, and leaves it running', async () => {
     const p = project();
-    const first = await service.request(p, ana);
-    first.status = 'running';
-    first.startedAt = new Date(Date.now() - 1000);
-
     await service.request(p, ana);
-
-    expect(builds.rows.find((b) => b.id === first.id)?.status).toBe('running');
-  });
-
-  it('answers 409 instead of silently reusing a queued build with a different engine', async () => {
-    const p = project();
-    const first = await service.request(p, ana);
-    expect(first.engine).toBe('xelatex');
-
-    const changed = { ...p, engine: 'lualatex' as const };
-    const error = await service.request(changed, ana).catch((e: unknown) => e);
-
-    expect(error).toBeInstanceOf(HttpException);
-    expect((error as HttpException).getStatus()).toBe(409);
+    (builds.rows[0] as Build).status = 'running';
+    (builds.rows[0] as Build).startedAt = new Date(Date.now() - 60_000);
+    await expect(service.request(p, ana)).rejects.toMatchObject({ status: 409 });
+    expect(builds.rows[0]?.status).toBe('running');
     expect(builds.rows).toHaveLength(1);
-    expect(builds.rows[0]?.engine).toBe('xelatex');
   });
-
-  it('still reuses the queued build when the engine matches', async () => {
-    const p = project();
-    const first = await service.request(p, ana);
-    const second = await service.request(p, ana);
-    expect(second.id).toBe(first.id);
-  });
-
-  it('queues a fresh build with the new engine behind a running one, without retargeting it', async () => {
-    const p = project();
-    const first = await service.request(p, ana);
-    first.status = 'running';
-
-    const changed = { ...p, engine: 'lualatex' as const };
-    const second = await service.request(changed, ana);
-
-    expect(second.id).not.toBe(first.id);
-    expect(second.engine).toBe('lualatex');
-    expect(builds.rows.find((b) => b.id === first.id)?.engine).toBe('xelatex');
-  });
-
   it('answers 429 once the user has 3 queued builds', async () => {
     for (let i = 0; i < 3; i++) await service.request(project(), ana);
     const error = await service.request(project(), ana).catch((e: unknown) => e);

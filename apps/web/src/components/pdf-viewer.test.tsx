@@ -35,6 +35,7 @@ const fake = (): CompileService => ({
   pdf: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
   openLog: vi.fn(),
   downloadPdf: vi.fn(),
+  cancel: vi.fn(),
 });
 
 describe('PdfViewer zoom', () => {

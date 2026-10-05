@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Search, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useService } from '../di/service-provider';
 import { LATEX_CATALOG } from '../latex-catalog';
@@ -58,6 +58,10 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
     setName('');
   };
   const usedBy = (n: string) => (usage ?? []).filter((u) => u.name === n);
+  const usageText = (n: string) =>
+    usedBy(n)
+      .map((u) => `${u.path}:${u.line}`)
+      .join(', ');
   const detected = [
     ...new Map(
       (usage ?? []).filter((u) => !list.some((e) => e.name === u.name)).map((u) => [u.name, u]),
@@ -80,6 +84,31 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
 
   return (
     <section className="packages-panel" aria-label="Bibliotecas">
+      <form
+        className="package-add"
+        onSubmit={(ev) => {
+          ev.preventDefault();
+          add();
+        }}
+      >
+        <input
+          list="package-catalog"
+          aria-label="Adicionar pacote"
+          placeholder="Adicionar pacote"
+          value={name}
+          onChange={(ev) => setName(ev.target.value)}
+        />
+        <datalist id="package-catalog">
+          {LATEX_CATALOG.map((c) => (
+            <option key={c.name} value={c.name}>
+              {c.description}
+            </option>
+          ))}
+        </datalist>
+        <Button variant="secondary" size="compact" type="submit" disabled={busy || !name.trim()}>
+          Adicionar
+        </Button>
+      </form>
       {(list.length > 0 || detected.length > 0) && (
         <div className="packages-overview">
           <span className="packages-stat">
@@ -121,6 +150,7 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
               <label className="package-name">
                 <input
                   type="checkbox"
+                  className="package-switch"
                   checked={e.enabled}
                   disabled={!canEdit || busy}
                   onChange={(ev) => patch(i, { enabled: ev.target.checked })}
@@ -129,6 +159,25 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
               </label>
               {!e.enabled && usedBy(e.name).length > 0 && (
                 <span className="badge">bypass ativo</span>
+              )}
+            </div>
+            <div className="package-meta">
+              <input
+                className="package-options"
+                aria-label={`Opções de ${e.name}`}
+                placeholder="opções"
+                defaultValue={e.options ?? ''}
+                disabled={!canEdit || busy}
+                maxLength={200}
+                onBlur={(ev) => {
+                  const options = ev.target.value.trim();
+                  if (options !== (e.options ?? '')) patch(i, { options });
+                }}
+              />
+              {usedBy(e.name).length > 0 && (
+                <small className="package-usage" title={usageText(e.name)}>
+                  {usageText(e.name)}
+                </small>
               )}
               {canEdit && (
                 <span className="package-actions">
@@ -157,31 +206,10 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
                     disabled={busy}
                     onClick={() => commit(list.filter((_, j) => j !== i))}
                   >
-                    <X size={14} aria-hidden="true" />
+                    <Trash2 size={14} aria-hidden="true" />
                   </Button>
                 </span>
               )}
-            </div>
-            <div className="package-meta">
-              {usedBy(e.name).length > 0 && (
-                <small className="package-usage">
-                  {usedBy(e.name)
-                    .map((u) => `${u.path}:${u.line}`)
-                    .join(', ')}
-                </small>
-              )}
-              <input
-                className="package-options"
-                aria-label={`Opções de ${e.name}`}
-                placeholder="opções"
-                defaultValue={e.options ?? ''}
-                disabled={!canEdit || busy}
-                maxLength={200}
-                onBlur={(ev) => {
-                  const options = ev.target.value.trim();
-                  if (options !== (e.options ?? '')) patch(i, { options });
-                }}
-              />
             </div>
           </li>
         ))}
@@ -190,8 +218,10 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
         <p className="muted">Nenhum pacote corresponde à busca.</p>
       )}
       {detected.length > 0 && visibleDetected.length > 0 && (
-        <>
-          <h3>Detectados no código</h3>
+        <details className="package-detected" open>
+          <summary>
+            Detectados no código <span className="badge">{visibleDetected.length}</span>
+          </summary>
           <ul className="detected-list">
             {visibleDetected.map((u) => (
               <li key={u.name} className="package-item">
@@ -220,57 +250,18 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
                     </span>
                   )}
                 </div>
-                <small className="package-usage">
-                  {usedBy(u.name)
-                    .map((x) => `${x.path}:${x.line}`)
-                    .join(', ')}
+                <small className="package-usage" title={usageText(u.name)}>
+                  {usageText(u.name)}
                 </small>
               </li>
             ))}
           </ul>
-        </>
+        </details>
       )}
       {canEdit && (
-        <>
-          <form
-            className="package-add"
-            onSubmit={(ev) => {
-              ev.preventDefault();
-              add();
-            }}
-          >
-            <input
-              list="package-catalog"
-              aria-label="Adicionar pacote"
-              placeholder="Adicionar pacote"
-              value={name}
-              onChange={(ev) => setName(ev.target.value)}
-            />
-            <datalist id="package-catalog">
-              {LATEX_CATALOG.map((c) => (
-                <option key={c.name} value={c.name}>
-                  {c.description}
-                </option>
-              ))}
-            </datalist>
-            <Button
-              variant="secondary"
-              size="compact"
-              type="submit"
-              disabled={busy || !name.trim()}
-            >
-              Adicionar
-            </Button>
-          </form>
-          <Button
-            variant="secondary"
-            size="compact"
-            disabled={busy}
-            onClick={() => migrate.mutate()}
-          >
-            Mover \usepackage do arquivo principal
-          </Button>
-        </>
+        <Button variant="secondary" size="compact" disabled={busy} onClick={() => migrate.mutate()}>
+          Mover \usepackage do arquivo principal
+        </Button>
       )}
       <p className="package-note">Desligar um pacote do qual outro depende quebra a compilação.</p>
       {moved !== null && <p className="package-note">{moved} pacotes movidos.</p>}

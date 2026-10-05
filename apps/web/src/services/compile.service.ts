@@ -7,7 +7,8 @@ export interface LogEntry {
   message: string;
 }
 
-export type BuildStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'timeout';
+export type BuildStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'timeout' | 'cancelled';
+export type CompileOptions = { draft?: boolean; haltOnError?: boolean };
 
 export interface Build {
   id: string;
@@ -19,6 +20,8 @@ export interface Build {
   exitCode: number | null;
   errors: LogEntry[];
   warnings: LogEntry[];
+  info?: LogEntry[];
+  options?: CompileOptions;
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
@@ -41,7 +44,9 @@ export const isStale = (b?: Build) => {
 };
 
 export interface CompileService {
-  compile(projectId: string): Promise<Build>;
+  compile(projectId: string, options?: CompileOptions): Promise<Build>;
+  /** Stops a queued or running build. */
+  cancel(projectId: string, buildId: string): Promise<Build>;
   /** Most recent first. */
   builds(projectId: string, limit?: number): Promise<Build[]>;
   pdf(projectId: string, buildId: string): Promise<ArrayBuffer>;
@@ -54,8 +59,12 @@ export const CompileServiceToken = createToken<CompileService>('CompileService')
 export class HttpCompileService implements CompileService {
   constructor(private readonly api: ApiClient) {}
 
-  compile(projectId: string) {
-    return this.api.post<Build>(`/projects/${projectId}/compile`);
+  compile(projectId: string, options: CompileOptions = {}) {
+    return this.api.post<Build>(`/projects/${projectId}/compile`, options);
+  }
+
+  cancel(projectId: string, buildId: string) {
+    return this.api.post<Build>(`/projects/${projectId}/builds/${buildId}/cancel`);
   }
 
   builds(projectId: string, limit = 5) {

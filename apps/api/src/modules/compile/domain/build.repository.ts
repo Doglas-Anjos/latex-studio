@@ -1,4 +1,4 @@
-import type { builds } from '@latex-studio/core/schema';
+import type { BuildOptions, builds } from '@latex-studio/core/schema';
 import type { ProjectEngine } from '../../projects/domain/project';
 
 export type Build = typeof builds.$inferSelect;
@@ -10,6 +10,7 @@ export interface NewBuild {
   requestedBy: string;
   engine: ProjectEngine;
   mainFile: string;
+  options: BuildOptions;
 }
 
 export interface BuildRepository {
@@ -26,4 +27,6 @@ export interface BuildRepository {
    * already reached a terminal status, so a late result from the original worker is not reopened.
    */
   failStale(buildId: string, message: string): Promise<boolean>;
+  /** Marks a queued/running build as cancelled; false if it already finished. */
+  cancel(buildId: string): Promise<boolean>;
 }

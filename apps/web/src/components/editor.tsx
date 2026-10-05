@@ -31,7 +31,10 @@ import {
   type ComposerTarget,
   commentComposer,
   commentHighlights,
+  placePopup,
   refreshHighlights,
+  type SelectionAffordance,
+  selectionAffordance,
   setComposerTarget,
 } from './editor-comments';
 import { editorTheme, latexHighlight } from './editor-theme';
@@ -165,13 +168,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const queryClient = useQueryClient();
   const ytextRef = useRef<Y.Text | null>(null);
   const editorBoxRef = useRef<HTMLDivElement | null>(null);
-  // True while the popup's own textarea has focus: a pointer selection elsewhere in the
-  // document must not steal the in-progress draft out from under the user.
+  // True while the popup's own textarea has focus.
   const composingRef = useRef(false);
+  // The round "add comment" button: shown (top, in px relative to .editor) while a selection exists.
+  const [icon, setIcon] = useState<number | null>(null);
   const [popup, setPopup] = useState<{
     target: ComposerTarget;
-    left: number | null;
-    top: number | null;
+    left: number;
+    top: number;
   } | null>(null);
   const [popupBody, setPopupBody] = useState('');
 
@@ -205,6 +209,41 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       body: text,
     });
   };
+
+  const openBox = (scope: CommentScope) => {
+    const view = viewRef.current;
+    if (!view) return;
+    const { from, to, head } = view.state.selection.main;
+    const range = scopeRange({ text: view.state.doc.toString(), from, to, head }, scope);
+    if (range && range.from < range.to) {
+      view.dispatch({ effects: setComposerTarget.of({ scope, ...range }) });
+    }
+  };
+  const closeAndRefocus = () => {
+    closePopup();
+    viewRef.current?.focus();
+  };
+  // Click outside the box (but not on the icon, which toggles it) or Escape closes it.
+  const popupOpen = popup !== null;
+  const popupTextRef = useRef<HTMLTextAreaElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: closePopup only touches refs and stable setters
+  useEffect(() => {
+    if (!popupOpen) return;
+    popupTextRef.current?.focus();
+    const onDown = (ev: MouseEvent) => {
+      const el = ev.target as Element;
+      if (!el.closest?.('.comment-popup, .comment-fab')) closePopup();
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') closeAndRefocus();
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [popupOpen]);
 
   // External sync: Yjs doc + websocket provider + CodeMirror view live and die with the file.
   useEffect(() => {
@@ -263,7 +302,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       const range = lineRangeAt(state.doc.toString(), from, from);
       useWorkspaceStore.getState().setCommentDraft(buildDraft(range, 'line'));
     };
-    /** Positions the floating popup near its target, relative to the `.editor` box. */
+    /** Positions the popup under the icon, clamped inside the `.editor` box (re-run on scroll). */
     const handleComposerTarget = (target: ComposerTarget | null, rect: ComposerRect | null) => {
       if (!target) {
         composingRef.current = false;
@@ -272,9 +311,20 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
         return;
       }
       const box = editorBoxRef.current?.getBoundingClientRect();
-      const left = rect && box ? rect.left - box.left : null;
-      const top = rect && box ? rect.bottom - box.top + 6 : null;
-      setPopup({ target, left, top });
+      if (!box) return;
+      // No rect (line not rendered): keep the last position instead of jumping elsewhere.
+      setPopup((prev) => {
+        const pos = rect
+          ? placePopup({ top: rect.top - box.top, bottom: rect.bottom - box.top }, box)
+          : (prev ?? placePopup({ top: 0, bottom: 0 }, box));
+        return { target, ...pos };
+      });
+    };
+    const handleSelection = (s: SelectionAffordance | null) => {
+      const box = editorBoxRef.current?.getBoundingClientRect();
+      if (!s?.rect || !box) return setIcon(null);
+      // Keep the button inside the editor even when the line is partly scrolled out.
+      setIcon(Math.max(4, Math.min(s.rect.top - box.top, box.height - 32)));
     };
     const commentExtensions: Extension = canComment
       ? [
@@ -288,10 +338,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
               },
             })),
           ),
-          commentComposer({
-            isComposing: () => composingRef.current,
-            onTarget: handleComposerTarget,
-          }),
+          commentComposer({ onTarget: handleComposerTarget }),
+          selectionAffordance(handleSelection),
         ]
       : [];
     const view = new EditorView({
@@ -403,6 +451,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       providerRef.current = null;
       ytextRef.current = null;
       composingRef.current = false;
+      setIcon(null);
       setPopup(null);
       setPopupBody('');
       view.destroy();
@@ -464,14 +513,24 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
         </div>
       )}
       <div ref={host} className="editor-host" data-blame={activeBlame ? '' : undefined} />
+      {canComment && icon !== null && (
+        <button
+          type="button"
+          className="comment-fab"
+          aria-label="Comentar seleção"
+          title="Comentar seleção"
+          style={{ top: `${icon}px` }}
+          // Keep the editor's selection and focus; this is an action, not a caret move.
+          onMouseDown={(ev) => ev.preventDefault()}
+          onClick={() => (popup ? closePopup() : openBox('selection'))}
+        >
+          <MessageSquarePlus size={16} aria-hidden="true" />
+        </button>
+      )}
       {canComment && popup && (
         <div
           className="comment-popup"
-          style={
-            popup.left !== null && popup.top !== null
-              ? ({ '--cp-left': `${popup.left}px`, '--cp-top': `${popup.top}px` } as CSSProperties)
-              : undefined
-          }
+          style={{ '--cp-left': `${popup.left}px`, '--cp-top': `${popup.top}px` } as CSSProperties}
         >
           <form
             className="comment-popup-form"
@@ -482,12 +541,24 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             }}
           >
             <div className="comment-popup-head">
-              <span className="comment-popup-scope">{SCOPE_LABELS[popup.target.scope]}</span>
+              <span className="comment-popup-scopes">
+                {SCOPE_SHORTCUTS.map(({ scope }) => (
+                  <button
+                    key={scope}
+                    type="button"
+                    className="comment-popup-scope"
+                    aria-pressed={popup.target.scope === scope}
+                    onClick={() => openBox(scope)}
+                  >
+                    {SCOPE_LABELS[scope]}
+                  </button>
+                ))}
+              </span>
               <button
                 type="button"
                 className="comment-popup-close"
                 aria-label="Fechar"
-                onClick={closePopup}
+                onClick={closeAndRefocus}
               >
                 <X size={12} aria-hidden="true" />
               </button>
@@ -497,6 +568,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
               placeholder="Escrever um comentário"
               rows={2}
               maxLength={4000}
+              ref={popupTextRef}
               value={popupBody}
               onFocus={() => {
                 composingRef.current = true;
@@ -505,7 +577,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
               onKeyDown={(ev) => {
                 if (ev.key === 'Escape') {
                   ev.preventDefault();
-                  closePopup();
+                  ev.stopPropagation();
+                  closeAndRefocus();
                 }
               }}
             />

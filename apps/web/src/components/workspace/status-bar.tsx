@@ -24,6 +24,7 @@ const buildLabel = {
   succeeded: 'Compilado',
   failed: 'Falhou',
   timeout: 'Falhou',
+  cancelled: 'Cancelada',
 };
 
 export function StatusBar({

@@ -14,6 +14,7 @@ const compile: CompileService = {
   pdf: vi.fn(),
   openLog: vi.fn(),
   downloadPdf: vi.fn(),
+  cancel: vi.fn(),
 };
 const tools: ToolsService = {
   wordCount: vi.fn(),

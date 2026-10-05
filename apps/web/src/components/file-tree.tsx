@@ -25,6 +25,7 @@ import {
   useState,
 } from 'react';
 import { useService } from '../di/service-provider';
+import { useHistoryStatus } from '../hooks/use-history-status';
 import { FileServiceToken, type ProjectFile } from '../services/file.service';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
@@ -143,6 +144,18 @@ export function FileTree({
     queryFn: () => files.list(projectId),
   });
   const tree = useMemo(() => buildTree(data ?? []), [data]);
+  const status = useHistoryStatus(projectId).data;
+  const { dirty, dirtyDirs } = useMemo(() => {
+    const dirty = new Map<string, 'add' | 'modify'>();
+    const dirtyDirs = new Set<string>();
+    for (const c of status?.changes ?? []) {
+      if (c.type === 'remove') continue;
+      dirty.set(c.path, c.type);
+      const parts = c.path.split('/');
+      for (let i = 1; i < parts.length; i++) dirtyDirs.add(parts.slice(0, i).join('/'));
+    }
+    return { dirty, dirtyDirs };
+  }, [status]);
 
   const rename = (from: string) => {
     setRenamingPath(from);
@@ -164,6 +177,7 @@ export function FileTree({
       {nodes.map((n) => {
         const isFolder = !!n.children;
         const open = !collapsed.has(n.path);
+        const dirtyType = isFolder ? undefined : dirty.get(n.path);
         return (
           <li key={n.path}>
             <div className="tree-row" data-active={n.path === activePath}>
@@ -198,7 +212,25 @@ export function FileTree({
                 ) : (
                   <FileTypeIcon name={n.name} />
                 )}
-                <span className="tree-label-text">{n.name}</span>
+                <span className="tree-label-text" data-dirty={dirtyType}>
+                  {n.name}
+                </span>
+                {dirtyType && (
+                  <span
+                    className="tree-dirty"
+                    data-type={dirtyType}
+                    title="Alterado desde a última versão salva"
+                  >
+                    {dirtyType === 'add' ? 'A' : 'M'}
+                  </span>
+                )}
+                {isFolder && dirtyDirs.has(n.path) && (
+                  <span
+                    className="tree-dirty tree-dirty-dot"
+                    data-type="modify"
+                    title="Contém arquivos alterados desde a última versão salva"
+                  />
+                )}
               </button>
               {canEdit && (
                 <span className="tree-actions">

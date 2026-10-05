@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../../di/container';
@@ -25,6 +25,7 @@ describe('ActivityBar', () => {
     expect(screen.getByRole('button', { name: 'Mudanças' }).getAttribute('aria-pressed')).toBe(
       'true',
     );
-    expect(await screen.findByText('1')).toBeTruthy();
+    expect(await screen.findAllByText('1')).toHaveLength(2);
+    expect(within(screen.getByRole('button', { name: 'Arquivos' })).getByText('1')).toBeTruthy();
   });
 });

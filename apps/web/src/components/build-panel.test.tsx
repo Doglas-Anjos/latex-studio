@@ -345,14 +345,12 @@ describe('BuildPanel active and stuck builds', () => {
     return { compile };
   }
 
-  it('keeps Compilar disabled while a fresh build is running', async () => {
+  it('offers Parar instead of Compilar while a fresh build is running', async () => {
     setupWith(activeBuild(new Date().toISOString()));
     await screen.findByText(/Compilando…/);
-    const button = screen.getByRole('button', { name: 'Compilar' }) as HTMLButtonElement;
-    expect(button.disabled).toBe(true);
-    expect(button.title).toMatch(/Aguarde/);
+    expect(screen.getByRole('button', { name: /Parar/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Compilar' })).toBeNull();
   });
-
   it('ticks the elapsed counter every second and reaches the retry state without a new build', async () => {
     vi.useFakeTimers();
     setupWith(activeBuild(new Date().toISOString()));
@@ -385,7 +383,7 @@ describe('BuildPanel active and stuck builds', () => {
     expect(button.title).toMatch(/Sem resposta/);
 
     await userEvent.click(button);
-    expect(compile.compile).toHaveBeenCalledWith('p1');
+    expect(compile.compile).toHaveBeenCalledWith('p1', expect.any(Object));
   });
 });
 
@@ -498,90 +496,6 @@ describe('BuildPanel engine change and permissions', () => {
     expect(select.disabled).toBe(false);
 
     await userEvent.click(button);
-    expect(compile.compile).toHaveBeenCalledWith('p1');
-  });
-});
-
-describe('BuildPanel engine change while an old-engine build is active', () => {
-  beforeEach(() => {
-    useSettingsStore.getState().reset();
-  });
-  afterEach(cleanup);
-
-  function buildWith(status: 'queued' | 'running'): Build {
-    return {
-      id: 'b1',
-      projectId: 'p1',
-      status,
-      engine: 'pdflatex',
-      mainFile: 'main.tex',
-      commitSha: null,
-      exitCode: null,
-      errors: [],
-      warnings: [],
-      createdAt: new Date().toISOString(),
-      startedAt: status === 'running' ? new Date().toISOString() : null,
-      finishedAt: null,
-    };
-  }
-
-  function setupWithBuild(build: Build) {
-    const projects = {
-      downloadSource: vi.fn(),
-      get: vi.fn().mockResolvedValue(fakeProject),
-      update: vi.fn<(id: string, patch: unknown) => Promise<Project>>(() =>
-        Promise.resolve({ ...fakeProject, engine: 'xelatex' }),
-      ),
-    } as unknown as ProjectService;
-    const compile = {
-      builds: vi.fn().mockResolvedValue([build]),
-      compile: vi.fn().mockResolvedValue({ ...build, id: 'b2', status: 'queued' }),
-    } as unknown as CompileService;
-    const packages = {
-      get: vi.fn().mockResolvedValue([]),
-      usage: vi.fn().mockResolvedValue([]),
-    } as unknown as PackageService;
-    renderWithApp(
-      <BuildPanel projectId="p1" canCompile={true} />,
-      new Container()
-        .register(CompileServiceToken, compile)
-        .register(ProjectServiceToken, projects)
-        .register(ToolsServiceToken, {} as unknown as ToolsService)
-        .register(FileServiceToken, {} as unknown as FileService)
-        .register(PackageServiceToken, packages),
-    );
-    return { compile };
-  }
-
-  it('lets a new build be queued for the new engine while the old one is only running', async () => {
-    const { compile } = setupWithBuild(buildWith('running'));
-    const select = (await screen.findByLabelText('Motor LaTeX')) as HTMLSelectElement;
-    const button = screen.getByRole('button', { name: 'Compilar' }) as HTMLButtonElement;
-    await waitFor(() => expect(select.disabled).toBe(false));
-    // Still blocked for as long as the selected engine matches the active build's.
-    expect(button.disabled).toBe(true);
-
-    await userEvent.selectOptions(select, 'xelatex');
-
-    await waitFor(() => expect(button.disabled).toBe(false));
-    expect(button.title ?? '').toBe('');
-    await userEvent.click(button);
-    expect(compile.compile).toHaveBeenCalledWith('p1');
-  });
-
-  it('keeps Compilar disabled with an honest reason when a build with the previous engine is already queued', async () => {
-    setupWithBuild(buildWith('queued'));
-    const select = (await screen.findByLabelText('Motor LaTeX')) as HTMLSelectElement;
-    const button = screen.getByRole('button', { name: 'Compilar' }) as HTMLButtonElement;
-    await waitFor(() => expect(select.disabled).toBe(false));
-    expect(button.disabled).toBe(true);
-
-    await userEvent.selectOptions(select, 'xelatex');
-
-    await waitFor(() =>
-      expect(button.title).toMatch(/pdfLaTeX já está na fila.*compilar com XeLaTeX/),
-    );
-    expect(button.disabled).toBe(true);
-    expect(await screen.findByText(/fila com pdfLaTeX/)).toBeTruthy();
+    expect(compile.compile).toHaveBeenCalledWith('p1', expect.any(Object));
   });
 });

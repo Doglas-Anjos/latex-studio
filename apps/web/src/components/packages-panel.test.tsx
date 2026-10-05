@@ -29,6 +29,10 @@ describe('PackagesPanel', () => {
     const boxes = await screen.findAllByRole('checkbox');
     expect(boxes).toHaveLength(2);
     expect(screen.getByText('graphicx')).toBeTruthy();
+    // Two lines per entry: switch + name, then options + actions.
+    const item = (boxes[1] as HTMLElement).closest('li') as HTMLElement;
+    expect(item.querySelectorAll('.package-row, .package-meta')).toHaveLength(2);
+    expect(item.querySelector('.package-meta .package-options')).toBeTruthy();
     await userEvent.click(boxes[0] as HTMLElement);
     await waitFor(() =>
       expect(service.set).toHaveBeenCalledWith('p1', [

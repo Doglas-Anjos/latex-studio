@@ -90,11 +90,25 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
         )[0]?.sha ?? null;
       new SafePath(tmp).resolve(build.mainFile); // throws on `..`, absolute or odd names
 
-      const run = await this.runner.run({
-        workDir: tmp,
-        engine: build.engine,
-        mainFile: build.mainFile,
-      });
+      // "Stop compilation": the API flips the row to cancelled; poll it and kill latexmk.
+      const abort = new AbortController();
+      const watch = setInterval(async () => {
+        const [row] = await this.db
+          .select({ status: builds.status })
+          .from(builds)
+          .where(eq(builds.id, buildId));
+        if (row?.status === 'cancelled') abort.abort();
+      }, 1000);
+      const run = await this.runner
+        .run({
+          workDir: tmp,
+          engine: build.engine,
+          mainFile: build.mainFile,
+          options: build.options,
+          signal: abort.signal,
+        })
+        .finally(() => clearInterval(watch));
+      if (run.cancelled) return;
 
       await mkdir(outDir, { recursive: true });
       const stem = basename(build.mainFile, extname(build.mainFile));
@@ -111,11 +125,12 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
         await pipeline(createReadStream(logFrom, { end: MAX_LOG - 1 }), createWriteStream(logPath));
       }
       const log = (await exists(logPath)) ? await readFile(logPath, 'utf8') : '';
-      const { errors, warnings } = parseLatexLog(log);
+      const { errors, warnings, info } = parseLatexLog(log);
       const status = toBuildStatus({
         exitCode: run.exitCode,
         timedOut: run.timedOut,
         pdfExists: await exists(join(outDir, 'output.pdf')),
+        haltOnError: build.options.haltOnError,
       });
       await this.finish(buildId, {
         status: tooLarge && status === 'succeeded' ? 'failed' : status,
@@ -123,6 +138,7 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
         commitSha,
         errors: tooLarge ? [{ message: 'Output too large' }, ...errors] : errors,
         warnings,
+        info,
       });
     } catch (e) {
       this.logger.error(`Build ${buildId} crashed: ${(e as Error).message}`);
@@ -152,7 +168,7 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
       .where(
         and(
           eq(builds.projectId, projectId),
-          inArray(builds.status, ['succeeded', 'failed', 'timeout']),
+          inArray(builds.status, ['succeeded', 'failed', 'timeout', 'cancelled']),
         ),
       )
       .orderBy(desc(builds.createdAt))

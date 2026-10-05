@@ -2,9 +2,21 @@ export type LogEntry = { file?: string; line?: number; message: string };
 
 const ON_LINE = /\s*on input line (\d+)\.?$/;
 
-export function parseLatexLog(log: string): { errors: LogEntry[]; warnings: LogEntry[] } {
+export type ParsedLog = { errors: LogEntry[]; warnings: LogEntry[]; info: LogEntry[] };
+
+/** Is a `! ` / `file:line:` error followed by TeX's `l.<n>` context? Those halt or need recovery. */
+function hasContext(lines: string[], from: number): boolean {
+  for (const l of lines.slice(from + 1, from + 10)) {
+    if (/^l\.\d+/.test(l)) return true;
+    if (l.startsWith('! ') || /^\S[^:]*?:\d+: /.test(l)) return false;
+  }
+  return false;
+}
+
+export function parseLatexLog(log: string): ParsedLog {
   const errors: LogEntry[] = [];
   const warnings: LogEntry[] = [];
+  const info: LogEntry[] = [];
   // open files; undefined = a plain "(" that is not a file
   const stack: Array<string | undefined> = [];
   const withFile = (): { file?: string } => {
@@ -19,7 +31,10 @@ export function parseLatexLog(log: string): { errors: LogEntry[]; warnings: LogE
     // `-file-line-error` format: `./chapters/intro.tex:12: Undefined control sequence.`
     const [, locFile, locLine, locMessage] = /^(\S[^:]*?):(\d+): (.*)$/.exec(text) ?? [];
     if (locFile && locLine && locMessage?.trim() && !locMessage.trim().startsWith('==>')) {
-      errors.push({ file: locFile, line: Number(locLine), message: locMessage.trim() });
+      const entry = { file: locFile, line: Number(locLine), message: locMessage.trim() };
+      // TeX recovered on its own (e.g. "Infinite glue shrinkage" while splitting a box): no
+      // `l.<n>` context follows and the run goes on, so it is a warning, as Overleaf shows it.
+      (hasContext(lines, i) ? errors : warnings).push(entry);
       continue;
     }
 
@@ -59,6 +74,12 @@ export function parseLatexLog(log: string): { errors: LogEntry[]; warnings: LogE
       continue;
     }
 
+    const box =
+      /^((?:Over|Under)full \\[hv]box .*?) (?:in paragraph |detected )?at lines? (\d+)/.exec(text);
+    if (box) {
+      info.push({ ...withFile(), line: Number(box[2]), message: box[1] as string });
+      continue;
+    }
     if (/^(l\.\d+|Overfull|Underfull)/.test(text)) continue;
 
     for (const m of text.matchAll(/\(([^\s()]*)|\)/g)) {
@@ -66,5 +87,5 @@ export function parseLatexLog(log: string): { errors: LogEntry[]; warnings: LogE
       else stack.push(/^(\.{0,2}\/|[A-Za-z]:)|\.\w+$/.test(m[1] ?? '') ? m[1] : undefined);
     }
   }
-  return { errors, warnings };
+  return { errors, warnings, info };
 }

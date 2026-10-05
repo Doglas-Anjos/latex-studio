@@ -1,6 +1,15 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Copy, Download, FileText, FolderOpen, Search, Trash2 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  CircleHelp,
+  Copy,
+  Download,
+  FileText,
+  FolderOpen,
+  Search,
+  Trash2,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/button';
 import {
@@ -10,6 +19,7 @@ import {
   type ImportMode,
   RemoveDialog,
 } from '../components/dashboard/dialogs';
+import { HELP_SEEN_KEY, HelpDialog } from '../components/dashboard/help-dialog';
 import { Menu } from '../components/menu';
 import { useService } from '../di/service-provider';
 import { type Project, ProjectServiceToken } from '../services/project.service';
@@ -42,11 +52,30 @@ export function ProjectsPage() {
   const importRef = useRef<HTMLDialogElement>(null);
   const copyRef = useRef<HTMLDialogElement>(null);
   const removeRef = useRef<HTMLDialogElement>(null);
+  const helpRef = useRef<HTMLDialogElement>(null);
   const [importMode, setImportMode] = useState<ImportMode>('zip');
   const [copying, setCopying] = useState<Project | null>(null);
   const [removing, setRemoving] = useState<Project | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+
+  // First visit with no projects: show the guide once; closing it sets the flag.
+  const empty = data?.length === 0;
+  useEffect(() => {
+    const dialog = helpRef.current;
+    if (!empty || !dialog) return;
+    try {
+      if (localStorage.getItem(HELP_SEEN_KEY)) return;
+    } catch {}
+    const markSeen = () => {
+      try {
+        localStorage.setItem(HELP_SEEN_KEY, '1');
+      } catch {}
+    };
+    dialog.addEventListener('close', markSeen, { once: true });
+    if (!dialog.open) dialog.showModal();
+    return () => dialog.removeEventListener('close', markSeen);
+  }, [empty]);
 
   const open = (id: string) => {
     useWorkspaceStore.getState().setActivePath(null);
@@ -103,6 +132,9 @@ export function ProjectsPage() {
               Importar pasta
             </button>
           </Menu>
+          <Button variant="ghost" size="compact" onClick={() => helpRef.current?.showModal()}>
+            <CircleHelp size={16} aria-hidden="true" /> Como funciona
+          </Button>
         </div>
       </header>
 
@@ -144,6 +176,7 @@ export function ProjectsPage() {
         />
       )}
 
+      <HelpDialog dialogRef={helpRef} />
       <CreateDialog dialogRef={createRef} onDone={open} />
       <ImportDialog dialogRef={importRef} mode={importMode} setMode={setImportMode} onDone={open} />
       <CopyDialog dialogRef={copyRef} project={copying} onDone={open} />

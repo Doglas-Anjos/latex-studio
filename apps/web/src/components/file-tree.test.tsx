@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
 import { type FileService, FileServiceToken } from '../services/file.service';
+import { type HistoryService, HistoryServiceToken } from '../services/history.service';
 import { renderWithApp } from '../test/render';
 import { useWorkspaceStore } from '../workspace-store';
 import { buildTree, classifyFile, FileTree } from './file-tree';
@@ -19,6 +20,9 @@ const fake = (): FileService => ({
   upload: vi.fn().mockResolvedValue(undefined),
   write: vi.fn(),
 });
+
+const history = (changes: { path: string; type: string }[] = []) =>
+  ({ status: vi.fn().mockResolvedValue({ baseline: null, changes }) }) as unknown as HistoryService;
 
 describe('FileTree', () => {
   beforeEach(() => {
@@ -49,7 +53,7 @@ describe('FileTree', () => {
   it('shows the folder and activates a file on click', async () => {
     renderWithApp(
       <FileTree projectId="p1" canEdit={false} mainFile="main.tex" />,
-      new Container().register(FileServiceToken, fake()),
+      new Container().register(FileServiceToken, fake()).register(HistoryServiceToken, history()),
     );
     expect(await screen.findByRole('button', { name: /chapters/ })).toBeTruthy();
     await userEvent.click(await screen.findByRole('button', { name: /intro\.tex/ }));
@@ -60,7 +64,7 @@ describe('FileTree', () => {
     const service = fake();
     renderWithApp(
       <FileTree projectId="p1" canEdit mainFile="main.tex" />,
-      new Container().register(FileServiceToken, service),
+      new Container().register(FileServiceToken, service).register(HistoryServiceToken, history()),
     );
     await userEvent.click(await screen.findByRole('button', { name: 'Renomear main.tex' }));
     const dialog = screen.getByRole('dialog', { name: 'Renomear' });
@@ -78,7 +82,7 @@ describe('FileTree', () => {
     const service = fake();
     renderWithApp(
       <FileTree projectId="p1" canEdit mainFile="main.tex" />,
-      new Container().register(FileServiceToken, service),
+      new Container().register(FileServiceToken, service).register(HistoryServiceToken, history()),
     );
     await userEvent.click(await screen.findByRole('button', { name: 'Excluir main.tex' }));
     const dialog = screen.getByRole('dialog', { name: 'Excluir' });
@@ -91,7 +95,7 @@ describe('FileTree', () => {
     const service = fake();
     renderWithApp(
       <FileTree projectId="p1" canEdit mainFile="main.tex" />,
-      new Container().register(FileServiceToken, service),
+      new Container().register(FileServiceToken, service).register(HistoryServiceToken, history()),
     );
     await userEvent.click(await screen.findByRole('button', { name: 'Upload' }));
     const dialog = screen.getByRole('dialog', { name: 'Enviar arquivos' });
@@ -107,5 +111,22 @@ describe('FileTree', () => {
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar' }));
     await waitFor(() => expect(service.upload).toHaveBeenCalledWith('p1', [b]));
+  });
+
+  it('marks changed files and their folders as dirty', async () => {
+    const { container } = renderWithApp(
+      <FileTree projectId="p1" canEdit={false} mainFile="main.tex" />,
+      new Container().register(FileServiceToken, fake()).register(
+        HistoryServiceToken,
+        history([
+          { path: 'chapters/intro.tex', type: 'modify' },
+          { path: 'gone.tex', type: 'remove' },
+        ]),
+      ),
+    );
+    const badge = await screen.findByText('M');
+    expect(badge.getAttribute('title')).toBe('Alterado desde a última versão salva');
+    expect(badge.getAttribute('data-type')).toBe('modify');
+    expect(container.querySelectorAll('.tree-dirty')).toHaveLength(2); // file + folder dot
   });
 });

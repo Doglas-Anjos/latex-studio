@@ -23,7 +23,10 @@ Type X to quit.
 )`;
 
 it('parses errors and warnings with file and line', () => {
-  const { errors, warnings } = parseLatexLog(log);
+  const { errors, warnings, info } = parseLatexLog(log);
+  expect(info).toEqual([
+    { file: './chapters/intro.tex', line: 3, message: 'Overfull \\hbox (12.0pt too wide)' },
+  ]);
   expect(errors).toEqual([
     { file: './chapters/intro.tex', line: 12, message: 'Undefined control sequence.' },
     { file: './main.tex', message: "LaTeX Error: File `foo.sty' not found." },
@@ -46,5 +49,19 @@ it('parses -file-line-error style errors', () => {
   ].join('\n');
   expect(parseLatexLog(log).errors).toEqual([
     { file: 't.tex', line: 3, message: 'Undefined control sequence.' },
+  ]);
+});
+
+it('treats a file:line error TeX recovered from (no l.<n> context) as a warning', () => {
+  const log = [
+    './cap.tex:225: Infinite glue shrinkage found in box being split',
+    '[30]',
+    './cap.tex:9: Undefined control sequence.',
+    String.raw`l.9 \foo`,
+  ].join('\n');
+  const { errors, warnings } = parseLatexLog(log);
+  expect(errors).toEqual([{ file: './cap.tex', line: 9, message: 'Undefined control sequence.' }]);
+  expect(warnings).toEqual([
+    { file: './cap.tex', line: 225, message: 'Infinite glue shrinkage found in box being split' },
   ]);
 });

@@ -2999,3 +2999,83 @@ button.log-row:hover {
 .status-problems [data-kind="warning"] {
   color: var(--warn);
 }
+
+/* Compile options menu */
+.compile-menu {
+  position: relative;
+}
+.compile-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+.compile-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.compile-menu-body {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 16rem;
+  padding: 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 18%, transparent);
+  font-size: 0.85rem;
+}
+.compile-menu-group {
+  display: grid;
+  padding: 0.25rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.compile-menu-label {
+  padding: 0.2rem 0.6rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  text-transform: none;
+}
+.compile-menu-body button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+}
+.compile-menu-body button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--line) 50%, transparent);
+}
+.compile-menu-body button:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+.compile-menu-check {
+  display: inline-grid;
+  place-items: center;
+  width: 1rem;
+  color: var(--primary);
+}
+.compile-menu-actions {
+  padding-top: 0.25rem;
+}
+.problem-count[data-kind="info"] {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+}
+.problem-count[aria-pressed="true"][data-kind="info"] {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.log-group-counts [data-kind="info"],
+.log-info {
+  color: var(--primary);
+}
+.log-info {
+  border-color: var(--primary);
+}

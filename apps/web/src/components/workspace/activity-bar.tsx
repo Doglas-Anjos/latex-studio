@@ -1,4 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
 import {
   Files,
   GitCompare,
@@ -10,8 +9,7 @@ import {
   Users,
 } from 'lucide-react';
 import { useRef } from 'react';
-import { useService } from '../../di/service-provider';
-import { HistoryServiceToken } from '../../services/history.service';
+import { useHistoryStatus } from '../../hooks/use-history-status';
 import { type SidebarView, useSettingsStore } from '../../settings-store';
 import { AppearanceDialog } from '../appearance-dialog';
 
@@ -42,13 +40,7 @@ export function ActivityBar({
   const appearance = useRef<HTMLDialogElement>(null);
   const view = useSettingsStore((s) => s.sidebarView);
   const set = useSettingsStore((s) => s.set);
-  const history = useService(HistoryServiceToken);
-  const { data } = useQuery({
-    queryKey: ['history', projectId, 'status'],
-    queryFn: () => history.status(projectId),
-    refetchInterval: 30_000,
-  });
-  const changed = data?.changes.length ?? 0;
+  const changed = useHistoryStatus(projectId).data?.changes.length ?? 0;
   return (
     <nav className="activity-bar" aria-label="Painéis">
       {(Object.keys(viewLabels) as SidebarView[]).map((v) => {
@@ -67,7 +59,9 @@ export function ActivityBar({
             }}
           >
             <Icon size={20} aria-hidden="true" />
-            {v === 'changes' && changed > 0 && <span className="activity-badge">{changed}</span>}
+            {(v === 'changes' || v === 'files') && changed > 0 && (
+              <span className="activity-badge">{changed}</span>
+            )}
           </button>
         );
       })}

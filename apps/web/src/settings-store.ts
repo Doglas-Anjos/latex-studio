@@ -44,6 +44,12 @@ export interface Settings {
   panelHeight: number;
   sidebarView: SidebarView;
   panelOpen: boolean;
+  /** Compile a few seconds after the document stops changing. */
+  autoCompile: boolean;
+  /** Images as frames, no overfull marks (faster). */
+  draftMode: boolean;
+  /** false = keep compiling past errors and still get a PDF. */
+  stopOnFirstError: boolean;
 }
 
 interface SettingsState extends Settings {
@@ -62,6 +68,9 @@ const defaults: Settings = {
   panelHeight: 220,
   sidebarView: 'files',
   panelOpen: false,
+  autoCompile: false,
+  draftMode: false,
+  stopOnFirstError: true,
 };
 
 export const resolveTheme = (theme: ThemeSetting, prefersDark: boolean): 'light' | 'dark' =>

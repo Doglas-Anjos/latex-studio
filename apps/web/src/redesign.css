@@ -642,3 +642,198 @@
     border-left: 0;
   }
 }
+
+/* Dirty files & help */
+.tree-label-text[data-dirty="modify"] {
+  color: var(--warn);
+}
+.tree-label-text[data-dirty="add"] {
+  color: var(--ok);
+}
+.tree-dirty {
+  margin-left: auto;
+  padding-left: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.tree-dirty[data-type="modify"] {
+  color: var(--warn);
+}
+.tree-dirty[data-type="add"] {
+  color: var(--ok);
+}
+.tree-dirty-dot {
+  width: 0.4rem;
+  height: 0.4rem;
+  padding: 0;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.6;
+}
+.help-sections {
+  display: grid;
+  gap: 0.9rem;
+}
+.help-sections h3 {
+  margin: 0 0 0.2rem;
+  font-size: 0.95rem;
+}
+.help-sections p {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* Comments & packages */
+/* Round "add comment" button at the editor's right edge, on the selection's
+   first line. Fades in when mounted; nothing else appears until it is clicked. */
+.comment-fab {
+  position: absolute;
+  right: 0.75rem;
+  z-index: 14;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  animation: comment-fab-in 150ms ease-out;
+}
+.comment-fab:hover,
+.comment-fab:focus-visible {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+@keyframes comment-fab-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+.comment-popup {
+  width: min(20rem, calc(100% - 1rem));
+  max-width: none;
+}
+.comment-popup-scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+button.comment-popup-scope {
+  all: unset;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+button.comment-popup-scope:hover,
+button.comment-popup-scope:focus-visible {
+  background: color-mix(in srgb, var(--focus) 20%, transparent);
+}
+button.comment-popup-scope[aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--primary-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .comment-fab {
+    animation: none;
+  }
+}
+@media (max-width: 36rem) {
+  .comment-popup {
+    width: auto;
+  }
+}
+
+/* Packages: two lines per entry (switch + name + badge / options + usage + actions). */
+.package-add {
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+}
+.package-add input {
+  flex: 1 1 0;
+}
+.package-switch {
+  appearance: none;
+  flex: none;
+  position: relative;
+  width: 1.7rem;
+  height: 1rem;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--line);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+.package-switch::after {
+  content: "";
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 0.15s;
+}
+.package-switch:checked {
+  background: var(--ok);
+}
+.package-switch:checked::after {
+  transform: translateX(0.7rem);
+}
+.package-switch:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.package-switch:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.package-name {
+  font-weight: 700;
+}
+.package-row {
+  flex-wrap: nowrap;
+}
+.package-row .badge {
+  flex: none;
+}
+.package-meta {
+  flex-wrap: nowrap;
+}
+.package-meta .package-options {
+  flex: 0 1 6.5rem;
+  width: 6.5rem;
+}
+.package-meta .package-usage {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+}
+.package-meta .package-actions {
+  margin-left: auto;
+}
+.package-detected > summary {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.2rem 0;
+}
+.package-detected > .detected-list {
+  margin-top: 0.3rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .package-switch,
+  .package-switch::after {
+    transition: none;
+  }
+}

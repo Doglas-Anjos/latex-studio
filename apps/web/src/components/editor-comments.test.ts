@@ -8,7 +8,10 @@ import {
   type ComposerTarget,
   commentComposer,
   commentHighlights,
+  placePopup,
   refreshHighlights,
+  type SelectionAffordance,
+  selectionAffordance,
   setComposerTarget,
 } from './editor-comments';
 import { encodeAnchorPos } from './yjs-anchor';
@@ -142,85 +145,39 @@ function draftRanges(state: EditorState) {
   return out;
 }
 
-function setupComposer(doc: string, isComposing: () => boolean = () => false) {
+function setupComposer(doc: string) {
   const calls: (ComposerTarget | null)[] = [];
   const view = new EditorView({
     state: EditorState.create({
       doc,
-      extensions: [commentComposer({ isComposing, onTarget: (target) => calls.push(target) })],
+      extensions: [commentComposer({ onTarget: (target) => calls.push(target) })],
     }),
   });
   return { view, calls };
 }
 
+const target: ComposerTarget = { scope: 'selection', from: 0, to: 5 };
+
 describe('commentComposer', () => {
-  it('resolves a click to the word touching the cursor', () => {
+  it('opens nothing on click or selection', () => {
     const { view, calls } = setupComposer('hello world');
     view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
-    expect(calls.at(-1)).toEqual({ scope: 'word', from: 0, to: 5 });
+    view.dispatch({ selection: { anchor: 0, head: 5 }, userEvent: 'select.pointer' });
+    expect(calls).toHaveLength(0);
+    view.destroy();
+  });
+
+  it('opens on the explicit effect and highlights the draft', () => {
+    const { view, calls } = setupComposer('hello world');
+    view.dispatch({ effects: setComposerTarget.of(target) });
+    expect(calls.at(-1)).toEqual(target);
     expect(draftRanges(view.state)).toEqual([{ from: 0, to: 5, cls: 'cm-comment-draft' }]);
     view.destroy();
   });
 
-  it('falls back to the line when the click touches no word', () => {
-    const { view, calls } = setupComposer('   \nhello');
-    view.dispatch({ selection: { anchor: 1 }, userEvent: 'select.pointer' });
-    expect(calls.at(-1)).toEqual({ scope: 'line', from: 0, to: 3 });
-    view.destroy();
-  });
-
-  it('opens nothing for a click on a genuinely empty line', () => {
-    const { view, calls } = setupComposer('\nhello');
-    view.dispatch({ selection: { anchor: 0 }, userEvent: 'select.pointer' });
-    expect(calls).toHaveLength(0);
-    view.destroy();
-  });
-
-  it('anchors a drag-selection to its exact bounds, including multi-line', () => {
-    const { view, calls } = setupComposer('aaa\nbbb\nccc');
-    view.dispatch({ selection: { anchor: 1, head: 9 }, userEvent: 'select.pointer' });
-    expect(calls.at(-1)).toEqual({ scope: 'selection', from: 1, to: 9 });
-    view.destroy();
-  });
-
-  it('ignores keyboard-driven selection (not tagged select.pointer)', () => {
+  it('clears via the explicit effect (escape/cancel)', () => {
     const { view, calls } = setupComposer('hello world');
-    view.dispatch({ selection: { anchor: 0, head: 5 }, userEvent: 'select' });
-    expect(calls).toHaveLength(0);
-    view.destroy();
-  });
-
-  it('keeps the target locked while the popup is being composed', () => {
-    let composing = false;
-    const { view, calls } = setupComposer('hello world', () => composing);
-    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
-    composing = true;
-    view.dispatch({ selection: { anchor: 8 }, userEvent: 'select.pointer' });
-    expect(calls.at(-1)).toEqual({ scope: 'word', from: 0, to: 5 });
-    view.destroy();
-  });
-
-  it('suppresses a click that lands on an existing comment mark', () => {
-    const { view, calls } = setupComposer('hello world');
-    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
-    expect(calls.at(-1)).not.toBeNull();
-
-    const mark = document.createElement('span');
-    mark.setAttribute('data-comment-id', 'c1');
-    view.contentDOM.appendChild(mark);
-    // button: 2 keeps CodeMirror's own mouse-selection machinery (which needs real
-    // layout) from kicking in; only our plugin's handler, and the resulting
-    // select.pointer transaction dispatched below, are under test here.
-    mark.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2 }));
-    view.dispatch({ selection: { anchor: 8 }, userEvent: 'select.pointer' });
-
-    expect(calls.at(-1)).toBeNull();
-    view.destroy();
-  });
-
-  it('clears via the explicit setComposerTarget effect (escape/cancel)', () => {
-    const { view, calls } = setupComposer('hello world');
-    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    view.dispatch({ effects: setComposerTarget.of(target) });
     view.dispatch({ effects: setComposerTarget.of(null) });
     expect(calls.at(-1)).toBeNull();
     view.destroy();
@@ -228,15 +185,15 @@ describe('commentComposer', () => {
 
   it('rides out an edit elsewhere in the document', () => {
     const { view, calls } = setupComposer('hello world');
-    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    view.dispatch({ effects: setComposerTarget.of(target) });
     view.dispatch({ changes: { from: 11, insert: '!' } });
-    expect(calls.at(-1)).toEqual({ scope: 'word', from: 0, to: 5 });
+    expect(calls.at(-1)).toEqual(target);
     view.destroy();
   });
 
   it('clears when an edit erases the target range', () => {
     const { view, calls } = setupComposer('hello world');
-    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    view.dispatch({ effects: setComposerTarget.of(target) });
     view.dispatch({ changes: { from: 0, to: 5, insert: '' } });
     expect(calls.at(-1)).toBeNull();
     view.destroy();
@@ -244,11 +201,50 @@ describe('commentComposer', () => {
 
   it('re-reports its position on scroll while open', () => {
     const { view, calls } = setupComposer('hello world');
-    view.dispatch({ selection: { anchor: 2 }, userEvent: 'select.pointer' });
+    view.dispatch({ effects: setComposerTarget.of(target) });
     const before = calls.length;
     view.scrollDOM.dispatchEvent(new Event('scroll'));
     expect(calls.length).toBe(before + 1);
-    expect(calls.at(-1)).toEqual({ scope: 'word', from: 0, to: 5 });
     view.destroy();
+  });
+});
+
+describe('selectionAffordance', () => {
+  it('reports a non-empty selection only after it settles, and clears at once', () => {
+    vi.useFakeTimers();
+    const seen: (SelectionAffordance | null)[] = [];
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: 'hello world',
+        extensions: [selectionAffordance((s) => seen.push(s))],
+      }),
+    });
+    view.dispatch({ selection: { anchor: 0, head: 5 } });
+    vi.advanceTimersByTime(100);
+    view.dispatch({ selection: { anchor: 0, head: 8 } });
+    vi.advanceTimersByTime(249);
+    expect(seen).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ from: 0, to: 8 });
+    view.dispatch({ selection: { anchor: 3 } });
+    expect(seen.at(-1)).toBeNull();
+    view.destroy();
+    vi.useRealTimers();
+  });
+});
+
+describe('placePopup', () => {
+  const box = { width: 600, height: 400 };
+  it('goes below the anchor when there is room', () => {
+    expect(placePopup({ top: 50, bottom: 70 }, box).top).toBe(76);
+  });
+  it('flips above when there is no room below', () => {
+    expect(placePopup({ top: 300, bottom: 320 }, box).top).toBe(94);
+  });
+  it('stays inside the box when the anchor is far offscreen', () => {
+    expect(placePopup({ top: -900, bottom: -880 }, box).top).toBe(8);
+    expect(placePopup({ top: 900, bottom: 920 }, box).top).toBe(192);
+    expect(placePopup({ top: 50, bottom: 70 }, { width: 200, height: 400 }).left).toBe(8);
   });
 });

@@ -1,5 +1,6 @@
 import { open } from 'node:fs/promises';
 import {
+  Body,
   Controller,
   DefaultValuePipe,
   Get,
@@ -24,6 +25,8 @@ import {
 import type { User } from '../../users/domain/user';
 import { CompileService } from '../application/compile.service';
 import type { Build } from '../domain/build.repository';
+// biome-ignore lint/style/useImportType: ValidationPipe needs the DTO class in design:paramtypes
+import { CompileDto } from './compile.dto';
 
 const COMPILE_RATE_LIMIT = { rateLimit: { max: 10, timeWindow: '1 minute' } };
 
@@ -48,8 +51,22 @@ export class CompileController {
   @Post('compile')
   @RequireProjectRole('viewer')
   @HttpCode(202)
-  request(@CurrentProject() project: Project, @CurrentUser() user: User): Promise<Build> {
-    return this.compile.request(project, user);
+  request(
+    @CurrentProject() project: Project,
+    @CurrentUser() user: User,
+    @Body() dto: CompileDto,
+  ): Promise<Build> {
+    return this.compile.request(project, user, dto);
+  }
+
+  @Post('builds/:buildId/cancel')
+  @RequireProjectRole('viewer')
+  @HttpCode(200)
+  cancel(
+    @CurrentProject() project: Project,
+    @Param('buildId', ParseUUIDPipe) buildId: string,
+  ): Promise<Build> {
+    return this.compile.cancel(project, buildId);
   }
 
   @Get('builds')

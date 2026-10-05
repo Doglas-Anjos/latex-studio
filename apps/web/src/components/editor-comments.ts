@@ -1,16 +1,15 @@
 // Usage (editor.tsx): extensions: [..., yCollab(ytext, awareness), commentHighlights(ytext, ref)];
 //   when the comment list changes: view.dispatch({ effects: refreshHighlights.of(null) }).
+import { type Extension, StateEffect, StateField } from '@codemirror/state';
 import {
-  type EditorState,
-  type Extension,
-  type SelectionRange,
-  StateEffect,
-  StateField,
-} from '@codemirror/state';
-import { Decoration, type DecorationSet, EditorView, ViewPlugin } from '@codemirror/view';
+  Decoration,
+  type DecorationSet,
+  EditorView,
+  ViewPlugin,
+  type ViewUpdate,
+} from '@codemirror/view';
 import type * as Y from 'yjs';
 import type { CommentScope } from '../comment-scope';
-import { lineRangeAt, wordRangeAt } from '../comment-scope';
 import type { Comment } from '../services/comment.service';
 import { useWorkspaceStore } from '../workspace-store';
 import { resolveAnchorPos } from './yjs-anchor';
@@ -92,7 +91,7 @@ export function commentHighlights(ytext: Y.Text, comments: { current: Anchored[]
   ];
 }
 
-/** A text range the contextual popup (editor.tsx) is composing a comment over. */
+/** A text range the popup (editor.tsx) is composing a comment over. */
 export interface ComposerTarget {
   scope: CommentScope;
   from: number;
@@ -105,24 +104,13 @@ export interface ComposerRect {
   bottom: number;
 }
 
-/** Clears the target (Escape, cancel, submit) or jumps it to a fresh selection/click. */
+/** Sets the target when the user opens the box from the icon; null clears it (Escape, cancel, submit). */
 export const setComposerTarget = StateEffect.define<ComposerTarget | null>();
 
-/** Exact selection; the word under a collapsed cursor; else its line, unless blank. */
-function resolveTarget(state: EditorState, sel: SelectionRange): ComposerTarget | null {
-  if (sel.from !== sel.to) return { scope: 'selection', from: sel.from, to: sel.to };
-  const text = state.doc.toString();
-  const word = wordRangeAt(text, sel.head);
-  if (word) return { scope: 'word', from: word.from, to: word.to };
-  const line = lineRangeAt(text, sel.head, sel.head);
-  return line.from < line.to ? { scope: 'line', from: line.from, to: line.to } : null;
-}
-
 /** Null when the position is offscreen, or layout isn't ready yet (coordsAtPos may throw). */
-function rectFor(view: EditorView, target: ComposerTarget): ComposerRect | null {
+function rectAt(view: EditorView, from: number): ComposerRect | null {
   try {
-    const pos = Math.min(target.to, view.state.doc.length);
-    const coords = view.coordsAtPos(pos, -1) ?? view.coordsAtPos(target.from, 1);
+    const coords = view.coordsAtPos(Math.min(from, view.state.doc.length), 1);
     return coords ? { left: coords.left, top: coords.top, bottom: coords.bottom } : null;
   } catch {
     return null;
@@ -130,33 +118,22 @@ function rectFor(view: EditorView, target: ComposerTarget): ComposerRect | null 
 }
 
 export interface ComposerCallbacks {
-  /** True while the popup's own composer has focus; pointer selection is then ignored. */
-  isComposing: () => boolean;
   /** Fires whenever the target changes, and on scroll/doc-change while one is set. */
   onTarget: (target: ComposerTarget | null, rect: ComposerRect | null) => void;
 }
 
 /**
- * Lightweight contextual counterpart to the explicit toolbar/gutter/shortcut flow: a mouse click
- * or drag-selection (tagged `select.pointer` by CodeMirror, unlike keyboard selection) proposes a
- * target for editor.tsx's floating popup, highlighted with `cm-comment-draft` so it reads like a
- * draft. Clicking an existing comment mark suppresses the proposal so the sidebar's reveal-thread
- * handler owns that click instead. The target rides out later edits via `tr.changes`, and clears
- * itself if they erase it.
+ * Holds the range the comment box is open over, highlighted with `cm-comment-draft`. It never
+ * proposes a target by itself (selecting text opens nothing; see `selectionAffordance`). The
+ * target rides out later edits via `tr.changes`, clears itself if they erase it, and re-reports
+ * its position on scroll so the box can follow.
  */
 export function commentComposer(callbacks: ComposerCallbacks): Extension {
-  let suppressNext = false;
   const field = StateField.define<ComposerTarget | null>({
     create: () => null,
     update(value, tr) {
       const effect = tr.effects.find((e) => e.is(setComposerTarget));
       if (effect) return effect.value;
-      if (tr.isUserEvent('select.pointer')) {
-        const suppressed = suppressNext;
-        suppressNext = false;
-        if (callbacks.isComposing()) return value;
-        return suppressed ? null : resolveTarget(tr.state, tr.state.selection.main);
-      }
       if (value && tr.docChanged) {
         const from = tr.changes.mapPos(value.from, -1);
         const to = tr.changes.mapPos(value.to, 1);
@@ -178,7 +155,7 @@ export function commentComposer(callbacks: ComposerCallbacks): Extension {
       private view: EditorView | null;
       private readonly onScroll = () => {
         const target = this.view?.state.field(field) ?? null;
-        if (this.view && target) callbacks.onTarget(target, rectFor(this.view, target));
+        if (this.view && target) callbacks.onTarget(target, rectAt(this.view, target.from));
       };
       constructor(view: EditorView) {
         this.view = view;
@@ -193,17 +170,77 @@ export function commentComposer(callbacks: ComposerCallbacks): Extension {
   return [
     field,
     scrollPlugin,
-    EditorView.domEventHandlers({
-      mousedown(event) {
-        suppressNext = !!(event.target as HTMLElement).closest?.('[data-comment-id]');
-        return false;
-      },
-    }),
     EditorView.updateListener.of((u) => {
       const target = u.state.field(field);
       if (target !== u.startState.field(field) || (target && u.docChanged)) {
-        callbacks.onTarget(target, target ? rectFor(u.view, target) : null);
+        callbacks.onTarget(target, target ? rectAt(u.view, target.from) : null);
       }
     }),
   ];
+}
+
+export interface SelectionAffordance {
+  from: number;
+  to: number;
+  /** First line of the selection; null while it is offscreen. */
+  rect: ComposerRect | null;
+}
+
+/**
+ * Reports a non-empty selection once it settles (`delay` ms without change), and again on
+ * scroll so the "add comment" icon follows its first line. An empty selection reports null
+ * at once. Nothing opens by itself: editor.tsx only shows an icon.
+ */
+export function selectionAffordance(
+  onChange: (s: SelectionAffordance | null) => void,
+  delay = 250,
+): Extension {
+  return ViewPlugin.fromClass(
+    class {
+      private timer: ReturnType<typeof setTimeout> | undefined;
+      private view: EditorView | null;
+      private readonly report = () => {
+        const sel = this.view?.state.selection.main;
+        if (!this.view || !sel || sel.empty) return onChange(null);
+        onChange({ from: sel.from, to: sel.to, rect: rectAt(this.view, sel.from) });
+      };
+      private readonly onScroll = () => {
+        if (this.view && !this.view.state.selection.main.empty) this.report();
+      };
+      constructor(view: EditorView) {
+        this.view = view;
+        view.scrollDOM.addEventListener('scroll', this.onScroll, { passive: true });
+      }
+      update(u: ViewUpdate) {
+        if (!u.selectionSet && !u.docChanged) return;
+        clearTimeout(this.timer);
+        if (u.state.selection.main.empty) onChange(null);
+        else this.timer = setTimeout(this.report, delay);
+      }
+      destroy() {
+        clearTimeout(this.timer);
+        this.view?.scrollDOM.removeEventListener('scroll', this.onScroll);
+        this.view = null;
+      }
+    },
+  );
+}
+
+/**
+ * Box position (relative to the editor box) under the icon anchored at `anchor`: right-aligned,
+ * flipped above when there is no room below, always clamped inside `box`.
+ */
+export function placePopup(
+  anchor: { top: number; bottom: number },
+  box: { width: number; height: number },
+  size = { w: 320, h: 200 },
+  margin = 8,
+): { left: number; top: number } {
+  const w = Math.min(size.w, box.width - 2 * margin);
+  const below = anchor.bottom + 6;
+  const top = below + size.h + margin > box.height ? anchor.top - 6 - size.h : below;
+  return {
+    left: Math.max(margin, box.width - w - 40),
+    top: Math.max(margin, Math.min(top, box.height - size.h - margin)),
+  };
 }

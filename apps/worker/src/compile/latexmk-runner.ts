@@ -10,6 +10,7 @@ export type Engine = 'pdflatex' | 'xelatex' | 'lualatex';
 export interface LatexmkResult {
   exitCode: number;
   timedOut: boolean;
+  cancelled: boolean;
 }
 
 const ENGINE_FLAGS: Record<Engine, string[]> = {
@@ -37,8 +38,15 @@ const WINDOWS = process.platform === 'win32';
 export class LatexmkRunner {
   constructor(@Inject(APP_CONFIG) private readonly config: WorkerConfig) {}
 
-  async run(job: { workDir: string; engine: Engine; mainFile: string }): Promise<LatexmkResult> {
-    const { workDir, engine, mainFile } = job;
+  async run(job: {
+    workDir: string;
+    engine: Engine;
+    mainFile: string;
+    options?: { draft?: boolean; haltOnError?: boolean } | undefined;
+    /** Aborting kills the whole process group (user pressed "stop"). */
+    signal?: AbortSignal | undefined;
+  }): Promise<LatexmkResult> {
+    const { workDir, engine, mainFile, options = {}, signal } = job;
     // A main file named like an option would be parsed as one.
     if (mainFile.startsWith('-')) throw new Error(`Invalid main file: ${mainFile}`);
     const args = [
@@ -46,7 +54,10 @@ export class LatexmkRunner {
       // A project-supplied .latexmkrc would run as Perl inside the worker.
       '-norc',
       '-interaction=nonstopmode',
-      '-halt-on-error',
+      // "Try to compile despite errors": nonstopmode without halting still yields a PDF.
+      ...(options.haltOnError === false ? [] : ['-halt-on-error']),
+      // Draft: images as frames, no overfull marks; same as Overleaf's "fast" mode.
+      ...(options.draft ? [String.raw`-usepretex=\PassOptionsToPackage{draft}{graphicx}`] : []),
       '-no-shell-escape',
       '-file-line-error',
       '-synctex=1',
@@ -80,17 +91,26 @@ export class LatexmkRunner {
           stdio: 'ignore',
         });
         let timedOut = false;
+        let cancelled = false;
         const timer = setTimeout(() => {
           timedOut = true;
           killTree(child);
         }, this.config.COMPILE_TIMEOUT_MS);
+        const onAbort = () => {
+          cancelled = true;
+          killTree(child);
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+        if (signal?.aborted) onAbort();
         child.on('error', (error) => {
           clearTimeout(timer);
+          signal?.removeEventListener('abort', onAbort);
           reject(error);
         });
         child.on('close', (code) => {
           clearTimeout(timer);
-          resolve({ exitCode: code ?? -1, timedOut });
+          signal?.removeEventListener('abort', onAbort);
+          resolve({ exitCode: code ?? -1, timedOut, cancelled });
         });
       });
     } finally {
