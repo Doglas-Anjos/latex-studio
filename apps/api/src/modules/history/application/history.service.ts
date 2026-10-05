@@ -110,13 +110,18 @@ export class HistoryService {
     }
     return this.lock.run(project.id, async () => {
       await this.sync.flush(project.id, path);
-      const sha = await files.repo.commitPaths(
-        [path],
-        trimmed || `Update ${basename(path)}`,
-        author(user),
-      );
-      if (!sha) throw new ConflictException('Nothing to commit');
-      return { sha };
+      const message = trimmed || `Update ${basename(path)}`;
+      const sha = await files.repo.commitPaths([path], message, author(user));
+      if (sha) return { sha };
+      // Already autosaved since the last named version: give it a named version anyway, so the
+      // "changed since the last saved version" marks clear as the person expects.
+      const [base, head] = await Promise.all([files.repo.baseline(), files.repo.head()]);
+      const sinceBase =
+        base && head && base.sha !== head
+          ? (await files.repo.changedFiles(base.sha, head)).some((c) => c.path === path)
+          : false;
+      if (!sinceBase) throw new ConflictException('Nothing to commit');
+      return { sha: await files.repo.markVersion(message, author(user)) };
     });
   }
 

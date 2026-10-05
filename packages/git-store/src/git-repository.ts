@@ -188,8 +188,16 @@ export class GitRepository {
     }) as Promise<Awaited<ReturnType<GitRepository['log']>>[number] | null>;
   }
 
+  /**
+   * A named save point with no new content: the working tree is already in HEAD (an autosave
+   * took it), but the person wants a version they chose, so the baseline moves here.
+   */
+  markVersion(message: string, author: Author): Promise<string> {
+    return git.commit({ fs, dir: this.dir, message, author, committer: author });
+  }
+
   /** HEAD's sha, or null for an empty repo. */
-  private head(): Promise<string | null> {
+  head(): Promise<string | null> {
     return git.resolveRef({ fs, dir: this.dir, ref: 'HEAD' }).catch(() => null);
   }
 
