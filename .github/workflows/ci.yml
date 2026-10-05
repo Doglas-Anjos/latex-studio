@@ -12,7 +12,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # gitleaks scans every commit of the push, so it needs the history
           fetch-depth: 0
@@ -39,7 +39,7 @@ jobs:
       matrix:
         image: [api, web]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: docker build -f docker/${{ matrix.image }}/Dockerfile -t latex-studio-${{ matrix.image }} .
       - name: Scan image for known vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     container: texlive/texlive:latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The TeX Live image has no Node, and pnpm's installer needs it.
       - uses: actions/setup-node@v4
         with:
