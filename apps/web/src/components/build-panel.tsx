@@ -113,9 +113,11 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
     queryKey: ['packages', projectId, 'usage'],
     queryFn: () => packages.usage(projectId),
   });
-  const disabledUsed = manifest?.find(
-    (e) => !e.enabled && usage?.some((u) => u.name === e.name),
-  )?.name;
+  // All of them: the error does not say which package defined the missing command.
+  const disabledUsed = manifest
+    ?.filter((e) => !e.enabled && usage?.some((u) => u.name === e.name))
+    .map((e) => e.name)
+    .join(', ');
   const build = builds?.[0];
   useSecondTick(isActive(build));
   const open = useSettingsStore((s) => s.panelOpen);
@@ -623,7 +625,7 @@ function LogItem({
       <span className="log-msg">
         {entry.message}
         {disabledUsed && /Undefined control sequence/.test(entry.message)
-          ? ` · pacote ${disabledUsed} está desligado`
+          ? ` · desligado no painel e usado no código: ${disabledUsed}`
           : ''}
       </span>
     </>

@@ -185,6 +185,51 @@ describe('BuildPanel problem counts', () => {
     await userEvent.click(warnings);
     expect(await screen.findByText('Undefined control sequence')).toBeTruthy();
   });
+
+  // The log cannot say which package defined the missing command, so name every suspect.
+  it('names every disabled package the code uses on an undefined control sequence', async () => {
+    const build = {
+      id: 'b1',
+      projectId: 'p1',
+      status: 'failed' as const,
+      engine: 'pdflatex',
+      mainFile: 'main.tex',
+      commitSha: null,
+      exitCode: 12,
+      errors: [{ file: 'custom.tex', line: 201, message: 'Undefined control sequence.' }],
+      warnings: [],
+      createdAt: '',
+      startedAt: null,
+      finishedAt: null,
+    };
+    renderWithApp(
+      <BuildPanel projectId="p1" canCompile={true} />,
+      new Container()
+        .register(CompileServiceToken, {
+          builds: vi.fn().mockResolvedValue([build]),
+        } as unknown as CompileService)
+        .register(ProjectServiceToken, {
+          get: vi.fn().mockResolvedValue(fakeProject),
+        } as unknown as ProjectService)
+        .register(ToolsServiceToken, {} as unknown as ToolsService)
+        .register(FileServiceToken, {} as unknown as FileService)
+        .register(PackageServiceToken, {
+          get: vi.fn().mockResolvedValue([
+            { name: 'geometry', enabled: false, order: 0 },
+            { name: 'newfloat', enabled: false, order: 1 },
+            { name: 'unused', enabled: false, order: 2 },
+          ]),
+          usage: vi.fn().mockResolvedValue([
+            { name: 'geometry', options: '', path: 'custom.tex', line: 7 },
+            { name: 'newfloat', options: '', path: 'custom.tex', line: 61 },
+          ]),
+        } as unknown as PackageService),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: '1 erro' }));
+    expect(
+      await screen.findByText(/desligado no painel e usado no código: geometry, newfloat$/),
+    ).toBeTruthy();
+  });
 });
 
 describe('BuildPanel failure without structured errors', () => {
