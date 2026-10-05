@@ -170,6 +170,10 @@ describe.skipIf(!latexmkAvailable)('LaTeX compile regressions', () => {
     const r = await compile(await project('glue'), 'pdflatex');
     expect(r.status).toBe('succeeded');
     expect(r.errors).toEqual([]);
+    // Whether this page layout triggers the message depends on the memoir/lipsum versions (TeX
+    // Live 2026 does not, MiKTeX does); when it does, it must land in warnings. The parser's unit
+    // test pins the classification itself.
+    if (!r.log.includes('Infinite glue shrinkage')) return;
     expect(r.warnings).toContainEqual(
       expect.objectContaining({
         message: expect.stringContaining('Infinite glue shrinkage found in box being split'),
