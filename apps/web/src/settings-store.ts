@@ -3,30 +3,42 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 
 export type SyntaxToken =
   | 'command'
+  | 'userCommand'
   | 'env'
-  | 'math'
-  | 'brace'
-  | 'string'
-  | 'ref'
+  | 'package'
+  | 'option'
   | 'heading'
-  | 'comment'
+  | 'title'
+  | 'math'
+  | 'mathCommand'
   | 'number'
-  | 'verbatim'
+  | 'brace'
+  | 'ref'
+  | 'url'
+  | 'string'
   | 'emphasis'
+  | 'verbatim'
+  | 'comment'
   | 'invalid';
 
 export const SYNTAX_TOKENS: { token: SyntaxToken; label: string }[] = [
   { token: 'command', label: 'Comandos' },
+  { token: 'userCommand', label: 'Comandos próprios' },
   { token: 'env', label: 'Ambientes' },
+  { token: 'package', label: 'Pacotes e classe' },
+  { token: 'option', label: 'Opções [..]' },
+  { token: 'heading', label: 'Comandos de seção' },
+  { token: 'title', label: 'Títulos de seção' },
   { token: 'math', label: 'Matemática' },
-  { token: 'brace', label: 'Chaves' },
-  { token: 'string', label: 'Strings' },
-  { token: 'ref', label: 'Referências' },
-  { token: 'heading', label: 'Títulos' },
-  { token: 'comment', label: 'Comentários' },
+  { token: 'mathCommand', label: 'Comandos matemáticos' },
   { token: 'number', label: 'Números' },
+  { token: 'brace', label: 'Chaves e operadores' },
+  { token: 'ref', label: 'Rótulos e citações' },
+  { token: 'url', label: 'URLs' },
+  { token: 'string', label: 'Caminhos e strings' },
+  { token: 'emphasis', label: 'Ênfase e negrito' },
   { token: 'verbatim', label: 'Verbatim' },
-  { token: 'emphasis', label: 'Ênfase' },
+  { token: 'comment', label: 'Comentários' },
   { token: 'invalid', label: 'Inválido' },
 ];
 

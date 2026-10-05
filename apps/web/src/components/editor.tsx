@@ -6,7 +6,6 @@ import { EditorView, keymap } from '@codemirror/view';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { basicSetup } from 'codemirror';
-import { latex } from 'codemirror-lang-latex';
 import { Heading, MessageSquarePlus, Rows, Type, X } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import { yCollab } from 'y-codemirror.next';
@@ -44,6 +43,7 @@ import {
   setComposerTarget,
 } from './editor-comments';
 import { editorTheme, latexHighlight } from './editor-theme';
+import { latexSupport } from './latex-language';
 import { peerColor } from './presence';
 import { useZoom } from './use-zoom';
 import { approxWords } from './word-count';
@@ -74,11 +74,20 @@ export const isLocalEdit = (tr: Transaction) =>
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 /** Remote awareness states as peers, one per client (two tabs of one user are two peers). */
-export function peersFrom(states: Map<number, Record<string, unknown>>, self: number): Peer[] {
+/**
+ * Other people editing this file. `selfUser` drops the same account in another tab or a
+ * connection that has not timed out yet, which otherwise shows up as a second "you".
+ */
+export function peersFrom(
+  states: Map<number, Record<string, unknown>>,
+  self: number,
+  selfUser?: string,
+): Peer[] {
   const peers: Peer[] = [];
   for (const [id, state] of states) {
-    const u = state.user as { name?: unknown; color?: unknown } | undefined;
+    const u = state.user as { id?: unknown; name?: unknown; color?: unknown } | undefined;
     if (id === self || typeof u?.name !== 'string') continue;
+    if (selfUser && u.id === selfUser) continue;
     // Remote-controlled: only a plain hex colour reaches a style attribute.
     const color = typeof u.color === 'string' && HEX_COLOR.test(u.color) ? u.color : 'var(--muted)';
     peers.push({ id, name: u.name, color });
@@ -406,7 +415,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           editorTheme,
           wrap.of(wrapping(useSettingsStore.getState().lineWrapping)),
           ro.of(EditorState.readOnly.of(readOnly)),
-          path.endsWith('.tex') ? latex() : [],
+          path.endsWith('.tex') ? latexSupport() : [],
           yCollab(ytext, provider.awareness),
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
@@ -480,7 +489,11 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     providerRef.current = provider;
     const onAwareness = () => {
       if (awareness)
-        useWorkspaceStore.getState().setPeers(peersFrom(awareness.getStates(), doc.clientID));
+        useWorkspaceStore
+          .getState()
+          .setPeers(
+            peersFrom(awareness.getStates(), doc.clientID, awareness.getLocalState()?.user?.id),
+          );
     };
     awareness?.on('change', onAwareness);
     provider.on('unsyncedChanges', ({ number }: { number: number }) =>
@@ -552,6 +565,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     if (!awareness || !me) return;
     const color = peerColor(me.id);
     awareness.setLocalStateField('user', {
+      id: me.id,
       name: me.name || me.email,
       color,
       colorLight: `${color}33`,

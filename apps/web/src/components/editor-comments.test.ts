@@ -8,6 +8,7 @@ import {
   type ComposerTarget,
   commentComposer,
   commentHighlights,
+  findQuote,
   placePopup,
   refreshHighlights,
   type SelectionAffordance,
@@ -246,5 +247,18 @@ describe('placePopup', () => {
     expect(placePopup({ top: -900, bottom: -880 }, box).top).toBe(8);
     expect(placePopup({ top: 900, bottom: 920 }, box).top).toBe(192);
     expect(placePopup({ top: 50, bottom: 70 }, { width: 200, height: 400 }).left).toBe(8);
+  });
+});
+
+describe('findQuote (comment whose Yjs anchor no longer resolves)', () => {
+  const text = 'intro\nalpha beta\nmiddle\nalpha beta\nend';
+  it('picks the occurrence closest to the stored line', () => {
+    expect(findQuote(text, 'alpha beta', 2)).toEqual({ from: 6, to: 16 });
+    expect(findQuote(text, 'alpha beta', 4)).toEqual({ from: 24, to: 34 });
+  });
+  it('gives up on a missing or too short quote', () => {
+    expect(findQuote(text, 'gone', 2)).toBeNull();
+    expect(findQuote(text, 'al', 2)).toBeNull();
+    expect(findQuote(text, undefined, 2)).toBeNull();
   });
 });

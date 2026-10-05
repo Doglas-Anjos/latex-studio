@@ -118,4 +118,13 @@ describe('peersFrom', () => {
       { id: 3, name: 'Ana', color: 'var(--muted)' },
     ]);
   });
+
+  it('hides the same account connected from another tab', () => {
+    const states = new Map<number, Record<string, unknown>>([
+      [1, { user: { id: 'u1', name: 'Local', color: '#000000' } }],
+      [5, { user: { id: 'u1', name: 'Local', color: '#000000' } }],
+      [6, { user: { id: 'u2', name: 'Ana', color: '#1f6fa8' } }],
+    ]);
+    expect(peersFrom(states, 1, 'u1')).toEqual([{ id: 6, name: 'Ana', color: '#1f6fa8' }]);
+  });
 });

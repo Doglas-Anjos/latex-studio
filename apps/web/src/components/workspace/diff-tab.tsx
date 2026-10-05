@@ -3,7 +3,6 @@ import { MergeView, unifiedMergeView } from '@codemirror/merge';
 import { EditorState } from '@codemirror/state';
 import { EditorView, lineNumbers } from '@codemirror/view';
 import { useQuery } from '@tanstack/react-query';
-import { latex } from 'codemirror-lang-latex';
 import { AlertTriangle } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useService } from '../../di/service-provider';
@@ -11,6 +10,7 @@ import { FileServiceToken } from '../../services/file.service';
 import { HistoryServiceToken } from '../../services/history.service';
 import { DIFF_LIMITS } from '../editor-changes';
 import { editorTheme, latexHighlight } from '../editor-theme';
+import { latexSupport } from '../latex-language';
 import { basename } from './tab-bar';
 
 const short = (sha: string, none: string) => (sha === 'empty' ? none : sha.slice(0, 7));
@@ -67,7 +67,7 @@ export function DiffTab(props: { projectId: string; path: string; from: string; 
       EditorView.editable.of(false),
       EditorView.lineWrapping,
       syntaxHighlighting(latexHighlight),
-      ...(path.endsWith('.tex') ? [latex()] : []),
+      ...(path.endsWith('.tex') ? [latexSupport()] : []),
     ];
     const view =
       mode === 'split'

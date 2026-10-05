@@ -14,17 +14,47 @@ import type { Comment } from '../services/comment.service';
 import { useWorkspaceStore } from '../workspace-store';
 import { resolveAnchorPos } from './yjs-anchor';
 
-type Anchored = Pick<Comment, 'id' | 'anchor'>;
+type Anchored = Pick<Comment, 'id' | 'anchor'> & Partial<Pick<Comment, 'quote' | 'line'>>;
 
 export const refreshHighlights = StateEffect.define<null>();
 
+/**
+ * Where a comment whose Yjs anchor no longer resolves (the document was rebuilt from the file, so
+ * its item ids changed) sits now: the occurrence of its quote closest to the line it was made on.
+ */
+export function findQuote(
+  text: string,
+  quote: string | undefined,
+  line: number | null | undefined,
+): { from: number; to: number } | null {
+  const q = quote?.trim();
+  if (!q || q.length < 3) return null;
+  let target = 0;
+  for (let n = 1, i = 0; n < (line ?? 1) && i !== -1; n++) {
+    i = text.indexOf('\n', i);
+    if (i !== -1) target = ++i;
+  }
+  let best = -1;
+  for (let i = text.indexOf(q); i !== -1; i = text.indexOf(q, i + 1)) {
+    if (best === -1 || Math.abs(i - target) < Math.abs(best - target)) best = i;
+  }
+  return best === -1 ? null : { from: best, to: best + q.length };
+}
+
 /** Decorations for the given comments, from their Yjs anchors; `ytext` must match `docLength`. */
 function resolve(ytext: Y.Text, comments: readonly Anchored[], docLength: number): DecorationSet {
+  let text: string | null = null;
   return Decoration.set(
     comments.flatMap((c) => {
-      const from = resolveAnchorPos(ytext, c.anchor.start);
-      const to = resolveAnchorPos(ytext, c.anchor.end);
-      if (from === null || to === null || from >= to || to > docLength) return [];
+      let from = resolveAnchorPos(ytext, c.anchor.start);
+      let to = resolveAnchorPos(ytext, c.anchor.end);
+      if (from === null || to === null || from >= to) {
+        text ??= ytext.toString();
+        const found = findQuote(text, c.quote, c.line);
+        if (!found) return [];
+        ({ from, to } = found);
+      }
+      if (to > docLength) return [];
       return [
         Decoration.mark({
           class: 'cm-comment',
