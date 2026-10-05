@@ -6,7 +6,7 @@ export type ParsedLog = { errors: LogEntry[]; warnings: LogEntry[]; info: LogEnt
 
 /** Is a `! ` / `file:line:` error followed by TeX's `l.<n>` context? Those halt or need recovery. */
 function hasContext(lines: string[], from: number): boolean {
-  for (const l of lines.slice(from + 1, from + 10)) {
+  for (const l of lines.slice(from + 1, from + 20)) {
     if (/^l\.\d+/.test(l)) return true;
     if (l.startsWith('! ') || /^\S[^:]*?:\d+: /.test(l)) return false;
   }
@@ -29,12 +29,14 @@ export function parseLatexLog(log: string): ParsedLog {
     const text = lines[i] ?? '';
 
     // `-file-line-error` format: `./chapters/intro.tex:12: Undefined control sequence.`
-    const [, locFile, locLine, locMessage] = /^(\S[^:]*?):(\d+): (.*)$/.exec(text) ?? [];
+    const [, locFile, locLine, locMessage] =
+      /^((?:[A-Za-z]:)?[^:\s][^:]*?):(\d+): (.*)$/.exec(text) ?? [];
     if (locFile && locLine && locMessage?.trim() && !locMessage.trim().startsWith('==>')) {
       const entry = { file: locFile, line: Number(locLine), message: locMessage.trim() };
       // TeX recovered on its own (e.g. "Infinite glue shrinkage" while splitting a box): no
       // `l.<n>` context follows and the run goes on, so it is a warning, as Overleaf shows it.
-      (hasContext(lines, i) ? errors : warnings).push(entry);
+      // An explicit `... Error` is always an error, even when its help text pushes `l.<n>` out of view.
+      (hasContext(lines, i) || /\bError\b/.test(entry.message) ? errors : warnings).push(entry);
       continue;
     }
 
@@ -60,7 +62,10 @@ export function parseLatexLog(log: string): ParsedLog {
       // continuation: next line starts with "(pkg)" for packages, or plain text for LaTeX
       for (let j = i + 1; j < Math.min(i + 5, lines.length) && !ON_LINE.test(message); j++) {
         const next = lines[j] ?? '';
-        const cont = tag ? new RegExp(`^\\(${tag}\\)\\s+(.*)`).exec(next)?.[1] : next.trim();
+        // startsWith, not a RegExp: the tag comes from the log, so `(a|a)*b` would backtrack forever.
+        const cont = tag
+          ? next.startsWith(`(${tag})`) && next.slice(tag.length + 2).trim()
+          : next.trim();
         if (!cont || (!tag && /^(!|\(|[A-Za-z]+ Warning:)/.test(next))) break;
         message += ` ${cont.trim()}`;
         i = j;

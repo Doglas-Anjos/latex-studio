@@ -22,10 +22,61 @@ import { snapshotProject } from '../snapshot';
 const run = promisify(execFile);
 const MAX_STDERR = 2048;
 const EXPORT_TTL_MS = 60 * 60 * 1000;
+const FORMAT_TTL_MS = 10 * 60 * 1000;
+const MAX_SCAN_BYTES = 1024 * 1024;
 // pandoc and texcount follow \input-like commands without kpathsea's paranoid mode, so a project
 // could pull /proc/self/environ or another project's files into the exported document.
-const UNSAFE_INCLUDE =
-  /\\(input|include|includegraphics|lstinputlisting|verbatiminput|InputIfFileExists|bibliography|addbibresource|import|subfile|includeonly)\s*(\[[^\]]*\])?\s*\{\s*(\/|[A-Za-z]:|\.\.|~)/;
+// ponytail: lexical scan, an alias (\let\x\input, \csname) still gets past it; the real fix is
+// running pandoc/texcount with no read access outside the snapshot (sandbox, or `pandoc --sandbox`).
+const INCLUDE_CMD =
+  /\\(input|include|includegraphics|lstinputlisting|verbatiminput|inputminted|InputIfFileExists|bibliography|addbibresource|import|subimport|subfile|includeonly|includepdf)(?![A-Za-z])/g;
+const TWO_PATH_ARGS = new Set(['import', 'subimport', 'inputminted']); // {dir}{file}, {lang}{file}
+const OPT_ARG = /[\s*]{0,64}\[[^\][]{0,1024}\]/y;
+const OPEN_ARG = /[\s*]{0,64}\{/y;
+const BARE_ARG = /\s{0,64}([^\s{}[\]\\%]{1,1024})/y;
+const MAX_ARG = 1024;
+
+/** Absolute, `~`, a `..` segment, a pipe, or a backslash (Windows separator or an unknown macro). */
+const unsafePath = (arg: string): boolean =>
+  arg
+    .replace(/[{}"]/g, '') // TeX drops grouping braces, pandoc drops quotes
+    .split(',') // \bibliography{a,b}, \includeonly{a,b}
+    .some((p) => /^\s*([/~]|[A-Za-z]:)|[\\|]|(^|\/)\s*\.\.\s*(\/|$)/.test(p));
+
+/** End of the brace group opened just before `from`, or -1 if it is unbalanced or too long. */
+function closeBrace(text: string, from: number): number {
+  for (let i = from, depth = 1; i < text.length && i < from + MAX_ARG; i++) {
+    if (text[i] === '{') depth++;
+    else if (text[i] === '}' && --depth === 0) return i;
+  }
+  return -1;
+}
+
+/** The first include-like command whose path argument could leave the project, if any. */
+export function findUnsafeInclude(text: string): string | undefined {
+  for (const m of text.matchAll(INCLUDE_CMD)) {
+    let pos = m.index + m[0].length;
+    let args = 0;
+    for (let guard = 0; guard < 8 && args < (TWO_PATH_ARGS.has(m[1] as string) ? 2 : 1); guard++) {
+      OPT_ARG.lastIndex = pos;
+      if (OPT_ARG.test(text)) {
+        pos = OPT_ARG.lastIndex;
+        continue;
+      }
+      OPEN_ARG.lastIndex = pos;
+      if (!OPEN_ARG.test(text)) break;
+      const end = closeBrace(text, OPEN_ARG.lastIndex);
+      if (end < 0 || unsafePath(text.slice(OPEN_ARG.lastIndex, end))) return m[0];
+      pos = end + 1;
+      args++;
+    }
+    if (args > 0) continue;
+    BARE_ARG.lastIndex = pos; // TeX's `\input file`
+    const bare = BARE_ARG.exec(text)?.[1];
+    if (bare && unsafePath(bare)) return m[0];
+  }
+  return undefined;
+}
 
 /** All files under `dir`, as `/`-separated paths relative to it. */
 async function listTree(dir: string): Promise<string[]> {
@@ -41,8 +92,13 @@ async function listTree(dir: string): Promise<string[]> {
 
 export async function assertNoUnsafeIncludes(dir: string, files: string[]): Promise<void> {
   for (const file of files.filter((f) => /\.(tex|sty|cls|bib)$/i.test(f))) {
-    if (UNSAFE_INCLUDE.test(await readFile(join(dir, file), 'utf8'))) {
-      throw new Error(`${file}: absolute or parent paths in input-like commands are not allowed`);
+    // Unscanned files must not reach pandoc/texcount, so a big one fails the job.
+    if ((await stat(join(dir, file))).size > MAX_SCAN_BYTES) {
+      throw new Error(`${file}: too large to check for unsafe includes (max 1 MB)`);
+    }
+    const cmd = findUnsafeInclude(await readFile(join(dir, file), 'utf8'));
+    if (cmd) {
+      throw new Error(`${file}: absolute or parent paths in ${cmd} are not allowed`);
     }
   }
 }
@@ -74,7 +130,7 @@ const MAX_FORMAT_BYTES = 1024 * 1024;
  * editor by seconds) in a throwaway dir: `in.<ext>` is the only file latexindent sees.
  * Memory is bounded by the container limit, like compile.
  */
-async function formatText(path: string, text: string): Promise<{ text: string }> {
+async function formatText(path: string, text: string): Promise<string> {
   const ext = FORMATTABLE.exec(path)?.[1]?.toLowerCase();
   if (!ext) throw new Error(`Invalid path: ${path}`);
   if (Buffer.byteLength(text) > MAX_FORMAT_BYTES) {
@@ -95,7 +151,7 @@ async function formatText(path: string, text: string): Promise<{ text: string }>
       const lines = (e.stderr || e.message).split('\n').slice(0, 5).join('\n');
       throw new Error(lines.replace(/[^\t\n\x20-\x7e]/g, '').slice(0, 500));
     });
-    return { text: stdout };
+    return stdout;
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -119,7 +175,17 @@ export class ToolsProcessor extends WorkerHost {
   }
 
   async process(job: Job<ToolJobData>): Promise<unknown> {
-    if (job.data.kind === 'format') return formatText(job.data.path, job.data.text);
+    if (job.data.kind === 'format') {
+      // Up to 1 MB: a return value would be copied into Redis (job hash and events stream), so
+      // it goes to disk and the API reads it back when the client polls the job.
+      const text = await formatText(job.data.path, job.data.text);
+      const dir = this.builds.resolve(`${job.data.projectId}/format`);
+      await mkdir(dir, { recursive: true });
+      await pruneOld(dir, FORMAT_TTL_MS);
+      const file = `${job.id}.txt`;
+      await writeFile(join(dir, file), text);
+      return { file };
+    }
     const { projectId } = job.data;
     const [project] = await this.db.select().from(projects).where(eq(projects.id, projectId));
     if (!project) throw new Error('Project not found');
@@ -144,7 +210,7 @@ export class ToolsProcessor extends WorkerHost {
       const { format } = job.data;
       const dir = this.builds.resolve(`${projectId}/exports`);
       await mkdir(dir, { recursive: true });
-      await pruneOld(dir);
+      await pruneOld(dir, EXPORT_TTL_MS);
       const file = `${job.id}.${format}`;
       const bib = files.find((f) => f.endsWith('.bib'));
       const args = [
@@ -166,10 +232,10 @@ export class ToolsProcessor extends WorkerHost {
   }
 }
 
-/** Export files are one-shot downloads; drop anything older than an hour. */
-async function pruneOld(dir: string): Promise<void> {
+/** Export and format files are one-shot downloads; drop anything older than `ttl`. */
+async function pruneOld(dir: string, ttl: number): Promise<void> {
   for (const name of await readdir(dir)) {
     const path = join(dir, name);
-    if (Date.now() - (await stat(path)).mtimeMs > EXPORT_TTL_MS) await unlink(path);
+    if (Date.now() - (await stat(path)).mtimeMs > ttl) await unlink(path);
   }
 }

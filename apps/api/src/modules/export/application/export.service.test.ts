@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppConfig } from '@latex-studio/core';
@@ -92,6 +92,29 @@ describe('ExportService', () => {
       BUILDS_DIR: dir,
     } as AppConfig);
     await expect(exporter.jobStatus({ id: 'p1' } as Project, '1')).rejects.toThrow('Job not found');
+  });
+
+  it('reads a completed format result from disk, not from Redis', async () => {
+    await mkdir(join(dir, 'p1', 'format'), { recursive: true });
+    await writeFile(join(dir, 'p1', 'format', '5.txt'), 'formatted');
+    const job = (file: string) => ({
+      data: { projectId: 'p1', kind: 'format' },
+      returnvalue: { file },
+      getState: async () => 'completed',
+    });
+    let file = '5.txt';
+    const queue = { add: async () => ({ id: '5' }), getJob: async () => job(file) } as never;
+    const exporter = new ExportService({} as never, {} as never, queue, {
+      BUILDS_DIR: dir,
+    } as AppConfig);
+    await expect(exporter.jobStatus({ id: 'p1' } as Project, '5')).resolves.toEqual({
+      state: 'completed',
+      result: { text: 'formatted' },
+    });
+    file = '6.txt';
+    await expect(exporter.jobStatus({ id: 'p1' } as Project, '5')).rejects.toThrow('expired');
+    file = '../../x.txt';
+    await expect(exporter.jobStatus({ id: 'p1' } as Project, '5')).rejects.toThrow('Invalid path');
   });
 
   it('enqueues a format job for a valid path only', async () => {

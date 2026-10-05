@@ -4,8 +4,8 @@ import {
   DatabaseModule,
   MAINTENANCE_QUEUE,
   QUEUE_CONNECTION,
-  type QueueConnection,
   QueueModule,
+  queueOptions,
   TOOLS_QUEUE,
 } from '@latex-studio/core';
 import { BullModule } from '@nestjs/bullmq';
@@ -23,7 +23,7 @@ import { ToolsProcessor } from './tools/tools.processor';
     BullModule.forRootAsync({
       imports: [QueueModule],
       inject: [QUEUE_CONNECTION],
-      useFactory: (connection: QueueConnection) => ({ connection }),
+      useFactory: queueOptions,
     }),
     BullModule.registerQueue(
       { name: COMPILE_QUEUE },

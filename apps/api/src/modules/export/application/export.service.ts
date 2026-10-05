@@ -1,4 +1,4 @@
-import { readdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import type { Readable } from 'node:stream';
 import {
@@ -102,9 +102,20 @@ export class ExportService {
   async jobStatus(project: Project, jobId: string): Promise<JobStatus> {
     const job = await this.find(project, jobId);
     const state = await job.getState();
+    let result: unknown = job.returnvalue;
+    if (state === 'completed' && job.data.kind === 'format') {
+      // The worker writes the formatted text to disk; Redis only holds the file name.
+      const file = (job.returnvalue as { file?: string } | null)?.file ?? '';
+      const path = this.builds.resolve(`${project.id}/format/${file}`);
+      const text = await readFile(path, 'utf8').catch((e: NodeJS.ErrnoException) => {
+        if (e.code === 'ENOENT') throw new NotFoundException('Formatted text expired');
+        throw e;
+      });
+      result = { text };
+    }
     return {
       state,
-      ...(state === 'completed' && { result: job.returnvalue }),
+      ...(state === 'completed' && { result }),
       ...(state === 'failed' && { error: job.failedReason }),
     };
   }

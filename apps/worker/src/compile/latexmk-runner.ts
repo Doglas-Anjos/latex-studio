@@ -59,6 +59,9 @@ export class LatexmkRunner {
       // Draft: images as frames, no overfull marks; same as Overleaf's "fast" mode.
       ...(options.draft ? [String.raw`-usepretex=\PassOptionsToPackage{draft}{graphicx}`] : []),
       '-no-shell-escape',
+      // MiKTeX ignores the max_print_line env var below; without this its log wraps at 79
+      // columns (MiKTeX's lualatex rejects the flag) and `C:\...\pkg.sty:10: Fatal ...` errors split across lines unparsed.
+      ...(WINDOWS && engine !== 'lualatex' ? ['-latexoption=-max-print-line=10000'] : []),
       '-file-line-error',
       '-synctex=1',
       '-output-directory=out',

@@ -65,3 +65,24 @@ it('treats a file:line error TeX recovered from (no l.<n> context) as a warning'
     { file: './cap.tex', line: 225, message: 'Infinite glue shrinkage found in box being split' },
   ]);
 });
+
+it('does not treat package names from the log as regexes', () => {
+  const evil = `Package (a|a)*b Warning: x\n(${'a'.repeat(40)}`;
+  const start = performance.now();
+  expect(parseLatexLog(evil).warnings).toEqual([{ message: 'x' }]);
+  expect(performance.now() - start).toBeLessThan(100);
+  const log = 'Package foo( Warning: bad\n(foo()    more on input line 3.';
+  expect(parseLatexLog(log).warnings).toEqual([{ message: 'bad more', line: 3 }]);
+});
+
+it('parses file:line errors whose path has a Windows drive letter', () => {
+  const log =
+    'C:MiKTeX\texlatex\fontspec\fontspec.sty:101: Fatal Package fontspec Error: requires XeTeX\nl.101 msg_fatal:nn';
+  expect(parseLatexLog(log).errors).toEqual([
+    {
+      file: 'C:MiKTeX\texlatex\fontspec\fontspec.sty',
+      line: 101,
+      message: 'Fatal Package fontspec Error: requires XeTeX',
+    },
+  ]);
+});

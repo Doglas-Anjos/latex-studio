@@ -52,6 +52,8 @@ async function bootstrap() {
       connectTimeout: 500,
       maxRetriesPerRequest: 1,
     }),
+    // Fail open: if Redis is down or full, availability beats strict limiting (argon2 still bounds auth).
+    skipOnError: true,
     // One IPv6 client usually owns a whole /64, so key on the prefix.
     keyGenerator: ({ ip }) => (ip.includes(':') ? ip.split(':').slice(0, 4).join(':') : ip),
     // Nest's exception handler turns plain errors into 500; an HttpException keeps the 429.

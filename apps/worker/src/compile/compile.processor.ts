@@ -40,6 +40,15 @@ const exists = (path: string) =>
     () => false,
   );
 
+/** Polls `cancelled`; a failed poll (DB blip) is retried next tick, not an unhandled rejection. */
+export function watchCancel(abort: AbortController, cancelled: () => Promise<boolean>, ms = 1000) {
+  return setInterval(async () => {
+    try {
+      if (await cancelled()) abort.abort();
+    } catch {}
+  }, ms);
+}
+
 @Processor(COMPILE_QUEUE)
 export class CompileProcessor extends WorkerHost implements OnApplicationBootstrap {
   private readonly logger = new Logger(CompileProcessor.name);
@@ -92,13 +101,13 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
 
       // "Stop compilation": the API flips the row to cancelled; poll it and kill latexmk.
       const abort = new AbortController();
-      const watch = setInterval(async () => {
+      const watch = watchCancel(abort, async () => {
         const [row] = await this.db
           .select({ status: builds.status })
           .from(builds)
           .where(eq(builds.id, buildId));
-        if (row?.status === 'cancelled') abort.abort();
-      }, 1000);
+        return row?.status === 'cancelled';
+      });
       const run = await this.runner
         .run({
           workDir: tmp,

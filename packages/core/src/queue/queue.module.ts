@@ -38,8 +38,18 @@ export function parseRedisUrl(url: string): QueueConnection {
 export const QUEUE_CONNECTION = Symbol('QUEUE_CONNECTION');
 
 /**
+ * BullMQ root options. Every Queue instance (api and worker) rewrites the events stream cap in
+ * Redis on startup, so all of them must use this: the default (10k events, each holding the job's
+ * return value) can fill a 64 MB noeviction Redis.
+ */
+export const queueOptions = (connection: QueueConnection) => ({
+  connection,
+  streams: { events: { maxLen: 200 } },
+});
+
+/**
  * Redis connection for BullMQ. Apps wire it with
- * `BullModule.forRootAsync({ inject: [QUEUE_CONNECTION], useFactory: (connection) => ({ connection }) })`.
+ * `BullModule.forRootAsync({ inject: [QUEUE_CONNECTION], useFactory: queueOptions })`.
  */
 @Global()
 @Module({

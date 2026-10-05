@@ -26,7 +26,7 @@ Full architecture plan: see `docs/architecture.md`.
 - No shell strings. Child processes only via `execFile`/spawn with argument arrays, and only inside the worker sandbox.
 - Every filesystem path from a user goes through `SafePath` (rejects `..`, absolute paths, symlinks; realpath inside the project dir).
 - Zip import: zip-slip check, entry/size caps, drop any `.git/` entry.
-- Compile: `latexmk -no-shell-escape`, timeout, memory and pid limits, no network.
+- Compile: `latexmk -no-shell-escape`, timeout, memory and pid limits; no internet egress, but TeX runs as the worker uid on the internal network (reaches Postgres/Redis).
 - No login of its own: the application in front (FasorX) signs a short JWT; `IdentityGuard` verifies it (`jose`, algorithm pinned by config, `iss`/`aud`, max lifetime) and a `ProjectRoleGuard` checks the role. Rate limits on compile and upload.
 - Local mode (no verifier) is only accepted when `APP_URL` is localhost; the config schema enforces it.
 - WebSocket upgrades bypass Nest guards: the Hocuspocus `onAuthenticate` hook must verify the bearer token (provider `token`) and the `Origin` header itself.
