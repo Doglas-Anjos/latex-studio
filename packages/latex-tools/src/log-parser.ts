@@ -87,6 +87,11 @@ export function parseLatexLog(log: string): ParsedLog {
     }
     if (/^(l\.\d+|Overfull|Underfull)/.test(text)) continue;
 
+    // TeX Live 2026 reports errors it recovered from without file or line, followed by whatever
+    // the page builder printed next: `ignored: Infinite glue shrinkage … [2] [3] (out/main.aux)`.
+    const ignored = /^ignored(?: error)?: (.{1,300}?)(?=\s+[[(]|$)/.exec(text);
+    if (ignored) warnings.push({ ...withFile(), message: (ignored[1] as string).trim() });
+
     for (const m of text.matchAll(/\(([^\s()]*)|\)/g)) {
       if (m[0] === ')') stack.pop();
       else stack.push(/^(\.{0,2}\/|[A-Za-z]:)|\.\w+$/.test(m[1] ?? '') ? m[1] : undefined);

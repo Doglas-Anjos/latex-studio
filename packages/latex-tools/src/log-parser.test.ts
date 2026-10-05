@@ -1,6 +1,19 @@
 import { expect, it } from 'vitest';
 import { parseLatexLog } from './log-parser';
 
+it('reads TeX Live 2026 "ignored:" recoveries as warnings in the current file', () => {
+  const log = [
+    '(./main.tex',
+    'ignored: Infinite glue shrinkage found in box being split [2] [3] [4] (out/main.aux)',
+    ')',
+  ].join('\n');
+  const { errors, warnings } = parseLatexLog(log);
+  expect(errors).toEqual([]);
+  expect(warnings).toEqual([
+    { file: './main.tex', message: 'Infinite glue shrinkage found in box being split' },
+  ]);
+});
+
 const log = `This is pdfTeX, Version 3.141592653-2.6-1.40.25
 (./main.tex
 LaTeX2e <2023-11-01>
