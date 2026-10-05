@@ -549,7 +549,7 @@ describe('BuildPanel compile options menu and auto compile', () => {
     await waitFor(() => expect((caret as HTMLButtonElement).disabled).toBe(false));
     // The build bar sits at the bottom of the window: no room below the caret.
     caret.getBoundingClientRect = () =>
-      ({ left: 400, top: window.innerHeight - 40, bottom: window.innerHeight - 8 }) as DOMRect;
+      ({ left: 400, top: window.innerHeight - 32, bottom: window.innerHeight }) as DOMRect;
     await userEvent.click(caret);
     const menu = document.querySelector('.compile-menu-body') as HTMLElement;
     // Both top and bottom set at once squeezed the real menu to a sliver below the window.
