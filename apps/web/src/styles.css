@@ -1103,9 +1103,9 @@ a {
 .history-panel {
   display: grid;
   gap: 0.5rem;
+  align-content: start;
   padding: 0.5rem 0.75rem 0.75rem;
-  max-height: 20rem;
-  overflow: auto;
+  /* The sidebar body scrolls; a capped inner box left a blank area below it. */
   font-size: 0.85rem;
 }
 .comment-composer {
