@@ -44,7 +44,7 @@ describe('ChangesView', () => {
     );
     await userEvent.type(screen.getByLabelText('Mensagem da versão'), 'nova');
     await userEvent.click(screen.getByRole('button', { name: 'Salvar versão' }));
-    await waitFor(() => expect(service.commit).toHaveBeenCalledWith('p1', 'nova'));
+    await waitFor(() => expect(service.commit).toHaveBeenCalledWith('p1', 'nova', undefined));
   });
 
   it('asks for confirmation before discarding changes, and cancel keeps them', async () => {

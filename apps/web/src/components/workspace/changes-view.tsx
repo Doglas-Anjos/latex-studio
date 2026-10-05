@@ -50,6 +50,9 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
   const openTab = useWorkspaceStore((s) => s.openTab);
   const setSettings = useSettingsStore((s) => s.set);
   const [message, setMessage] = useState('');
+  // Files left out of the next version (VS Code's unstaged); everything is included by default,
+  // and a file that changes again stays as the user left it.
+  const [excluded, setExcluded] = useState<ReadonlySet<string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(new Set());
   const discardDialog = useRef<HTMLDialogElement>(null);
   const [discardTarget, setDiscardTarget] = useState<string | null>(null);
@@ -61,6 +64,16 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
   const baseline = data?.baseline;
   const changes = data?.changes ?? [];
   const groups = useMemo(() => groupChanges(changes), [changes]);
+  const selected = changes.filter((c) => !excluded.has(c.path)).map((c) => c.path);
+  const allSelected = selected.length === changes.length;
+  const toggleFile = (path: string) =>
+    setExcluded((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(path)) next.add(path);
+      return next;
+    });
+  const toggleAll = () =>
+    setExcluded(allSelected ? new Set(changes.map((c) => c.path)) : new Set());
   const showGroupHeaders = groups.length > 1;
   const countLabel =
     changes.length === 0
@@ -70,9 +83,10 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
         : `${changes.length} arquivos alterados`;
 
   const save = useMutation({
-    mutationFn: () => history.commit(projectId, message.trim()),
+    mutationFn: () => history.commit(projectId, message.trim(), allSelected ? undefined : selected),
     onSuccess: () => {
       setMessage('');
+      setExcluded(new Set());
       return queryClient.invalidateQueries({ queryKey: ['history', projectId] });
     },
   });
@@ -89,12 +103,12 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
   });
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (message.trim() && !save.isPending) save.mutate();
+    if (message.trim() && selected.length > 0 && !save.isPending) save.mutate();
   };
   const onComposerKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault();
-      if (message.trim() && !save.isPending) save.mutate();
+      if (message.trim() && selected.length > 0 && !save.isPending) save.mutate();
     }
   };
   const toggleGroup = (folder: string) =>
@@ -105,7 +119,17 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
     });
 
   const renderRow = (c: FileChange) => (
-    <li key={c.path} className="change-row">
+    <li key={c.path} className="change-row" data-excluded={excluded.has(c.path)}>
+      {canEdit && (
+        <input
+          type="checkbox"
+          className="change-check"
+          checked={!excluded.has(c.path)}
+          aria-label={`Incluir ${c.path} na versão`}
+          title="Incluir na próxima versão"
+          onChange={() => toggleFile(c.path)}
+        />
+      )}
       {c.type === 'remove' ? (
         <span className="change-row-main" title={c.path}>
           <FileTypeIcon name={c.path} />
@@ -250,6 +274,14 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
       </div>
       {canEdit && (
         <form className="changes-composer" onSubmit={submit}>
+          {changes.length > 0 && (
+            <label className="changes-select-all">
+              <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+              {allSelected
+                ? `Todos os ${changes.length} arquivos entram na versão`
+                : `${selected.length} de ${changes.length} arquivos entram na versão`}
+            </label>
+          )}
           <textarea
             placeholder="Mensagem da versão"
             aria-label="Mensagem da versão"
@@ -260,7 +292,11 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
           />
           <div className="changes-composer-actions">
             {save.error && <p className="form-error">{save.error.message}</p>}
-            <Button variant="primary" type="submit" disabled={save.isPending || !message.trim()}>
+            <Button
+              variant="primary"
+              type="submit"
+              disabled={save.isPending || !message.trim() || selected.length === 0}
+            >
               {save.isPending ? 'Salvando…' : 'Salvar versão'}
             </Button>
           </div>

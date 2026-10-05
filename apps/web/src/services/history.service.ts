@@ -41,7 +41,8 @@ export interface HistoryService {
   file(projectId: string, sha: string, path: string): Promise<string>;
   status(projectId: string): Promise<HistoryStatus>;
   blame(projectId: string, path: string): Promise<Blame>;
-  commit(projectId: string, message: string): Promise<{ sha: string }>;
+  /** `paths` limits the version to those files; all changes when omitted. */
+  commit(projectId: string, message: string, paths?: string[]): Promise<{ sha: string }>;
   /** Commits only `path` ("Ctrl+S"); an empty message falls back to a default on the server. */
   commitFile(projectId: string, path: string, message?: string): Promise<{ sha: string }>;
   restore(projectId: string, sha: string, path: string): Promise<{ sha: string }>;
@@ -82,8 +83,11 @@ export class HttpHistoryService implements HistoryService {
     );
   }
 
-  commit(projectId: string, message: string) {
-    return this.api.post<{ sha: string }>(`/projects/${projectId}/history/commit`, { message });
+  commit(projectId: string, message: string, paths?: string[]) {
+    return this.api.post<{ sha: string }>(`/projects/${projectId}/history/commit`, {
+      message,
+      ...(paths && { paths }),
+    });
   }
 
   commitFile(projectId: string, path: string, message?: string) {
