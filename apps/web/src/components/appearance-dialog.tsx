@@ -123,16 +123,39 @@ export function AppearanceDialog({ ref }: { ref: RefObject<HTMLDialogElement | n
             ))}
           </select>
         </label>
-        <label className="field">
-          <span>Fonte do editor</span>
-          <select value={s.editorFont} onChange={(e) => set({ editorFont: e.target.value })}>
-            {FONTS.map((f) => (
-              <option key={f} value={f}>
-                {(f.split(',')[0] ?? f).replaceAll('"', '')}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* Each choice previews itself in its own font, size and syntax colours. A font that is
+            not installed falls back to the next one, and the sample shows it. */}
+        <fieldset className="font-choices">
+          <legend>Fonte do editor</legend>
+          {FONTS.map((f) => (
+            <label key={f} className="font-choice">
+              <input
+                type="radio"
+                name="editor-font"
+                value={f}
+                checked={s.editorFont === f}
+                onChange={() => set({ editorFont: f })}
+              />
+              <span className="font-choice-name">{(f.split(',')[0] ?? f).replaceAll('"', '')}</span>
+              <code
+                className="font-sample"
+                aria-hidden="true"
+                style={{ fontFamily: f, fontSize: s.fontSize }}
+              >
+                <span className="s-heading">{String.raw`\section`}</span>
+                <span className="s-brace">{'{'}</span>
+                <span className="s-title">Introdução</span>
+                <span className="s-brace">{'}'}</span> <span className="s-comment">% 0O 1lI</span>
+                {'\n'}
+                <span className="s-math">{String.raw`$\alpha \neq x^2 -> y$`}</span>{' '}
+                <span className="s-command">{String.raw`\cite`}</span>
+                <span className="s-brace">{'{'}</span>
+                <span className="s-ref">silva2020</span>
+                <span className="s-brace">{'}'}</span>
+              </code>
+            </label>
+          ))}
+        </fieldset>
         <label className="field">
           <span>Tamanho: {s.fontSize}px</span>
           <input

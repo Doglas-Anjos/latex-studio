@@ -2430,6 +2430,73 @@ button.change-row-main:hover .change-name {
 .appearance-dialog .actions {
   flex-wrap: wrap;
 }
+.font-choices {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.font-choices legend {
+  margin-bottom: 0.25rem;
+  padding: 0;
+}
+.font-choice {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 0.5rem;
+  align-items: center;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.font-choice:has(input:checked) {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+.font-choice:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.font-choice-name {
+  font-weight: 600;
+}
+.font-sample {
+  grid-column: 1 / -1;
+  display: block;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  white-space: pre;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+.font-sample .s-heading {
+  color: var(--syn-heading);
+  font-weight: 600;
+}
+.font-sample .s-title {
+  color: var(--syn-title);
+  font-weight: 600;
+}
+.font-sample .s-brace {
+  color: var(--syn-brace);
+}
+.font-sample .s-comment {
+  color: var(--syn-comment);
+  font-style: italic;
+}
+.font-sample .s-math {
+  color: var(--syn-math);
+}
+.font-sample .s-command {
+  color: var(--syn-command);
+}
+.font-sample .s-ref {
+  color: var(--syn-ref);
+}
 .cm-ySelectionInfo {
   padding: 1px 4px;
   border-radius: 3px 3px 3px 0;
