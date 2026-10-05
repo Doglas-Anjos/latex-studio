@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Code2, FileText, X } from 'lucide-react';
+import { ArrowLeft, Code2, FileText, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Brand } from '../components/brand';
@@ -226,12 +226,36 @@ export function ProjectPage() {
                 )}
               </section>
             </div>
-            {(!compact || surface === 'pdf') && (
-              <>
-                {!compact && <Splitter root={root} resizes="pdfWidth" label="Redimensionar PDF" />}
-                <PdfViewer projectId={project.id} />
-              </>
-            )}
+            {(!compact || surface === 'pdf') &&
+              (pdfWidth === 0 && !compact ? (
+                <button
+                  type="button"
+                  className="pdf-collapsed"
+                  title="Mostrar PDF"
+                  onClick={() => setSettings({ pdfWidth: 480 })}
+                >
+                  <PanelRightOpen size={16} aria-hidden="true" />
+                  <span>PDF</span>
+                </button>
+              ) : (
+                <>
+                  {!compact && (
+                    <div className="pdf-divider">
+                      <Splitter root={root} resizes="pdfWidth" label="Redimensionar PDF" />
+                      <button
+                        type="button"
+                        className="pdf-collapse"
+                        title="Ocultar PDF"
+                        aria-label="Ocultar PDF"
+                        onClick={() => setSettings({ pdfWidth: 0 })}
+                      >
+                        <PanelRightClose size={14} aria-hidden="true" />
+                      </button>
+                    </div>
+                  )}
+                  <PdfViewer projectId={project.id} />
+                </>
+              ))}
           </div>
           {panelOpen && (
             <Splitter root={root} resizes="panelHeight" label="Redimensionar painel inferior" />

@@ -203,13 +203,25 @@ export class GitRepository {
     author: Author,
     coAuthors: Author[] = [],
   ): Promise<string | null> {
-    const rows = await git.statusMatrix({ fs, dir: this.dir, filepaths: paths });
-    const changed = rows.filter(([, head, workdir]) => !(head === 1 && workdir === 1));
-    if (changed.length === 0) return null;
-    for (const [filepath, , workdir] of changed) {
-      if (workdir === 0) await git.remove({ fs, dir: this.dir, filepath });
+    // Content hashes, not statusMatrix: its mtime+size shortcut misses a same-size edit made in
+    // the same second, which is exactly what Ctrl+S right after typing produces.
+    const head = await this.head();
+    let changed = 0;
+    for (const filepath of paths) {
+      const content = await fs.promises.readFile(join(this.dir, filepath)).catch(() => null);
+      const inHead = head
+        ? await git
+            .readBlob({ fs, dir: this.dir, oid: head, filepath })
+            .then((r) => r.oid)
+            .catch(() => null)
+        : null;
+      const now = content ? (await git.hashBlob({ object: content })).oid : null;
+      if (now === inHead) continue;
+      changed++;
+      if (content === null) await git.remove({ fs, dir: this.dir, filepath });
       else await git.add({ fs, dir: this.dir, filepath });
     }
+    if (changed === 0) return null;
     const trailers = coAuthors.map((a) => `Co-authored-by: ${a.name} <${a.email}>`);
     const full = trailers.length ? `${message}\n\n${trailers.join('\n')}` : message;
     return git.commit({ fs, dir: this.dir, message: full, author, committer: author });

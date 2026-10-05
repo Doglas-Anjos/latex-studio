@@ -157,6 +157,9 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
                 />
                 <span className="package-name-text">{e.name}</span>
               </label>
+              <span className="package-state" data-enabled={e.enabled}>
+                {e.enabled ? 'ativo' : 'desligado'}
+              </span>
               {!e.enabled && usedBy(e.name).length > 0 && (
                 <span className="badge">bypass ativo</span>
               )}

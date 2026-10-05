@@ -3079,3 +3079,168 @@ button.log-row:hover {
 .log-info {
   border-color: var(--primary);
 }
+
+/* Split compile button + fixed-position options menu */
+.split-btn {
+  display: inline-flex;
+  align-items: stretch;
+}
+.split-btn > .btn {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.split-btn-caret {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--primary-ink) 35%, transparent);
+  border-radius: 0 6px 6px 0;
+  background: var(--primary);
+  color: var(--primary-ink);
+  cursor: pointer;
+}
+.split-btn-caret.is-danger {
+  background: var(--danger);
+}
+.split-btn-caret:hover {
+  filter: brightness(1.1);
+}
+.compile-menu-body {
+  z-index: 1000;
+}
+
+/* Packages: clear rows, real switch, obvious on/off */
+.packages-panel .package-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  margin: 0 0 0.4rem;
+  background: var(--surface);
+}
+.packages-panel .package-item[data-enabled="false"] {
+  background: color-mix(in srgb, var(--line) 35%, var(--surface));
+}
+.packages-panel .package-item[data-enabled="false"] .package-name-text {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+}
+.packages-panel .package-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 2.1rem;
+  height: 1.2rem;
+  margin: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--muted) 55%, var(--surface));
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex: none;
+}
+.packages-panel .package-switch::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.2rem - 4px);
+  height: calc(1.2rem - 4px);
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform 0.15s;
+}
+.packages-panel .package-switch:checked {
+  background: var(--ok);
+}
+.packages-panel .package-switch:checked::before {
+  transform: translateX(0.9rem);
+}
+.packages-panel .package-switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.package-state {
+  font-size: 0.7rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+.package-state[data-enabled="true"] {
+  color: var(--ok);
+  border-color: color-mix(in srgb, var(--ok) 50%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .packages-panel .package-switch,
+  .packages-panel .package-switch::before {
+    transition: none;
+  }
+}
+
+/* Editor | PDF divider: visible grip, collapsible */
+.pdf-divider {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+.pdf-divider .splitter {
+  width: 6px;
+  flex: none;
+  border-left: 1px solid var(--line);
+  background: var(--paper);
+}
+.pdf-divider .splitter::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  width: 2px;
+  height: 28px;
+  margin-top: -14px;
+  border-radius: 2px;
+  background: var(--muted);
+  opacity: 0.6;
+}
+.pdf-divider .splitter:hover,
+.pdf-divider .splitter:focus-visible {
+  background: color-mix(in srgb, var(--primary) 25%, var(--paper));
+}
+.pdf-collapse {
+  position: absolute;
+  top: 0.4rem;
+  left: 8px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+.pdf-collapse:hover {
+  color: var(--ink);
+}
+.pdf-collapsed {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  width: 2rem;
+  padding: 0.5rem 0;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+  writing-mode: vertical-rl;
+}
+.pdf-collapsed:hover {
+  color: var(--ink);
+}

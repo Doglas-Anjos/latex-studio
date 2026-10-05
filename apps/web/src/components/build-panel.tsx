@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useService } from '../di/service-provider';
 import {
   type Build,
@@ -61,12 +62,6 @@ const exportLabels: [ExportFormat, string][] = [
   ['md', 'Markdown'],
   ['html', 'HTML'],
 ];
-
-const engineLabels: Record<Project['engine'], string> = {
-  pdflatex: 'pdfLaTeX',
-  xelatex: 'XeLaTeX',
-  lualatex: 'LuaLaTeX',
-};
 
 /**
  * Why a build that ended badly lists no error, or `null` when there is nothing to explain. Some
@@ -158,6 +153,12 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   // unless a build is already in flight.
   const wordCount = useWorkspaceStore((s) => s.wordCount);
   const armed = useRef(false);
+  const autoFire = useRef(() => {});
+  autoFire.current = () => {
+    const latest = queryClient.getQueryData<Build[]>(['builds', projectId])?.[0];
+    if (!isActive(latest)) start.mutate();
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: wordCount is the "document changed" signal; the action lives in a ref
   useEffect(() => {
     if (!autoCompile || !canCompile) {
       armed.current = false;
@@ -167,13 +168,11 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
       armed.current = true; // the first value is the document loading, not an edit
       return;
     }
-    const id = window.setTimeout(() => {
-      const latest = queryClient.getQueryData<Build[]>(['builds', projectId])?.[0];
-      if (!isActive(latest)) start.mutate();
-    }, 3000);
+    const id = window.setTimeout(() => autoFire.current(), 3000);
     return () => window.clearTimeout(id);
-    // biome-ignore lint/correctness/useExhaustiveDependencies: wordCount is the edit signal
   }, [wordCount, autoCompile, canCompile]);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const caretRef = useRef<HTMLButtonElement>(null);
   const { data: project } = useQuery({
     queryKey: ['project', projectId],
     queryFn: () => projects.get(projectId),
@@ -269,36 +268,43 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   return (
     <section className="build-panel" aria-label="Compilação">
       <div className="build-bar">
-        {running && build ? (
-          <Button
-            variant="danger"
-            size="compact"
-            disabled={stop.isPending}
-            title="Parar a compilação em andamento"
-            onClick={() => stop.mutate(build.id)}
-          >
-            <Square size={12} aria-hidden="true" /> Parar
-          </Button>
-        ) : (
-          <Button
-            variant="primary"
-            size="compact"
-            disabled={compileDisabled}
-            title={compileTitle}
-            onClick={() => start.mutate()}
-          >
-            {stuck ? 'Tentar novamente' : 'Compilar'}
-          </Button>
-        )}
-        <details className="menu compile-menu">
-          <summary
-            className="icon-btn"
+        <div className="split-btn">
+          {running && build ? (
+            <Button
+              variant="danger"
+              size="compact"
+              disabled={stop.isPending}
+              title="Parar a compilação em andamento"
+              onClick={() => stop.mutate(build.id)}
+            >
+              <Square size={12} aria-hidden="true" /> Parar
+            </Button>
+          ) : (
+            <Button
+              variant="primary"
+              size="compact"
+              disabled={compileDisabled}
+              title={compileTitle}
+              onClick={() => start.mutate()}
+            >
+              {stuck ? 'Tentar novamente' : 'Compilar'}
+            </Button>
+          )}
+          <button
+            ref={caretRef}
+            type="button"
+            className={`split-btn-caret ${running ? 'is-danger' : ''}`}
             aria-label="Opções de compilação"
             title="Opções de compilação"
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
           >
-            <ChevronDown size={16} aria-hidden="true" />
-          </summary>
-          <div className="compile-menu-body" role="menu">
+            <ChevronDown size={14} aria-hidden="true" />
+          </button>
+        </div>
+        {menuOpen && (
+          <CompileMenu anchor={caretRef} onClose={() => setMenuOpen(false)}>
             <MenuGroup label="Compilação automática">
               <MenuChoice checked={autoCompile} onPick={() => setSettings({ autoCompile: true })}>
                 Ligada
@@ -332,23 +338,27 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             <div className="compile-menu-actions">
               <button
                 type="button"
-                role="menuitem"
                 disabled={!running || !build || stop.isPending}
-                onClick={() => build && stop.mutate(build.id)}
+                onClick={() => {
+                  if (build) stop.mutate(build.id);
+                  setMenuOpen(false);
+                }}
               >
                 Parar compilação
               </button>
               <button
                 type="button"
-                role="menuitem"
                 disabled={compileDisabled || running}
-                onClick={() => start.mutate()}
+                onClick={() => {
+                  start.mutate();
+                  setMenuOpen(false);
+                }}
               >
                 Recompilar
               </button>
             </div>
-          </div>
-        </details>
+          </CompileMenu>
+        )}
         <select
           className="engine-select"
           aria-label="Motor LaTeX"
@@ -636,7 +646,7 @@ const logKey = (kind: string, e: LogEntry) => `${kind}|${e.file}|${e.line}|${e.m
 
 function MenuGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="compile-menu-group" role="group" aria-label={label}>
+    <div className="compile-menu-group">
       <span className="compile-menu-label">{label}</span>
       {children}
     </div>
@@ -653,11 +663,58 @@ function MenuChoice({
   children: React.ReactNode;
 }) {
   return (
-    <button type="button" role="menuitemradio" aria-checked={checked} onClick={onPick}>
+    <button type="button" aria-pressed={checked} onClick={onPick}>
       <span className="compile-menu-check" aria-hidden="true">
         {checked && <Check size={14} />}
       </span>
       {children}
     </button>
+  );
+}
+
+/**
+ * Rendered in a portal with fixed coordinates: the build bar lives inside a clipped bottom panel,
+ * so an in-flow dropdown gets cut off. Flips above the caret when there is no room below.
+ */
+function CompileMenu({
+  anchor,
+  onClose,
+  children,
+}: {
+  anchor: React.RefObject<HTMLButtonElement | null>;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<React.CSSProperties>({ visibility: 'hidden' });
+  useEffect(() => {
+    const r = anchor.current?.getBoundingClientRect();
+    const h = ref.current?.offsetHeight ?? 320;
+    if (!r) return;
+    const below = r.bottom + 4 + h <= window.innerHeight;
+    setPos({
+      position: 'fixed',
+      left: Math.max(8, Math.min(r.left, window.innerWidth - 272)),
+      ...(below ? { top: r.bottom + 4 } : { bottom: window.innerHeight - r.top + 4 }),
+    });
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!ref.current?.contains(t) && !anchor.current?.contains(t)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [anchor, onClose]);
+  return createPortal(
+    <div ref={ref} className="compile-menu-body" style={pos}>
+      {children}
+    </div>,
+    document.body,
   );
 }

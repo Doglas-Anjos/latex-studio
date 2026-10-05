@@ -27,3 +27,11 @@ jobs:
       - uses: github/codeql-action/autobuild@v3
 
       - uses: github/codeql-action/analyze@v3
+        with:
+          # Private repo without code scanning enabled: analyse, keep the SARIF as an artifact.
+          upload: never
+          output: codeql-results
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codeql-results
+          path: codeql-results
