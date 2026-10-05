@@ -1,0 +1,7 @@
+\documentclass{memoir}
+\usepackage{lipsum}
+\begin{document}
+% A footnote split across pages with infinitely shrinkable glue: TeX recovers on its own.
+\lipsum[1-4]\footnote{\lipsum[1-3]\vskip 0pt minus 1fil \lipsum[4-6]}
+\lipsum[1-8]
+\end{document}
