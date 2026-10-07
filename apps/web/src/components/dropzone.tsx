@@ -1,14 +1,17 @@
 import { Upload, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Button } from './button';
 
-function formatSize(bytes: number): string {
+export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-/** Drag-and-drop + native picker for one or more files; shows the current selection. */
+/**
+ * Drag-and-drop + native picker for one or more files. Shows the current selection, or
+ * `children` in its place when the caller renders its own (e.g. with destinations).
+ */
 export function Dropzone({
   accept,
   multiple,
@@ -19,6 +22,7 @@ export function Dropzone({
   browseLabel,
   files,
   onFiles,
+  children,
 }: {
   accept?: string;
   multiple?: boolean;
@@ -30,6 +34,7 @@ export function Dropzone({
   browseLabel: string;
   files: File[];
   onFiles: (files: File[]) => void;
+  children?: ReactNode;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -82,7 +87,8 @@ export function Dropzone({
           }}
         />
       </fieldset>
-      {files.length > 0 && (
+      {children}
+      {!children && files.length > 0 && (
         <ul className="dropzone-files">
           {files.map((file) => (
             <li key={`${file.webkitRelativePath || file.name}-${file.size}-${file.lastModified}`}>
@@ -102,7 +108,7 @@ export function Dropzone({
           ))}
         </ul>
       )}
-      {multiple && files.length > 1 && (
+      {!children && multiple && files.length > 1 && (
         <p className="muted dropzone-count">{files.length} arquivos selecionados</p>
       )}
     </div>

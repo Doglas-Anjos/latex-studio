@@ -429,14 +429,131 @@ a {
 .dropzone-count {
   margin: 0;
 }
-.upload-replaced {
+/* Upload: destination folder as a small explorer, picked files as one compact list. */
+.folder-picker {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
   margin: 0;
-  padding: 0.5rem 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  padding: 0;
+  border: 0;
+}
+.folder-picker legend {
+  margin-bottom: 0.25rem;
+  padding: 0;
+}
+.folder-picker-list {
+  max-height: 10.5rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  background: var(--surface);
+}
+.folder-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.5rem 0.3rem calc(0.5rem + var(--depth, 0) * 1.1rem);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.folder-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.folder-option:hover {
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+  color: var(--ink);
+}
+.folder-option:has(input:checked) {
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  color: var(--primary);
+  font-weight: 600;
+}
+.folder-option:has(input:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+.upload-picked {
+  display: grid;
+  gap: 0.4rem;
+}
+/* Once files are picked the zone only has to offer "pick again": keep it a slim bar. */
+.dropzone-field:has(.upload-picked) .dropzone {
+  grid-auto-flow: column;
+  justify-content: center;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+}
+.dropzone-field:has(.upload-picked) :is(.dropzone-icon, .dropzone-hint) {
+  display: none;
+}
+.upload-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.85rem;
-  overflow-wrap: anywhere;
+}
+.upload-summary > :last-child {
+  margin-left: auto;
+}
+/* Two classes: the dialog lives inside .file-tree, whose `ul` rule would indent this list. */
+.upload-picked .upload-files {
+  max-height: 14rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.upload-files li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem 0.3rem 0.6rem;
+  font-size: 0.85rem;
+}
+.upload-files li + li {
+  border-top: 1px solid var(--line);
+}
+.upload-file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upload-file-size {
+  min-width: 3.25rem;
+  text-align: right;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+.upload-badge {
+  flex: none;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+.upload-badge[data-type="modify"] {
+  color: var(--warn);
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+.upload-badge[data-type="add"] {
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 14%, transparent);
+}
+.upload-note {
+  margin: 0;
+  font-size: 0.8rem;
 }
 .form .check {
   display: flex;

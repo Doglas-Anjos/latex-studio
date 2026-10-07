@@ -10,12 +10,15 @@ import {
   Folder as FolderIcon,
   FolderOpen,
   FolderPlus,
+  FolderRoot,
   History,
   Pencil,
   Trash2,
   Upload as UploadIcon,
+  X,
 } from 'lucide-react';
 import {
+  type CSSProperties,
   type FormEvent,
   type ReactNode,
   type RefObject,
@@ -32,7 +35,7 @@ import { useSettingsStore } from '../settings-store';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { Dialog } from './dialog';
-import { Dropzone } from './dropzone';
+import { Dropzone, formatSize } from './dropzone';
 import { Form } from './form';
 
 function invalidPathReason(path: string): string | null {
@@ -393,7 +396,7 @@ function UploadDialog({
   }, [existing]);
   const paths = new Set((existing ?? []).map((f) => f.path));
   const entries = picked.map((file) => ({ file, path: uploadPath(folder, file, contentsOnly) }));
-  const replaced = entries.map((e) => e.path).filter((p) => paths.has(p));
+  const replaced = new Set(entries.map((e) => e.path).filter((p) => paths.has(p)));
   const mutation = useMutation({
     mutationFn: () => files.upload(projectId, entries),
     onSuccess: () => {
@@ -445,17 +448,33 @@ function UploadDialog({
       }
     >
       <Form id={formId} onSubmit={submit}>
-        <label className="field">
-          <span>Pasta de destino</span>
-          <select value={folder} onChange={(e) => setFolder(e.target.value)}>
-            <option value="">Raiz do projeto</option>
-            {folders.map((f) => (
-              <option key={f} value={f}>
-                {f}/
-              </option>
-            ))}
-          </select>
-        </label>
+        <fieldset className="folder-picker">
+          <legend>Pasta de destino</legend>
+          <div className="folder-picker-list">
+            {['', ...folders].map((f) => {
+              const depth = f ? f.split('/').length : 0;
+              const Icon = !f ? FolderRoot : folder === f ? FolderOpen : FolderIcon;
+              return (
+                <label
+                  key={f}
+                  className="folder-option"
+                  title={f ? `${f}/` : 'Raiz do projeto'}
+                  style={{ '--depth': depth } as CSSProperties}
+                >
+                  <input
+                    type="radio"
+                    name="upload-folder"
+                    value={f}
+                    checked={folder === f}
+                    onChange={() => setFolder(f)}
+                  />
+                  <Icon size={15} aria-hidden="true" />
+                  <span>{f ? f.slice(f.lastIndexOf('/') + 1) : 'Raiz do projeto'}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
         <div className="tabs" role="tablist">
           {(['files', 'folder'] as const).map((m) => (
             <button
@@ -472,28 +491,76 @@ function UploadDialog({
             </button>
           ))}
         </div>
-        {mode === 'files' ? (
-          <Dropzone
-            key="files"
-            multiple
-            label="Arraste os arquivos aqui"
-            hint="ou selecione do seu computador"
-            browseLabel="Selecionar arquivos"
-            files={picked}
-            onFiles={setPicked}
-          />
-        ) : (
-          <Dropzone
-            key="folder"
-            directory
-            multiple
-            label="Selecione uma pasta do seu computador"
-            hint="Ela vai com o nome e as subpastas. Arrastar e soltar não funciona para pastas."
-            browseLabel="Selecionar pasta"
-            files={picked}
-            onFiles={setPicked}
-          />
-        )}
+        <Dropzone
+          key={mode}
+          directory={mode === 'folder'}
+          multiple
+          label={
+            mode === 'files' ? 'Arraste os arquivos aqui' : 'Selecione uma pasta do seu computador'
+          }
+          hint={
+            mode === 'files'
+              ? 'ou selecione do seu computador'
+              : 'Ela vai com o nome e as subpastas. Arrastar e soltar não funciona para pastas.'
+          }
+          browseLabel={mode === 'files' ? 'Selecionar arquivos' : 'Selecionar pasta'}
+          files={picked}
+          onFiles={setPicked}
+        >
+          {entries.length > 0 && (
+            <div className="upload-picked">
+              <div className="upload-summary" role="status">
+                <span>
+                  {entries.length === 1 ? '1 arquivo' : `${entries.length} arquivos`} ·{' '}
+                  {formatSize(entries.reduce((sum, e) => sum + e.file.size, 0))}
+                </span>
+                {replaced.size > 0 && (
+                  <span className="upload-badge" data-type="modify">
+                    {replaced.size === entries.length
+                      ? 'todos substituem'
+                      : `${replaced.size} substituem`}
+                  </span>
+                )}
+                <Button variant="ghost" size="compact" onClick={() => setPicked([])}>
+                  Limpar
+                </Button>
+              </div>
+              <ul className="upload-files">
+                {entries.map(({ file, path }) => {
+                  const cut = path.lastIndexOf('/') + 1;
+                  const replaces = replaced.has(path);
+                  return (
+                    <li key={path}>
+                      <FileTypeIcon name={file.name} />
+                      <span className="upload-file-path" title={path}>
+                        {cut > 0 && <span className="muted">{path.slice(0, cut)}</span>}
+                        <span>{path.slice(cut)}</span>
+                      </span>
+                      <span className="upload-badge" data-type={replaces ? 'modify' : 'add'}>
+                        {replaces ? 'substitui' : 'novo'}
+                      </span>
+                      <span className="upload-file-size muted">{formatSize(file.size)}</span>
+                      <button
+                        type="button"
+                        className="dropzone-file-remove"
+                        aria-label={`Remover ${path}`}
+                        onClick={() => setPicked(picked.filter((f) => f !== file))}
+                      >
+                        <X size={13} aria-hidden="true" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              {replaced.size > 0 && (
+                <p className="upload-note muted">
+                  Os arquivos que substituem ficam marcados como modificados (M), com o diff, até
+                  você salvar a versão.
+                </p>
+              )}
+            </div>
+          )}
+        </Dropzone>
         {mode === 'folder' && pickedFolder && (
           <label className="check">
             <input
@@ -503,15 +570,6 @@ function UploadDialog({
             />
             Enviar só o conteúdo, sem criar a pasta “{pickedFolder}”
           </label>
-        )}
-        {replaced.length > 0 && (
-          <p className="upload-replaced" role="status">
-            {replaced.length === 1
-              ? 'Este arquivo já existe e será substituído: '
-              : `${replaced.length} arquivos já existem e serão substituídos: `}
-            {replaced.join(', ')}. Eles ficam marcados como modificados (M), com o diff, até você
-            salvar a versão.
-          </p>
         )}
         {mutation.error && <Form.Error>{mutation.error.message}</Form.Error>}
       </Form>

@@ -172,14 +172,13 @@ describe('FileTree', () => {
     );
     await userEvent.click(await screen.findByRole('button', { name: 'Upload' }));
     const dialog = screen.getByRole('dialog', { name: 'Enviar arquivos' });
-    await userEvent.selectOptions(
-      within(dialog).getByRole('combobox', { name: 'Pasta de destino' }),
-      'chapters',
-    );
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'chapters' }));
     const intro = new File(['new intro'], 'intro.tex');
     const input = dialog.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [intro] } });
-    expect(within(dialog).getByRole('status').textContent).toContain('chapters/intro.tex');
+    const row = within(dialog).getByTitle('chapters/intro.tex').closest('li') as HTMLElement;
+    expect(within(row).getByText('substitui')).toBeTruthy();
+    expect(within(dialog).getByRole('status').textContent).toContain('todos substituem');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar' }));
     await waitFor(() =>
       expect(service.upload).toHaveBeenCalledWith('p1', [
