@@ -6,8 +6,13 @@ import { type Extension, StateEffect, StateField, Text } from '@codemirror/state
 import { type EditorView, GutterMarker, gutter, ViewPlugin } from '@codemirror/view';
 
 type LineClass = 'added' | 'modified' | 'deleted';
-/** Keeps a huge rewrite from freezing the tab; the diff degrades instead. */
-export const DIFF_LIMITS = { scanLimit: 500, timeout: 500 };
+/**
+ * Keeps a huge rewrite from freezing the tab; the diff degrades instead. The timeout is the real
+ * guard (a full 60 KB rewrite takes ~330 ms at this scanLimit). MergeView's default scanLimit of
+ * 500 gave up on a long chapter with a few one-word edits and repeated `% ───` separator lines,
+ * reporting ~200 lines as one changed block.
+ */
+export const DIFF_LIMITS = { scanLimit: 5000, timeout: 500 };
 
 export const setChangeBase = StateEffect.define<string | null>();
 const setLineClasses = StateEffect.define<Map<number, LineClass>>();

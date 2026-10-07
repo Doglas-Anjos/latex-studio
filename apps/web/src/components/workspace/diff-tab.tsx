@@ -274,12 +274,37 @@ export function DiffTab(props: {
     const afterRevert = () => setTimeout(() => setNotice({ kind: 'revert', n: Date.now() }));
 
     let merge: MergeView | null = null;
+    // MergeView pins each button to its chunk's first line. Stretching it over the whole chunk
+    // (the taller side) puts the icon at the middle of the paragraph and makes all of it clickable.
+    let frame = 0;
+    const stretchReverts = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        if (!merge) return;
+        const span = (v: EditorView, from: number, to: number) =>
+          to > from
+            ? v.lineBlockAt(Math.min(to - 1, v.state.doc.length)).bottom - v.lineBlockAt(from).top
+            : 0;
+        for (const el of merge.dom.querySelectorAll<HTMLElement>(
+          '.cm-merge-revert > [data-chunk]',
+        )) {
+          const c = merge.chunks[Number(el.dataset.chunk)];
+          if (!c) continue;
+          const height = Math.max(span(merge.a, c.fromA, c.toA), span(merge.b, c.fromB, c.toB), 22);
+          el.style.height = `${height}px`;
+        }
+      });
+    };
+    const relayout = EditorView.updateListener.of((u) => {
+      if (u.docChanged || u.geometryChanged || u.viewportChanged || u.heightChanged)
+        stretchReverts();
+    });
     const splitControl = () => {
       const button = revertButton();
-      const chunk = () => {
-        const i = Array.prototype.indexOf.call(button.parentElement?.children ?? [], button);
-        return merge?.chunks[i];
-      };
+      // The library tags each button with its chunk index; only chunks in view get a button, so
+      // the button's position among its siblings is not the chunk index.
+      const chunk = () => merge?.chunks[Number(button.dataset.chunk)];
+      stretchReverts();
       button.addEventListener('mouseenter', () => {
         const c = chunk();
         if (!c || !merge) return;
@@ -325,8 +350,8 @@ export function DiffTab(props: {
 
     if (mode === 'split') {
       merge = new MergeView({
-        a: { doc: data.a, extensions: [...base, comingLines, ...readOnly] },
-        b: { doc: b, extensions: bSide },
+        a: { doc: data.a, extensions: [...base, comingLines, relayout, ...readOnly] },
+        b: { doc: b, extensions: [...bSide, relayout] },
         parent: host.current,
         highlightChanges: true,
         gutter: true,
@@ -335,7 +360,10 @@ export function DiffTab(props: {
         ...(editable && { revertControls: 'a-to-b', renderRevertControl: splitControl }),
       });
       const view = merge;
-      return () => view.destroy();
+      return () => {
+        cancelAnimationFrame(frame);
+        view.destroy();
+      };
     }
     unified = new EditorView({
       state: EditorState.create({

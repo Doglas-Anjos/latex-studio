@@ -2922,23 +2922,24 @@ button.change-row-main:hover .change-name {
   width: 1.9rem;
   background: var(--paper);
 }
+/* One strip per changed block, as tall as the block (height set in diff-tab.tsx), icon centred. */
 .diff-tab-body .cm-merge-revert .diff-revert {
   position: absolute;
-  left: 0.15rem;
-  width: 1.55rem;
-  height: 1.55rem;
+  left: 0.2rem;
+  width: 1.5rem;
+  min-height: 1.4rem;
   justify-content: center;
   padding: 0;
-  border-color: var(--diff-del-ink);
+  border-color: color-mix(in srgb, var(--diff-del-ink) 35%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--diff-del-ink) 7%, var(--surface));
   color: var(--diff-del-ink);
-  opacity: 0.6;
 }
 .diff-tab-body .cm-merge-revert .diff-revert:hover,
 .diff-tab-body .cm-merge-revert .diff-revert:focus-visible {
+  border-color: var(--diff-del-ink);
   background: var(--diff-del-ink);
   color: var(--surface);
-  opacity: 1;
-  transform: scale(1.08);
 }
 .diff-tab-body .cm-chunkButtons {
   position: absolute;
