@@ -86,8 +86,8 @@ export function Dropzone({
         <ul className="dropzone-files">
           {files.map((file) => (
             <li key={`${file.webkitRelativePath || file.name}-${file.size}-${file.lastModified}`}>
-              <span className="dropzone-file-name" title={file.name}>
-                {file.name}
+              <span className="dropzone-file-name" title={file.webkitRelativePath || file.name}>
+                {file.webkitRelativePath || file.name}
               </span>
               <span className="dropzone-file-size muted">{formatSize(file.size)}</span>
               <button

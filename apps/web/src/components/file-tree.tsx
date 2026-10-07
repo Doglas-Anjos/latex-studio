@@ -355,6 +355,16 @@ export function FileTree({
   );
 }
 
+/**
+ * Where a picked file lands. A picked folder keeps its subfolders (`cap_03/x.png`); with
+ * `contentsOnly` its own name is dropped, so picking the project folder updates files in place.
+ */
+export function uploadPath(folder: string, file: File, contentsOnly = false): string {
+  const rel = file.webkitRelativePath || file.name;
+  const inside = contentsOnly && file.webkitRelativePath ? rel.split('/').slice(1).join('/') : rel;
+  return [folder, inside].filter(Boolean).join('/');
+}
+
 function UploadDialog({
   dialogRef,
   projectId,
@@ -364,16 +374,40 @@ function UploadDialog({
 }) {
   const files = useService(FileServiceToken);
   const queryClient = useQueryClient();
+  const { data: existing } = useQuery({
+    queryKey: ['files', projectId],
+    queryFn: () => files.list(projectId),
+  });
   const [picked, setPicked] = useState<File[]>([]);
+  const [folder, setFolder] = useState('');
+  const [mode, setMode] = useState<'files' | 'folder'>('files');
+  const [contentsOnly, setContentsOnly] = useState(false);
+  const pickedFolder = picked[0]?.webkitRelativePath?.split('/')[0]; // undefined in jsdom
+  const folders = useMemo(() => {
+    const set = new Set<string>();
+    for (const f of existing ?? []) {
+      const parts = f.path.split('/');
+      for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join('/'));
+    }
+    return [...set].sort();
+  }, [existing]);
+  const paths = new Set((existing ?? []).map((f) => f.path));
+  const entries = picked.map((file) => ({ file, path: uploadPath(folder, file, contentsOnly) }));
+  const replaced = entries.map((e) => e.path).filter((p) => paths.has(p));
   const mutation = useMutation({
-    mutationFn: () => files.upload(projectId, picked),
+    mutationFn: () => files.upload(projectId, entries),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files', projectId] });
+      // Replaced files are now working changes: refresh the M badges and the Mudanças view.
+      queryClient.invalidateQueries({ queryKey: ['history', projectId] });
       dialogRef.current?.close();
     },
   });
   useResetOnClose(dialogRef, () => {
     setPicked([]);
+    setFolder('');
+    setMode('files');
+    setContentsOnly(false);
     mutation.reset();
   });
   const formId = useId();
@@ -411,14 +445,74 @@ function UploadDialog({
       }
     >
       <Form id={formId} onSubmit={submit}>
-        <Dropzone
-          multiple
-          label="Arraste os arquivos aqui"
-          hint="ou selecione do seu computador"
-          browseLabel="Selecionar arquivos"
-          files={picked}
-          onFiles={setPicked}
-        />
+        <label className="field">
+          <span>Pasta de destino</span>
+          <select value={folder} onChange={(e) => setFolder(e.target.value)}>
+            <option value="">Raiz do projeto</option>
+            {folders.map((f) => (
+              <option key={f} value={f}>
+                {f}/
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="tabs" role="tablist">
+          {(['files', 'folder'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              onClick={() => {
+                setMode(m);
+                setPicked([]);
+              }}
+            >
+              {m === 'files' ? 'Arquivos' : 'Pasta inteira'}
+            </button>
+          ))}
+        </div>
+        {mode === 'files' ? (
+          <Dropzone
+            key="files"
+            multiple
+            label="Arraste os arquivos aqui"
+            hint="ou selecione do seu computador"
+            browseLabel="Selecionar arquivos"
+            files={picked}
+            onFiles={setPicked}
+          />
+        ) : (
+          <Dropzone
+            key="folder"
+            directory
+            multiple
+            label="Selecione uma pasta do seu computador"
+            hint="Ela vai com o nome e as subpastas. Arrastar e soltar não funciona para pastas."
+            browseLabel="Selecionar pasta"
+            files={picked}
+            onFiles={setPicked}
+          />
+        )}
+        {mode === 'folder' && pickedFolder && (
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={contentsOnly}
+              onChange={(e) => setContentsOnly(e.target.checked)}
+            />
+            Enviar só o conteúdo, sem criar a pasta “{pickedFolder}”
+          </label>
+        )}
+        {replaced.length > 0 && (
+          <p className="upload-replaced" role="status">
+            {replaced.length === 1
+              ? 'Este arquivo já existe e será substituído: '
+              : `${replaced.length} arquivos já existem e serão substituídos: `}
+            {replaced.join(', ')}. Eles ficam marcados como modificados (M), com o diff, até você
+            salvar a versão.
+          </p>
+        )}
         {mutation.error && <Form.Error>{mutation.error.message}</Form.Error>}
       </Form>
     </Dialog>

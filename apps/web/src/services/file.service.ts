@@ -16,7 +16,8 @@ export interface FileService {
   createFolder(projectId: string, path: string): Promise<void>;
   remove(projectId: string, path: string): Promise<void>;
   rename(projectId: string, from: string, to: string): Promise<void>;
-  upload(projectId: string, files: File[], folder?: string): Promise<void>;
+  /** `path` is where each file lands, relative to the project root. */
+  upload(projectId: string, files: { file: File; path: string }[]): Promise<void>;
 }
 
 export const FileServiceToken = createToken<FileService>('FileService');
@@ -62,10 +63,10 @@ export class HttpFileService implements FileService {
     return this.api.post<void>(`/projects/${projectId}/files/rename`, { from, to });
   }
 
-  async upload(projectId: string, files: File[], folder?: string) {
+  async upload(projectId: string, files: { file: File; path: string }[]) {
     const form = new FormData();
-    if (folder) form.append('path', folder); // `path` must come before the files
-    for (const file of files) form.append('files', file);
+    // The part's filename carries the path; the API keeps its folders (`img/cap/fig.png`).
+    for (const { file, path } of files) form.append('files', file, path);
     await this.api.postForm(`/projects/${projectId}/upload`, form);
   }
 }

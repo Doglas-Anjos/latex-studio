@@ -8,7 +8,7 @@ import { type HistoryService, HistoryServiceToken } from '../services/history.se
 import { useSettingsStore } from '../settings-store';
 import { renderWithApp } from '../test/render';
 import { useWorkspaceStore } from '../workspace-store';
-import { buildTree, classifyFile, FileTree } from './file-tree';
+import { buildTree, classifyFile, FileTree, uploadPath } from './file-tree';
 
 const fake = (): FileService => ({
   list: vi.fn().mockResolvedValue([{ path: 'main.tex' }, { path: 'chapters/intro.tex' }]),
@@ -159,7 +159,42 @@ describe('FileTree', () => {
     expect(within(dialog).queryByText('a.png')).toBeNull();
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar' }));
-    await waitFor(() => expect(service.upload).toHaveBeenCalledWith('p1', [b]));
+    await waitFor(() =>
+      expect(service.upload).toHaveBeenCalledWith('p1', [{ file: b, path: 'b.png' }]),
+    );
+  });
+
+  it('uploads into the chosen folder and warns which existing files get replaced', async () => {
+    const service = fake();
+    renderWithApp(
+      <FileTree projectId="p1" canEdit mainFile="main.tex" />,
+      new Container().register(FileServiceToken, service).register(HistoryServiceToken, history()),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Upload' }));
+    const dialog = screen.getByRole('dialog', { name: 'Enviar arquivos' });
+    await userEvent.selectOptions(
+      within(dialog).getByRole('combobox', { name: 'Pasta de destino' }),
+      'chapters',
+    );
+    const intro = new File(['new intro'], 'intro.tex');
+    const input = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [intro] } });
+    expect(within(dialog).getByRole('status').textContent).toContain('chapters/intro.tex');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar' }));
+    await waitFor(() =>
+      expect(service.upload).toHaveBeenCalledWith('p1', [
+        { file: intro, path: 'chapters/intro.tex' },
+      ]),
+    );
+  });
+
+  it('keeps a picked folder name unless only its contents are sent', () => {
+    const file = new File(['x'], 'fig.png');
+    Object.defineProperty(file, 'webkitRelativePath', { value: 'tese/img/fig.png' });
+    expect(uploadPath('', file)).toBe('tese/img/fig.png');
+    expect(uploadPath('', file, true)).toBe('img/fig.png');
+    expect(uploadPath('extra', file, true)).toBe('extra/img/fig.png');
+    expect(uploadPath('extra', new File(['x'], 'a.tex'), true)).toBe('extra/a.tex');
   });
 
   it('marks changed files and their folders as dirty', async () => {

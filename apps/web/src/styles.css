@@ -429,6 +429,20 @@ a {
 .dropzone-count {
   margin: 0;
 }
+.upload-replaced {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.form .check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 @media (max-width: 26rem) {
   .dropzone {
     padding: 1.25rem 0.75rem;
