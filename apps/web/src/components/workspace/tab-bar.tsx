@@ -1,9 +1,13 @@
-import { ChevronLeft, ChevronRight, FileDiff, X } from 'lucide-react';
+import { FileDiff, X } from 'lucide-react';
 import { type KeyboardEvent, type MouseEvent, useEffect, useRef, useState } from 'react';
 import { type Tab, useWorkspaceStore } from '../../workspace-store';
 import { FileTypeIcon } from '../file-tree';
 
 export const basename = (p: string) => p.slice(p.lastIndexOf('/') + 1);
+
+/** Tab ids cut off at each edge of the strip. */
+type Hidden = { before: string[]; after: string[] };
+const NONE: Hidden = { before: [], after: [] };
 
 export function TabBar() {
   const tabs = useWorkspaceStore((s) => s.tabs);
@@ -12,44 +16,89 @@ export function TabBar() {
   const openTab = useWorkspaceStore((s) => s.openTab);
   const stripRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef(new Map<string, HTMLButtonElement>());
-  const [overflow, setOverflow] = useState({ start: false, end: false });
+  const [hidden, setHidden] = useState<Hidden>(NONE);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const stackRef = useRef<HTMLDivElement>(null);
 
-  const updateOverflow = () => {
-    const el = stripRef.current;
-    if (!el) return;
-    setOverflow({
-      start: el.scrollLeft > 1,
-      end: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
-    });
-  };
-
-  // No ResizeObserver in jsdom: fall back to scroll-only tracking there, the
-  // pixel geometry doesn't matter for the tests that mount this.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: tabs.length re-measures after tabs are added/removed, not read in the body.
+  // Which tabs are not fully visible, from layout the browser already has (offsetLeft/Width are
+  // relative to the positioned strip); the state only changes when the sets do.
   useEffect(() => {
     const el = stripRef.current;
     if (!el) return;
-    updateOverflow();
-    el.addEventListener('scroll', updateOverflow);
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const left = el.scrollLeft;
+        const right = left + el.clientWidth;
+        const next: Hidden = { before: [], after: [] };
+        for (const t of tabs) {
+          const node = tabRefs.current.get(t.id)?.parentElement;
+          if (!node) continue;
+          if (node.offsetLeft < left - 1) next.before.push(t.id);
+          else if (node.offsetLeft + node.offsetWidth > right + 1) next.after.push(t.id);
+        }
+        setHidden((prev) =>
+          prev.before.join() === next.before.join() && prev.after.join() === next.after.join()
+            ? prev
+            : next,
+        );
+      });
+    };
+    // A vertical wheel scrolls the strip sideways once it overflows; horizontal deltas (trackpads)
+    // keep their native behaviour.
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    measure();
+    el.addEventListener('scroll', measure, { passive: true });
+    el.addEventListener('wheel', onWheel, { passive: false });
+    // No ResizeObserver in jsdom: scroll-only tracking there is enough for the tests.
     const observer =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateOverflow) : undefined;
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : undefined;
     observer?.observe(el);
     return () => {
-      el.removeEventListener('scroll', updateOverflow);
+      cancelAnimationFrame(frame);
+      el.removeEventListener('scroll', measure);
+      el.removeEventListener('wheel', onWheel);
       observer?.disconnect();
     };
-  }, [tabs.length]);
+  }, [tabs]);
+
+  // The whole card, close button included: revealing only the label left the "x" cut off, and the
+  // card then counted as hidden.
+  const reveal = (id: string) =>
+    tabRefs.current
+      .get(id)
+      ?.parentElement?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+
+  // The stack takes the same room on either side, so the visible width only changes when overflow
+  // starts or ends; that moment can cut the tab just opened, hence the second trigger.
+  const overflowing = hidden.before.length > 0 || hidden.after.length > 0;
 
   // Keeps the active tab in view after opening it from the file tree or
   // restoring it from history, without yanking the whole page vertically.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: overflowing re-runs it when the stack appears.
   useEffect(() => {
     if (!activeTabId) return;
-    tabRefs.current.get(activeTabId)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
-  }, [activeTabId]);
+    reveal(activeTabId);
+  }, [activeTabId, overflowing]);
 
-  const scrollByStep = (dir: 1 | -1) => {
-    stripRef.current?.scrollBy({ left: dir * 160, behavior: 'smooth' });
-  };
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: Event) => {
+      if (!stackRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && setMenuOpen(false);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
 
   const activateNeighbour = (index: number) => {
     const next = tabs[index];
@@ -81,25 +130,59 @@ export function TabBar() {
     if (e.button === 1) e.preventDefault();
   };
 
+  // The stack sits at the end while tabs are cut off there; scrolled all the way, it moves to the
+  // start for the ones cut off on the left.
+  const stackSide = hidden.after.length ? 'end' : hidden.before.length ? 'start' : null;
+  const stackIds = stackSide === 'end' ? hidden.after : hidden.before;
+  const stackTabs = tabs.filter((t) => stackIds.includes(t.id));
+  const stack = stackSide && (
+    <div className="tab-stack-wrap" ref={stackRef} data-side={stackSide}>
+      <button
+        type="button"
+        className="tab-stack"
+        aria-label={`${stackTabs.length} abas fora da vista`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        title={stackTabs.map((t) => basename(t.path)).join(', ')}
+        onClick={() => setMenuOpen((o) => !o)}
+      >
+        <span className="tab-stack-card">+{stackTabs.length}</span>
+      </button>
+      {menuOpen && (
+        <div className="tab-stack-menu" role="menu" aria-label="Abas fora da vista">
+          {stackTabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="menuitem"
+              className="tab-stack-item"
+              data-active={t.id === activeTabId}
+              title={t.path}
+              onClick={() => {
+                setMenuOpen(false);
+                openTab(t);
+                reveal(t.id);
+              }}
+            >
+              <TabIcon tab={t} />
+              <span className="tab-label-text">{basename(t.path)}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="tab-bar">
-      {overflow.start && (
-        <button
-          type="button"
-          className="tab-scroll-btn"
-          aria-label="Abas anteriores"
-          onClick={() => scrollByStep(-1)}
-        >
-          <ChevronLeft size={14} aria-hidden="true" />
-        </button>
-      )}
+      {stackSide === 'start' && stack}
       <div
         className="tab-strip"
         ref={stripRef}
         role="tablist"
         aria-label="Arquivos abertos"
-        data-fade-start={overflow.start}
-        data-fade-end={overflow.end}
+        data-fade-start={hidden.before.length > 0}
+        data-fade-end={hidden.after.length > 0}
       >
         {tabs.map((t, i) => {
           const name = basename(t.path);
@@ -144,16 +227,7 @@ export function TabBar() {
           );
         })}
       </div>
-      {overflow.end && (
-        <button
-          type="button"
-          className="tab-scroll-btn"
-          aria-label="Próximas abas"
-          onClick={() => scrollByStep(1)}
-        >
-          <ChevronRight size={14} aria-hidden="true" />
-        </button>
-      )}
+      {stackSide === 'end' && stack}
     </div>
   );
 }
