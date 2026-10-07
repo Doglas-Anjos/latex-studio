@@ -14,6 +14,8 @@ import {
   AlertTriangle,
   Columns2,
   type LucideIcon,
+  PanelRightClose,
+  PanelRightOpen,
   Redo2,
   Rows2,
   Undo2,
@@ -27,6 +29,7 @@ import { useService } from '../../di/service-provider';
 import { FileServiceToken } from '../../services/file.service';
 import { HistoryServiceToken } from '../../services/history.service';
 import { IdentityToken } from '../../services/identity';
+import { useSettingsStore } from '../../settings-store';
 import { closeWhenSynced } from '../editor';
 import { DIFF_LIMITS } from '../editor-changes';
 import { editorTheme, latexHighlight } from '../editor-theme';
@@ -45,10 +48,11 @@ const MODES: { mode: ViewMode; label: string; Icon: LucideIcon }[] = [
 const COLLAB_EXT = /\.(tex|bib|sty|cls|txt|md|json)$/i;
 const REVERT_TITLE = 'Desfazer esta mudança: volta ao texto anterior';
 
-// Two columns need real width: from this width the split is the default, and under the
-// minimum it is not offered at all (each column would be a few words wide).
-const SPLIT_DEFAULT_WIDTH = 720;
-const SPLIT_MIN_WIDTH = 560;
+// Two columns need real width (VS Code switches to inline under 900 px): from the default the
+// split opens on its own; under the minimum each column is a ribbon of wrapped words, so picking
+// it hides the PDF to make room, and with no PDF left to hide it is not offered.
+const SPLIT_DEFAULT_WIDTH = 900;
+const SPLIT_MIN_WIDTH = 760;
 
 const phrases = EditorState.phrases.of({
   '$ unchanged lines': '$ linhas sem mudança',
@@ -195,7 +199,20 @@ export function DiffTab(props: {
   const live = useLiveText(projectId, path, liveWanted);
   const { ytext, undo } = live;
   const editable = canEdit && !!ytext;
-  const [reverted, setReverted] = useState(0); // bumps on every undo click; 0 = no notice
+  const pdfWidth = useSettingsStore((s) => s.pdfWidth);
+  const setSettings = useSettingsStore((s) => s.set);
+  const pdfBefore = useRef(0);
+  // Bottom notice: an undo just happened, or the PDF was hidden to fit the split. `n` restarts
+  // the timer when the same kind repeats.
+  const [notice, setNotice] = useState<{ kind: 'revert' | 'pdf'; n: number } | null>(null);
+  const chooseMode = (m: ViewMode) => {
+    setModeOverride(m);
+    if (m === 'split' && splitTooNarrow && pdfWidth > 0) {
+      pdfBefore.current = pdfWidth;
+      setSettings({ pdfWidth: 0 });
+      setNotice({ kind: 'pdf', n: Date.now() });
+    }
+  };
 
   useEffect(() => {
     const el = wrapRef.current;
@@ -209,10 +226,10 @@ export function DiffTab(props: {
   }, []);
 
   useEffect(() => {
-    if (!reverted) return;
-    const timer = setTimeout(() => setReverted(0), 8000);
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 8000);
     return () => clearTimeout(timer);
-  }, [reverted]);
+  }, [notice]);
 
   const { data, error, isPending } = useQuery({
     queryKey: ['diff', projectId, path, from, to, liveWanted],
@@ -254,7 +271,7 @@ export function DiffTab(props: {
     ];
     // A revert is its own undo step, never merged with typing just before it.
     const beforeRevert = () => undo?.stopCapturing();
-    const afterRevert = () => setTimeout(() => setReverted((n) => n + 1));
+    const afterRevert = () => setTimeout(() => setNotice({ kind: 'revert', n: Date.now() }));
 
     let merge: MergeView | null = null;
     const splitControl = () => {
@@ -350,7 +367,7 @@ export function DiffTab(props: {
       ytext.delete(p.fromB, p.toB - p.fromB);
       ytext.insert(p.fromB, p.removed);
     });
-    setReverted((n) => n + 1);
+    setNotice({ kind: 'revert', n: Date.now() });
   };
 
   return (
@@ -381,7 +398,8 @@ export function DiffTab(props: {
         <fieldset className="diff-modes">
           <legend className="sr-only">Modo de comparação</legend>
           {MODES.map(({ mode: m, label, Icon }) => {
-            const blocked = m === 'split' && splitTooNarrow;
+            const blocked = m === 'split' && splitTooNarrow && pdfWidth === 0;
+            const makesRoom = m === 'split' && splitTooNarrow && pdfWidth > 0;
             return (
               <button
                 key={m}
@@ -391,11 +409,13 @@ export function DiffTab(props: {
                 aria-label={label}
                 title={
                   blocked
-                    ? 'Lado a lado precisa de mais largura: amplie esta área ou oculte o PDF'
-                    : label
+                    ? 'Lado a lado precisa de mais largura: recolha a barra lateral'
+                    : makesRoom
+                      ? 'Lado a lado (oculta o PDF para dar espaço às duas colunas)'
+                      : label
                 }
                 disabled={blocked}
-                onClick={() => setModeOverride(m)}
+                onClick={() => chooseMode(m)}
               >
                 <Icon size={14} aria-hidden="true" />
                 <span className="diff-mode-label">{label}</span>
@@ -420,26 +440,47 @@ export function DiffTab(props: {
       ) : (
         <div className="diff-tab-body" ref={host} />
       )}
-      {reverted > 0 && (
+      {notice && (
         <div className="diff-toast" role="status">
-          <Undo2 size={15} aria-hidden="true" />
-          <span>Mudança desfeita.</span>
-          <button
-            type="button"
-            className="diff-toast-action"
-            onClick={() => {
-              undo?.undo();
-              setReverted(0);
-            }}
-          >
-            <Redo2 size={14} aria-hidden="true" />
-            Refazer
-          </button>
+          {notice.kind === 'revert' ? (
+            <>
+              <Undo2 size={15} aria-hidden="true" />
+              <span>Mudança desfeita.</span>
+              <button
+                type="button"
+                className="diff-toast-action"
+                onClick={() => {
+                  undo?.undo();
+                  setNotice(null);
+                }}
+              >
+                <Redo2 size={14} aria-hidden="true" />
+                Refazer
+              </button>
+            </>
+          ) : (
+            <>
+              <PanelRightClose size={15} aria-hidden="true" />
+              <span>PDF ocultado para caber o lado a lado.</span>
+              <button
+                type="button"
+                className="diff-toast-action"
+                onClick={() => {
+                  setSettings({ pdfWidth: pdfBefore.current || 480 });
+                  setModeOverride('unified');
+                  setNotice(null);
+                }}
+              >
+                <PanelRightOpen size={14} aria-hidden="true" />
+                Mostrar PDF
+              </button>
+            </>
+          )}
           <button
             type="button"
             className="diff-toast-close"
             aria-label="Fechar aviso"
-            onClick={() => setReverted(0)}
+            onClick={() => setNotice(null)}
           >
             <X size={14} aria-hidden="true" />
           </button>
