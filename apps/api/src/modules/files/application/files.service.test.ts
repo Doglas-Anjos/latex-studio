@@ -49,12 +49,27 @@ describe('FilesService', () => {
     await storage.open(project.id).write('main.tex', 'old');
     const written = await service.upload(
       project,
-      ana,
       parts({ 'main.tex': 'new upload', 'refs.BIB': '@book{x}', 'fig.png': 'png' }),
     );
     expect(written.sort()).toEqual(['fig.png', 'main.tex', 'refs.BIB']);
     expect(sync.calls.sort()).toEqual(['replace main.tex', 'replace refs.BIB']);
     expect(sync.texts.get('main.tex')).toBe('new upload');
+  });
+
+  it('leaves an upload over an existing file as a working change, not a commit', async () => {
+    // Different sizes: isomorphic-git's WORKDIR skips hashing a same-size file written in the
+    // same second as the commit (real uploads come long after the saved version).
+    await service.create(project, ana, 'cap.tex', 'old');
+    const repo = storage.open(project.id).repo;
+    const saved = await repo.head();
+    await service.upload(project, parts({ 'cap.tex': 'new text', 'sub/new.tex': 'x' }));
+    expect(await repo.head()).toBe(saved);
+    expect(await repo.workingChanges(saved)).toEqual(
+      expect.arrayContaining([
+        { path: 'cap.tex', type: 'modify' },
+        { path: 'sub/new.tex', type: 'add' },
+      ]),
+    );
   });
 
   it('forgets the docs of renamed and deleted files', async () => {

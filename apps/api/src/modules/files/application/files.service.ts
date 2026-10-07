@@ -134,8 +134,10 @@ export class FilesService {
   /**
    * Multipart upload: an optional `path` field (target folder, sent before the files), then files
    * whose filenames are paths relative to that folder. Existing files are overwritten.
+   * No commit: like editor typing, the upload stays a working change against the last saved
+   * version, so replaced files show as modified (badge, gutter, diff) until "Salvar versão".
    */
-  upload(project: Project, user: User, parts: AsyncIterable<UploadPart>): Promise<string[]> {
+  upload(project: Project, parts: AsyncIterable<UploadPart>): Promise<string[]> {
     return this.lock.run(project.id, async () => {
       const files = this.storage.open(project.id);
       const used = (await files.repo.listFiles()).reduce((sum, f) => sum + f.size, 0);
@@ -168,7 +170,6 @@ export class FilesService {
         throw e;
       }
       if (written.size === 0) throw new BadRequestException('No files uploaded');
-      await files.repo.commitAll(`Upload ${written.size} files`, author(user));
       // An open doc (or its saved state) would otherwise write the old text back over the upload.
       for (const path of written) {
         if (!TEXT_EXTENSIONS.has(extname(path).toLowerCase())) continue;

@@ -114,11 +114,7 @@ export class FilesController {
   @RouteConfig(UPLOAD_RATE_LIMIT)
   @Post('upload')
   @RequireProjectRole('editor')
-  upload(
-    @CurrentProject() project: Project,
-    @CurrentUser() user: User,
-    @Req() request: FastifyRequest,
-  ): Promise<string[]> {
-    return withParts(request, (parts) => this.files.upload(project, user, parts));
+  upload(@CurrentProject() project: Project, @Req() request: FastifyRequest): Promise<string[]> {
+    return withParts(request, (parts) => this.files.upload(project, parts));
   }
 }
