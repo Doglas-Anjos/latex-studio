@@ -2777,15 +2777,16 @@ button.change-row-main:hover .change-name {
 .diff-tab-body .cm-mergeView {
   height: 100%;
 }
+/* .cm-mergeView is the one scroller; both columns grow with their text. A fixed height here
+   clipped each column at one screen and left the rest of the comparison blank. */
 .diff-tab-body .cm-mergeViewEditors {
-  height: 100%;
+  min-height: 100%;
 }
 .diff-tab-body .cm-merge-a,
 .diff-tab-body .cm-merge-b {
   min-width: 0;
-  overflow: auto;
 }
-.diff-tab-body .cm-editor {
+.diff-tab-body > .cm-editor {
   height: 100%;
 }
 /* Unified mode placeholder for folded unchanged lines: a clickable divider,
