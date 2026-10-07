@@ -15,7 +15,7 @@ const fake = (): FileService => ({
   download: vi.fn(),
   blob: vi.fn(),
   create: vi.fn(),
-  createFolder: vi.fn(),
+  createFolder: vi.fn().mockResolvedValue(undefined),
   remove: vi.fn().mockResolvedValue(undefined),
   rename: vi.fn().mockResolvedValue(undefined),
   upload: vi.fn().mockResolvedValue(undefined),
@@ -185,6 +185,26 @@ describe('FileTree', () => {
         { file: intro, path: 'chapters/intro.tex' },
       ]),
     );
+  });
+
+  it('creates a folder inside the chosen parent and refuses a name that already exists', async () => {
+    const service = fake();
+    renderWithApp(
+      <FileTree projectId="p1" canEdit mainFile="main.tex" />,
+      new Container().register(FileServiceToken, service).register(HistoryServiceToken, history()),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Nova pasta' }));
+    const dialog = screen.getByRole('dialog', { name: 'Nova pasta' });
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'chapters' }));
+    const name = within(dialog).getByLabelText('Nome');
+    await userEvent.type(name, 'intro.tex');
+    expect(within(dialog).getByRole('alert').textContent).toContain('chapters/intro.tex');
+    expect(within(dialog).getByRole('button', { name: 'Criar' })).toHaveProperty('disabled', true);
+    await userEvent.clear(name);
+    await userEvent.type(name, 'figs');
+    expect(within(dialog).getByText('figs').closest('p')?.textContent).toBe('chapters/figs');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Criar' }));
+    await waitFor(() => expect(service.createFolder).toHaveBeenCalledWith('p1', 'chapters/figs'));
   });
 
   it('keeps a picked folder name unless only its contents are sent', () => {

@@ -329,9 +329,7 @@ export function FileTree({
         title="Novo arquivo"
         icon={<FilePlus size={18} aria-hidden="true" />}
         kicker="Novo item"
-        description="Caminho relativo dentro do projeto."
-        placeholder="capitulos/intro.tex"
-        confirmLabel="Criar"
+        namePlaceholder="intro.tex"
         action={(id, path) => files.create(id, path)}
         onDone={setActivePath}
       />
@@ -341,9 +339,7 @@ export function FileTree({
         title="Nova pasta"
         icon={<FolderPlus size={18} aria-hidden="true" />}
         kicker="Novo item"
-        description="Caminho relativo dentro do projeto."
-        placeholder="capitulos"
-        confirmLabel="Criar"
+        namePlaceholder="resultados"
         action={(id, path) => files.createFolder(id, path)}
       />
       <RenameDialog
@@ -368,6 +364,77 @@ export function uploadPath(folder: string, file: File, contentsOnly = false): st
   return [folder, inside].filter(Boolean).join('/');
 }
 
+/** Every file path and folder of the project, from the cached file list. */
+function useProjectPaths(projectId: string) {
+  const files = useService(FileServiceToken);
+  const { data } = useQuery({
+    queryKey: ['files', projectId],
+    queryFn: () => files.list(projectId),
+  });
+  return useMemo(() => {
+    const paths = new Set((data ?? []).map((f) => f.path));
+    const set = new Set<string>();
+    for (const p of paths) {
+      const parts = p.split('/');
+      for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join('/'));
+    }
+    // Segment-wise order keeps children right under their parent (`img`, `img/a`, `img-x`).
+    const folders = [...set].sort((a, b) => {
+      const [x, y] = [a.split('/'), b.split('/')];
+      for (let i = 0; i < Math.min(x.length, y.length); i++) {
+        const c = (x[i] as string).localeCompare(y[i] as string);
+        if (c) return c;
+      }
+      return x.length - y.length;
+    });
+    return { paths, folders };
+  }, [data]);
+}
+
+/** The project's folders as a small explorer of radio buttons; '' is the project root. */
+function FolderPicker({
+  legend,
+  folders,
+  value,
+  onChange,
+}: {
+  legend: string;
+  folders: string[];
+  value: string;
+  onChange: (folder: string) => void;
+}) {
+  const name = useId();
+  return (
+    <fieldset className="folder-picker">
+      <legend>{legend}</legend>
+      <div className="folder-picker-list">
+        {['', ...folders].map((f) => {
+          const depth = f ? f.split('/').length : 0;
+          const Icon = !f ? FolderRoot : value === f ? FolderOpen : FolderIcon;
+          return (
+            <label
+              key={f}
+              className="folder-option"
+              title={f ? `${f}/` : 'Raiz do projeto'}
+              style={{ '--depth': depth } as CSSProperties}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={f}
+                checked={value === f}
+                onChange={() => onChange(f)}
+              />
+              <Icon size={15} aria-hidden="true" />
+              <span>{f ? f.slice(f.lastIndexOf('/') + 1) : 'Raiz do projeto'}</span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 function UploadDialog({
   dialogRef,
   projectId,
@@ -377,24 +444,12 @@ function UploadDialog({
 }) {
   const files = useService(FileServiceToken);
   const queryClient = useQueryClient();
-  const { data: existing } = useQuery({
-    queryKey: ['files', projectId],
-    queryFn: () => files.list(projectId),
-  });
+  const { paths, folders } = useProjectPaths(projectId);
   const [picked, setPicked] = useState<File[]>([]);
   const [folder, setFolder] = useState('');
   const [mode, setMode] = useState<'files' | 'folder'>('files');
   const [contentsOnly, setContentsOnly] = useState(false);
   const pickedFolder = picked[0]?.webkitRelativePath?.split('/')[0]; // undefined in jsdom
-  const folders = useMemo(() => {
-    const set = new Set<string>();
-    for (const f of existing ?? []) {
-      const parts = f.path.split('/');
-      for (let i = 1; i < parts.length; i++) set.add(parts.slice(0, i).join('/'));
-    }
-    return [...set].sort();
-  }, [existing]);
-  const paths = new Set((existing ?? []).map((f) => f.path));
   const entries = picked.map((file) => ({ file, path: uploadPath(folder, file, contentsOnly) }));
   const replaced = new Set(entries.map((e) => e.path).filter((p) => paths.has(p)));
   const mutation = useMutation({
@@ -448,33 +503,12 @@ function UploadDialog({
       }
     >
       <Form id={formId} onSubmit={submit}>
-        <fieldset className="folder-picker">
-          <legend>Pasta de destino</legend>
-          <div className="folder-picker-list">
-            {['', ...folders].map((f) => {
-              const depth = f ? f.split('/').length : 0;
-              const Icon = !f ? FolderRoot : folder === f ? FolderOpen : FolderIcon;
-              return (
-                <label
-                  key={f}
-                  className="folder-option"
-                  title={f ? `${f}/` : 'Raiz do projeto'}
-                  style={{ '--depth': depth } as CSSProperties}
-                >
-                  <input
-                    type="radio"
-                    name="upload-folder"
-                    value={f}
-                    checked={folder === f}
-                    onChange={() => setFolder(f)}
-                  />
-                  <Icon size={15} aria-hidden="true" />
-                  <span>{f ? f.slice(f.lastIndexOf('/') + 1) : 'Raiz do projeto'}</span>
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
+        <FolderPicker
+          legend="Pasta de destino"
+          folders={folders}
+          value={folder}
+          onChange={setFolder}
+        />
         <div className="tabs" role="tablist">
           {(['files', 'folder'] as const).map((m) => (
             <button
@@ -583,9 +617,7 @@ function PathDialog({
   title,
   icon,
   kicker,
-  description,
-  placeholder,
-  confirmLabel,
+  namePlaceholder,
   action,
   onDone,
 }: {
@@ -594,80 +626,92 @@ function PathDialog({
   title: string;
   icon: ReactNode;
   kicker: string;
-  description: string;
-  placeholder: string;
-  confirmLabel: string;
+  namePlaceholder: string;
   action: (projectId: string, path: string) => Promise<void>;
   onDone?: (path: string) => void;
 }) {
   const queryClient = useQueryClient();
+  const { paths, folders } = useProjectPaths(projectId);
   const formId = useId();
-  const hintId = useId();
-  const [path, setPath] = useState('');
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [parent, setParent] = useState('');
+  const [name, setName] = useState('');
+  const trimmed = name.trim();
+  const path = [parent, trimmed].filter(Boolean).join('/');
+  // Checked as the person types; the server re-checks both under the project lock.
+  const problem = !trimmed
+    ? null
+    : (invalidPathReason(trimmed) ??
+      (paths.has(path) || folders.includes(path) ? `Já existe "${path}" no projeto.` : null));
   const mutation = useMutation({
-    mutationFn: () => action(projectId, path.trim()),
+    mutationFn: () => action(projectId, path),
     onSuccess: () => {
-      const created = path.trim();
       queryClient.invalidateQueries({ queryKey: ['files', projectId] });
       dialogRef.current?.close();
-      onDone?.(created);
+      onDone?.(path);
     },
   });
   useResetOnClose(dialogRef, () => {
-    setPath('');
-    setLocalError(null);
+    setParent('');
+    setName('');
     mutation.reset();
   });
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (mutation.isPending) return;
-    const reason = invalidPathReason(path.trim());
-    if (reason) {
-      setLocalError(reason);
-      return;
-    }
-    setLocalError(null);
+    if (mutation.isPending || !trimmed || problem) return;
     mutation.mutate();
   };
-  const cancel = () => dialogRef.current?.close();
   return (
     <Dialog
       ref={dialogRef}
       title={title}
       icon={icon}
       kicker={kicker}
-      description={description}
+      description="Escolha onde criar e dê um nome."
       pending={mutation.isPending}
       footer={
         <div className="actions">
-          <Button variant="ghost" onClick={cancel} disabled={mutation.isPending}>
+          <Button
+            variant="ghost"
+            onClick={() => dialogRef.current?.close()}
+            disabled={mutation.isPending}
+          >
             Cancelar
           </Button>
-          <Button variant="primary" type="submit" form={formId} disabled={mutation.isPending}>
-            {mutation.isPending ? 'Salvando…' : confirmLabel}
+          <Button
+            variant="primary"
+            type="submit"
+            form={formId}
+            disabled={mutation.isPending || !trimmed || !!problem}
+            loading={mutation.isPending}
+          >
+            {mutation.isPending ? 'Criando…' : 'Criar'}
           </Button>
         </div>
       }
     >
       <Form id={formId} onSubmit={submit}>
+        <FolderPicker legend="Criar em" folders={folders} value={parent} onChange={setParent} />
         <Form.Field
-          label="Caminho"
-          value={path}
-          onChange={(e) => {
-            setPath(e.target.value);
-            setLocalError(null);
-          }}
-          placeholder={placeholder}
-          aria-describedby={hintId}
+          label="Nome"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={namePlaceholder}
           autoFocus
           required
         />
-        <p id={hintId} className="field-hint">
-          Exemplo: <code>{placeholder}</code>
+        <p className="path-preview" aria-live="polite">
+          {icon}
+          {trimmed ? (
+            <span>
+              {parent && <span className="muted">{parent}/</span>}
+              {trimmed}
+            </span>
+          ) : (
+            <span className="muted">O caminho aparece aqui.</span>
+          )}
         </p>
-        {(localError || mutation.error) && (
-          <Form.Error>{localError ?? mutation.error?.message}</Form.Error>
+        {(problem || mutation.error) && (
+          <Form.Error>{problem ?? mutation.error?.message}</Form.Error>
         )}
       </Form>
     </Dialog>
