@@ -51,7 +51,7 @@ describe('FilesService', () => {
       project,
       parts({ 'main.tex': 'new upload', 'refs.BIB': '@book{x}', 'fig.png': 'png' }),
     );
-    expect(written.sort()).toEqual(['fig.png', 'main.tex', 'refs.BIB']);
+    expect(written.map((w) => w.path).sort()).toEqual(['fig.png', 'main.tex', 'refs.BIB']);
     expect(sync.calls.sort()).toEqual(['replace main.tex', 'replace refs.BIB']);
     expect(sync.texts.get('main.tex')).toBe('new upload');
   });
@@ -70,6 +70,21 @@ describe('FilesService', () => {
         { path: 'sub/new.tex', type: 'add' },
       ]),
     );
+  });
+
+  it('tells new, changed and byte-identical uploads apart, and leaves identical docs alone', async () => {
+    await service.create(project, ana, 'same.tex', 'kept');
+    await service.create(project, ana, 'edit.tex', 'before');
+    const result = await service.upload(
+      project,
+      parts({ 'same.tex': 'kept', 'edit.tex': 'aft3r!', 'new.tex': 'x' }),
+    );
+    expect(Object.fromEntries(result.map((r) => [r.path, r.change]))).toEqual({
+      'same.tex': 'same',
+      'edit.tex': 'modify',
+      'new.tex': 'add',
+    });
+    expect(sync.calls).not.toContain('replace same.tex');
   });
 
   it('forgets the docs of renamed and deleted files', async () => {

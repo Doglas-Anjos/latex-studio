@@ -23,7 +23,7 @@ import {
 } from '../../projects/presentation/guards/project-role.guard';
 import { UPLOAD_RATE_LIMIT, withParts } from '../../projects/presentation/multipart';
 import type { User } from '../../users/domain/user';
-import { FilesService } from '../application/files.service';
+import { FilesService, type UploadedFile } from '../application/files.service';
 import { CONTENT_TYPES } from './content-types';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
 import { CreateFileDto, CreateFolderDto, RenameFileDto, UpdateFileDto } from './files.dto';
@@ -114,7 +114,10 @@ export class FilesController {
   @RouteConfig(UPLOAD_RATE_LIMIT)
   @Post('upload')
   @RequireProjectRole('editor')
-  upload(@CurrentProject() project: Project, @Req() request: FastifyRequest): Promise<string[]> {
+  upload(
+    @CurrentProject() project: Project,
+    @Req() request: FastifyRequest,
+  ): Promise<UploadedFile[]> {
     return withParts(request, (parts) => this.files.upload(project, parts));
   }
 }

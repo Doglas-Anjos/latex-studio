@@ -1,3 +1,4 @@
+import { createHash, type Hash } from 'node:crypto';
 import { extname } from 'node:path/posix';
 import { APP_CONFIG, type AppConfig } from '@latex-studio/core';
 import {
@@ -26,6 +27,23 @@ import {
   type ProjectStorage,
 } from '../../projects/domain/project-storage';
 import type { User } from '../../users/domain/user';
+
+export interface UploadedFile {
+  path: string;
+  /** `same`: byte-identical to the file it replaced, so nothing changed. */
+  change: 'add' | 'modify' | 'same';
+}
+
+const SAME_CHECK_MAX = 32 * 1024 * 1024;
+const sha256 = (data: Uint8Array) => createHash('sha256').update(data).digest('hex');
+
+/** Passes chunks through unchanged while feeding them to `hash`. */
+async function* hashing(source: AsyncIterable<Uint8Array>, hash: Hash) {
+  for await (const chunk of source) {
+    hash.update(chunk);
+    yield chunk;
+  }
+}
 
 /** The file at `path`, or every file under the folder `path`. */
 async function filesUnder(files: ProjectFiles, path: string) {
@@ -136,14 +154,16 @@ export class FilesService {
    * whose filenames are paths relative to that folder. Existing files are overwritten.
    * No commit: like editor typing, the upload stays a working change against the last saved
    * version, so replaced files show as modified (badge, gutter, diff) until "Salvar versão".
+   * Each file reports whether it was new, changed, or byte-identical to what was there.
    */
-  upload(project: Project, parts: AsyncIterable<UploadPart>): Promise<string[]> {
+  upload(project: Project, parts: AsyncIterable<UploadPart>): Promise<UploadedFile[]> {
     return this.lock.run(project.id, async () => {
       const files = this.storage.open(project.id);
-      const used = (await files.repo.listFiles()).reduce((sum, f) => sum + f.size, 0);
-      const budget = { left: this.quota - used };
+      const listed = await files.repo.listFiles();
+      const sizes = new Map(listed.map((f) => [f.path, f.size]));
+      const budget = { left: this.quota - listed.reduce((sum, f) => sum + f.size, 0) };
       let folder = '';
-      const written = new Set<string>();
+      const written = new Map<string, UploadedFile['change']>();
       const created: string[] = [];
       try {
         for await (const part of parts) {
@@ -159,8 +179,15 @@ export class FilesService {
             throw e;
           }
           const existed = await files.isFile(path);
-          await files.writeStream(path, limitBytes(part.file, budget));
-          written.add(path);
+          // ponytail: a same-size file over SAME_CHECK_MAX is reported as modified unread (no
+          // multi-hundred-MB read); a streamed hash of the old file would lift the cap.
+          const before =
+            existed && (sizes.get(path) ?? Number.POSITIVE_INFINITY) <= SAME_CHECK_MAX
+              ? sha256(await files.repo.readFile(path))
+              : null;
+          const hash = createHash('sha256');
+          await files.writeStream(path, hashing(limitBytes(part.file, budget), hash));
+          written.set(path, !existed ? 'add' : before === hash.digest('hex') ? 'same' : 'modify');
           if (!existed) created.push(path);
         }
       } catch (e) {
@@ -171,12 +198,12 @@ export class FilesService {
       }
       if (written.size === 0) throw new BadRequestException('No files uploaded');
       // An open doc (or its saved state) would otherwise write the old text back over the upload.
-      for (const path of written) {
-        if (!TEXT_EXTENSIONS.has(extname(path).toLowerCase())) continue;
+      for (const [path, change] of written) {
+        if (change === 'same' || !TEXT_EXTENSIONS.has(extname(path).toLowerCase())) continue;
         const text = Buffer.from(await files.repo.readFile(path)).toString('utf8');
         await this.sync.replaceText(project.id, path, text);
       }
-      return [...written];
+      return [...written].map(([path, change]) => ({ path, change }));
     });
   }
 }
