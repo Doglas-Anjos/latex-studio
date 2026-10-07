@@ -25,6 +25,13 @@
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
   --font-ui: "IBM Plex Sans", "Trebuchet MS", "Liberation Sans", sans-serif;
   --ok: #3f6b4a;
+  /* Diff: what left (red, struck) and what came in (green), line tint and word band. */
+  --diff-del-line: #fcebea;
+  --diff-del-word: #f4bcb7;
+  --diff-del-ink: #9b1c1c;
+  --diff-ins-line: #e7f5ea;
+  --diff-ins-word: #aee0bb;
+  --diff-ins-ink: #145a2e;
   --syn-command: #1a56b0;
   --syn-userCommand: #283593;
   --syn-env: #8a3ab9;
@@ -85,6 +92,12 @@
   --chrome-line: #262a33;
   --chrome-accent: #e3b04b;
   --ok: #7fc08a;
+  --diff-del-line: #3b2124;
+  --diff-del-word: #7d3036;
+  --diff-del-ink: #ffb4ab;
+  --diff-ins-line: #1c3325;
+  --diff-ins-word: #2e6b43;
+  --diff-ins-ink: #b8f0c6;
   --syn-command: #7fb2ff;
   --syn-userCommand: #a5b4fc;
   --syn-env: #d19af2;
@@ -2773,6 +2786,168 @@ button.change-row-main:hover .change-name {
 }
 .diff-tab-body .cm-collapsedLines:hover {
   background: color-mix(in srgb, var(--line) 55%, transparent);
+}
+.diff-legend {
+  display: inline-flex;
+  gap: 0.35rem;
+  flex: none;
+  font-size: 0.72rem;
+}
+.diff-legend > span {
+  padding: 0.05rem 0.4rem;
+  border-radius: 4px;
+}
+.diff-legend-del {
+  background: var(--diff-del-word);
+  color: var(--diff-del-ink);
+  text-decoration: line-through;
+}
+.diff-legend-ins {
+  background: var(--diff-ins-word);
+  color: var(--diff-ins-ink);
+}
+/* Undo controls: quiet until hovered, like the revert arrows of VS Code's diff editor. */
+.diff-revert {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.diff-revert:hover,
+.diff-revert:focus-visible {
+  border-color: var(--diff-del-ink);
+  color: var(--diff-del-ink);
+}
+.diff-tab-body .cm-merge-revert {
+  width: 1.9rem;
+  background: var(--paper);
+}
+.diff-tab-body .cm-merge-revert .diff-revert {
+  position: absolute;
+  left: 0.2rem;
+  padding: 0.15rem;
+  opacity: 0.45;
+}
+.diff-tab-body .cm-merge-revert .diff-revert:hover,
+.diff-tab-body .cm-merge-revert .diff-revert:focus-visible {
+  opacity: 1;
+}
+.diff-tab-body .cm-chunkButtons {
+  position: absolute;
+  right: 0.5rem;
+  z-index: 1;
+  opacity: 0.7;
+  transition: opacity 0.12s;
+}
+.diff-tab-body .cm-deletedChunk:hover .cm-chunkButtons,
+.diff-tab-body .cm-chunkButtons:focus-within {
+  opacity: 1;
+}
+/* Beat the library's white-on-colour chunk button style. */
+.diff-tab-body .cm-chunkButtons .diff-revert {
+  border: 1px solid var(--diff-del-ink);
+  background: var(--surface);
+  color: var(--diff-del-ink);
+}
+/* <del> strikes whole removed lines by default; only the words that changed are struck. */
+.diff-tab-body .cm-deletedChunk del {
+  text-decoration: none;
+}
+.diff-tab-body .cm-chunkButtons span:empty {
+  display: none;
+}
+/* Words: the new text as prose, tracked-changes style. */
+.word-diff-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0.75rem 1.25rem 2rem;
+}
+.word-diff-count {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+.word-diff {
+  max-width: 80ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: var(--editor-font, ui-monospace, monospace);
+  font-size: var(--editor-font-size, 14px);
+  line-height: 1.75;
+}
+.wd-change {
+  position: relative;
+}
+.wd-del {
+  padding: 0.05rem 0.1rem;
+  border-radius: 3px;
+  background: var(--diff-del-word);
+  color: var(--diff-del-ink);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+.wd-ins {
+  padding: 0.05rem 0.1rem;
+  border-radius: 3px;
+  background: var(--diff-ins-word);
+  color: var(--diff-ins-ink);
+  text-decoration: none;
+}
+.wd-del + .wd-ins {
+  margin-left: 0.15rem;
+}
+.wd-revert {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 0;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--diff-del-ink);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--diff-del-ink);
+  font-family: var(--font-body, inherit);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+  opacity: 0;
+  pointer-events: none;
+  cursor: pointer;
+}
+.wd-change:hover .wd-revert,
+.wd-revert:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.word-diff-fold {
+  display: block;
+  width: 100%;
+  margin: 0.35rem 0;
+  padding: 0.15rem 0.6rem;
+  border: 0;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--line) 40%, transparent);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-style: italic;
+  text-align: left;
+  cursor: pointer;
+}
+.word-diff-fold:hover {
+  background: color-mix(in srgb, var(--line) 60%, transparent);
 }
 .cm-changes-gutter {
   width: 4px;

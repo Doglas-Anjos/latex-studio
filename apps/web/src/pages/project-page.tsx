@@ -224,6 +224,7 @@ export function ProjectPage() {
                     path={activeTab.path}
                     from={activeTab.from}
                     to={activeTab.to}
+                    canEdit={canEdit}
                   />
                 ) : (
                   <Editor
