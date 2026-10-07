@@ -30,7 +30,7 @@ import {
 } from 'react';
 import { useService } from '../di/service-provider';
 import { useHistoryStatus } from '../hooks/use-history-status';
-import { FileServiceToken, type ProjectFile } from '../services/file.service';
+import { FileServiceToken, type ProjectFile, type UploadedFile } from '../services/file.service';
 import { useSettingsStore } from '../settings-store';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
@@ -458,9 +458,10 @@ function UploadDialog({
       queryClient.invalidateQueries({ queryKey: ['files', projectId] });
       // Replaced files are now working changes: refresh the M badges and the Mudanças view.
       queryClient.invalidateQueries({ queryKey: ['history', projectId] });
-      dialogRef.current?.close();
     },
   });
+  const result = mutation.data;
+  const changed = result?.some((r) => r.change !== 'same');
   useResetOnClose(dialogRef, () => {
     setPicked([]);
     setFolder('');
@@ -482,132 +483,206 @@ function UploadDialog({
       kicker="Arquivos do projeto"
       pending={mutation.isPending}
       footer={
-        <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={mutation.isPending}
-          >
-            Cancelar
-          </Button>
-          <Button
-            variant="primary"
-            type="submit"
-            form={formId}
-            disabled={mutation.isPending || picked.length === 0}
-            loading={mutation.isPending}
-          >
-            {mutation.isPending ? 'Enviando…' : 'Enviar'}
-          </Button>
-        </div>
+        result ? (
+          <div className="actions">
+            {changed && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  useSettingsStore.getState().set({ sidebarView: 'changes' });
+                  dialogRef.current?.close();
+                }}
+              >
+                Ver mudanças
+              </Button>
+            )}
+            <Button variant="primary" onClick={() => dialogRef.current?.close()}>
+              Fechar
+            </Button>
+          </div>
+        ) : (
+          <div className="actions">
+            <Button
+              variant="ghost"
+              onClick={() => dialogRef.current?.close()}
+              disabled={mutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form={formId}
+              disabled={mutation.isPending || picked.length === 0}
+              loading={mutation.isPending}
+            >
+              {mutation.isPending ? 'Enviando…' : 'Enviar'}
+            </Button>
+          </div>
+        )
       }
     >
-      <Form id={formId} onSubmit={submit}>
-        <FolderPicker
-          legend="Pasta de destino"
-          folders={folders}
-          value={folder}
-          onChange={setFolder}
-        />
-        <div className="tabs" role="tablist">
-          {(['files', 'folder'] as const).map((m) => (
-            <button
-              key={m}
-              type="button"
-              role="tab"
-              aria-selected={mode === m}
-              onClick={() => {
-                setMode(m);
-                setPicked([]);
-              }}
-            >
-              {m === 'files' ? 'Arquivos' : 'Pasta inteira'}
-            </button>
-          ))}
-        </div>
-        <Dropzone
-          key={mode}
-          directory={mode === 'folder'}
-          multiple
-          label={
-            mode === 'files' ? 'Arraste os arquivos aqui' : 'Selecione uma pasta do seu computador'
-          }
-          hint={
-            mode === 'files'
-              ? 'ou selecione do seu computador'
-              : 'Ela vai com o nome e as subpastas. Arrastar e soltar não funciona para pastas.'
-          }
-          browseLabel={mode === 'files' ? 'Selecionar arquivos' : 'Selecionar pasta'}
-          files={picked}
-          onFiles={setPicked}
-        >
-          {entries.length > 0 && (
-            <div className="upload-picked">
-              <div className="upload-summary" role="status">
-                <span>
-                  {entries.length === 1 ? '1 arquivo' : `${entries.length} arquivos`} ·{' '}
-                  {formatSize(entries.reduce((sum, e) => sum + e.file.size, 0))}
-                </span>
-                {replaced.size > 0 && (
-                  <span className="upload-badge" data-type="modify">
-                    {replaced.size === entries.length
-                      ? 'todos substituem'
-                      : `${replaced.size} substituem`}
+      {result ? (
+        <UploadResult result={result} />
+      ) : (
+        <Form id={formId} onSubmit={submit}>
+          <FolderPicker
+            legend="Pasta de destino"
+            folders={folders}
+            value={folder}
+            onChange={setFolder}
+          />
+          <div className="tabs" role="tablist">
+            {(['files', 'folder'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="tab"
+                aria-selected={mode === m}
+                onClick={() => {
+                  setMode(m);
+                  setPicked([]);
+                }}
+              >
+                {m === 'files' ? 'Arquivos' : 'Pasta inteira'}
+              </button>
+            ))}
+          </div>
+          <Dropzone
+            key={mode}
+            directory={mode === 'folder'}
+            multiple
+            label={
+              mode === 'files'
+                ? 'Arraste os arquivos aqui'
+                : 'Selecione uma pasta do seu computador'
+            }
+            hint={
+              mode === 'files'
+                ? 'ou selecione do seu computador'
+                : 'Ela vai com o nome e as subpastas. Arrastar e soltar não funciona para pastas.'
+            }
+            browseLabel={mode === 'files' ? 'Selecionar arquivos' : 'Selecionar pasta'}
+            files={picked}
+            onFiles={setPicked}
+          >
+            {entries.length > 0 && (
+              <div className="upload-picked">
+                <div className="upload-summary" role="status">
+                  <span>
+                    {entries.length === 1 ? '1 arquivo' : `${entries.length} arquivos`} ·{' '}
+                    {formatSize(entries.reduce((sum, e) => sum + e.file.size, 0))}
                   </span>
+                  {replaced.size > 0 && (
+                    <span className="upload-badge" data-type="modify">
+                      {replaced.size === entries.length
+                        ? 'todos substituem'
+                        : `${replaced.size} substituem`}
+                    </span>
+                  )}
+                  <Button variant="ghost" size="compact" onClick={() => setPicked([])}>
+                    Limpar
+                  </Button>
+                </div>
+                <ul className="upload-files">
+                  {entries.map(({ file, path }) => {
+                    const cut = path.lastIndexOf('/') + 1;
+                    const replaces = replaced.has(path);
+                    return (
+                      <li key={path}>
+                        <FileTypeIcon name={file.name} />
+                        <span className="upload-file-path" title={path}>
+                          {cut > 0 && <span className="muted">{path.slice(0, cut)}</span>}
+                          <span>{path.slice(cut)}</span>
+                        </span>
+                        <span className="upload-badge" data-type={replaces ? 'modify' : 'add'}>
+                          {replaces ? 'substitui' : 'novo'}
+                        </span>
+                        <span className="upload-file-size muted">{formatSize(file.size)}</span>
+                        <button
+                          type="button"
+                          className="dropzone-file-remove"
+                          aria-label={`Remover ${path}`}
+                          onClick={() => setPicked(picked.filter((f) => f !== file))}
+                        >
+                          <X size={13} aria-hidden="true" />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                {replaced.size > 0 && (
+                  <p className="upload-note muted">
+                    Os arquivos que substituem ficam marcados como modificados (M), com o diff, até
+                    você salvar a versão.
+                  </p>
                 )}
-                <Button variant="ghost" size="compact" onClick={() => setPicked([])}>
-                  Limpar
-                </Button>
               </div>
-              <ul className="upload-files">
-                {entries.map(({ file, path }) => {
-                  const cut = path.lastIndexOf('/') + 1;
-                  const replaces = replaced.has(path);
-                  return (
-                    <li key={path}>
-                      <FileTypeIcon name={file.name} />
-                      <span className="upload-file-path" title={path}>
-                        {cut > 0 && <span className="muted">{path.slice(0, cut)}</span>}
-                        <span>{path.slice(cut)}</span>
-                      </span>
-                      <span className="upload-badge" data-type={replaces ? 'modify' : 'add'}>
-                        {replaces ? 'substitui' : 'novo'}
-                      </span>
-                      <span className="upload-file-size muted">{formatSize(file.size)}</span>
-                      <button
-                        type="button"
-                        className="dropzone-file-remove"
-                        aria-label={`Remover ${path}`}
-                        onClick={() => setPicked(picked.filter((f) => f !== file))}
-                      >
-                        <X size={13} aria-hidden="true" />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              {replaced.size > 0 && (
-                <p className="upload-note muted">
-                  Os arquivos que substituem ficam marcados como modificados (M), com o diff, até
-                  você salvar a versão.
-                </p>
-              )}
-            </div>
+            )}
+          </Dropzone>
+          {mode === 'folder' && pickedFolder && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={contentsOnly}
+                onChange={(e) => setContentsOnly(e.target.checked)}
+              />
+              Enviar só o conteúdo, sem criar a pasta “{pickedFolder}”
+            </label>
           )}
-        </Dropzone>
-        {mode === 'folder' && pickedFolder && (
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={contentsOnly}
-              onChange={(e) => setContentsOnly(e.target.checked)}
-            />
-            Enviar só o conteúdo, sem criar a pasta “{pickedFolder}”
-          </label>
-        )}
-        {mutation.error && <Form.Error>{mutation.error.message}</Form.Error>}
-      </Form>
+          {mutation.error && <Form.Error>{mutation.error.message}</Form.Error>}
+        </Form>
+      )}
     </Dialog>
+  );
+}
+
+const CHANGE_LABELS: Record<UploadedFile['change'], [one: string, many: string, badge: string]> = {
+  modify: ['modificado', 'modificados', 'modificado'],
+  add: ['novo', 'novos', 'novo'],
+  same: ['sem alterações', 'sem alterações', 'sem alterações'],
+};
+
+/** What the upload did to each file; "same" ones were byte-identical, so nothing changed. */
+function UploadResult({ result }: { result: UploadedFile[] }) {
+  const count = (c: UploadedFile['change']) => result.filter((r) => r.change === c).length;
+  const summary = (['modify', 'add', 'same'] as const)
+    .filter((c) => count(c) > 0)
+    .map((c) => `${count(c)} ${CHANGE_LABELS[c][count(c) === 1 ? 0 : 1]}`)
+    .join(' · ');
+  return (
+    <div className="upload-picked upload-result" role="status">
+      <p className="upload-result-title">Envio concluído: {summary}</p>
+      <ul className="upload-files">
+        {result.map(({ path, change }) => {
+          const cut = path.lastIndexOf('/') + 1;
+          return (
+            <li key={path}>
+              <FileTypeIcon name={path} />
+              <span className="upload-file-path" title={path}>
+                {cut > 0 && <span className="muted">{path.slice(0, cut)}</span>}
+                <span>{path.slice(cut)}</span>
+              </span>
+              <span className="upload-badge" data-type={change}>
+                {CHANGE_LABELS[change][2]}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {count('same') > 0 && (
+        <p className="upload-note">
+          “Sem alterações” quer dizer que o arquivo enviado é idêntico, byte a byte, ao que já
+          estava no projeto. Confira se as mudanças foram salvas no seu computador antes de enviar.
+        </p>
+      )}
+      {count('same') < result.length && (
+        <p className="upload-note muted">
+          Os novos e modificados aparecem com A e M na árvore e na aba Mudanças até você salvar a
+          versão.
+        </p>
+      )}
+    </div>
   );
 }
 

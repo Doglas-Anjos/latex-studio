@@ -23,7 +23,7 @@
   --chrome-line: #2a2d36;
   --chrome-accent: #d9a441;
   --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-ui: "IBM Plex Sans", "Trebuchet MS", "Liberation Sans", sans-serif;
   --ok: #3f6b4a;
   --syn-command: #1a56b0;
   --syn-userCommand: #283593;
@@ -554,6 +554,14 @@ a {
 .upload-note {
   margin: 0;
   font-size: 0.8rem;
+}
+.upload-badge[data-type="same"] {
+  color: var(--muted);
+  background: color-mix(in srgb, var(--muted) 14%, transparent);
+}
+.upload-result-title {
+  margin: 0;
+  font-weight: 600;
 }
 .path-preview {
   display: flex;

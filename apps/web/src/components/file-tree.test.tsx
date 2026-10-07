@@ -207,6 +207,29 @@ describe('FileTree', () => {
     await waitFor(() => expect(service.createFolder).toHaveBeenCalledWith('p1', 'chapters/figs'));
   });
 
+  it('reports after sending which files changed and which were identical', async () => {
+    const service = fake();
+    vi.mocked(service.upload).mockResolvedValue([
+      { path: 'chapters/intro.tex', change: 'same' },
+      { path: 'chapters/new.tex', change: 'add' },
+    ]);
+    renderWithApp(
+      <FileTree projectId="p1" canEdit mainFile="main.tex" />,
+      new Container().register(FileServiceToken, service).register(HistoryServiceToken, history()),
+    );
+    await userEvent.click(await screen.findByRole('button', { name: 'Upload' }));
+    const dialog = screen.getByRole('dialog', { name: 'Enviar arquivos' });
+    const input = dialog.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'intro.tex')] } });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar' }));
+    expect(
+      await within(dialog).findByText('Envio concluído: 1 novo · 1 sem alterações'),
+    ).toBeTruthy();
+    expect(within(dialog).getByText(/idêntico, byte a byte/)).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Ver mudanças' }));
+    expect(useSettingsStore.getState().sidebarView).toBe('changes');
+  });
+
   it('keeps a picked folder name unless only its contents are sent', () => {
     const file = new File(['x'], 'fig.png');
     Object.defineProperty(file, 'webkitRelativePath', { value: 'tese/img/fig.png' });
