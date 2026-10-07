@@ -2074,17 +2074,22 @@ button.change-row-main:hover .change-name {
   text-decoration: underline;
 }
 .change-row-actions {
-  display: none;
+  display: flex;
   flex: none;
   gap: 0.1rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s;
 }
 .change-row:hover .change-row-actions,
 .change-row:focus-within .change-row-actions {
-  display: flex;
+  opacity: 1;
+  pointer-events: auto;
 }
 @media (hover: none) {
   .change-row-actions {
-    display: flex;
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 .change-badge {
@@ -2687,20 +2692,29 @@ button.change-row-main:hover .change-name {
 
 /* Changes & diff */
 .diff-tab-wrap {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   min-width: 0;
+  container-type: inline-size;
 }
 .diff-tab-header {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  padding: 0.4rem 0.75rem;
+  gap: 0.6rem;
+  min-height: 2.6rem;
+  padding: 0.35rem 0.6rem 0.35rem 0.75rem;
   border-bottom: 1px solid var(--line);
   background: var(--paper);
+}
+.diff-tab-file {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .diff-tab-path {
   min-width: 0;
@@ -2793,6 +2807,65 @@ button.change-row-main:hover .change-name {
   flex: none;
   font-size: 0.72rem;
 }
+.diff-modes {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.diff-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.55rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.12s,
+    color 0.12s;
+}
+.diff-mode:hover:not(:disabled) {
+  background: var(--paper);
+  color: var(--ink);
+}
+.diff-mode[aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--primary-ink);
+  font-weight: 600;
+}
+.diff-mode:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.diff-mode:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+/* Narrow pane (sidebar and PDF open): icons only, then drop the revisions. */
+@container (max-width: 640px) {
+  .diff-legend,
+  .diff-mode-label {
+    display: none;
+  }
+  .diff-mode {
+    padding: 0.3rem 0.45rem;
+  }
+}
+@container (max-width: 380px) {
+  .diff-tab-revs {
+    display: none;
+  }
+}
 .diff-legend > span {
   padding: 0.05rem 0.4rem;
   border-radius: 4px;
@@ -2820,10 +2893,27 @@ button.change-row-main:hover .change-name {
   font-size: 0.72rem;
   cursor: pointer;
 }
-.diff-revert:hover,
-.diff-revert:focus-visible {
+.diff-revert {
+  transition:
+    background-color 0.12s,
+    color 0.12s,
+    border-color 0.12s,
+    opacity 0.12s,
+    transform 0.08s;
+}
+.diff-tab-wrap .diff-revert:hover,
+.diff-tab-wrap .diff-revert:focus-visible {
   border-color: var(--diff-del-ink);
-  color: var(--diff-del-ink);
+  background: var(--diff-del-ink);
+  color: var(--surface);
+  opacity: 1;
+  outline-offset: 1px;
+}
+.diff-tab-wrap .diff-revert:focus-visible {
+  outline: 2px solid var(--focus);
+}
+.diff-revert:active {
+  transform: scale(0.94);
 }
 .diff-tab-body .cm-merge-revert {
   width: 1.9rem;
@@ -2831,13 +2921,21 @@ button.change-row-main:hover .change-name {
 }
 .diff-tab-body .cm-merge-revert .diff-revert {
   position: absolute;
-  left: 0.2rem;
-  padding: 0.15rem;
-  opacity: 0.45;
+  left: 0.15rem;
+  width: 1.55rem;
+  height: 1.55rem;
+  justify-content: center;
+  padding: 0;
+  border-color: var(--diff-del-ink);
+  color: var(--diff-del-ink);
+  opacity: 0.6;
 }
 .diff-tab-body .cm-merge-revert .diff-revert:hover,
 .diff-tab-body .cm-merge-revert .diff-revert:focus-visible {
+  background: var(--diff-del-ink);
+  color: var(--surface);
   opacity: 1;
+  transform: scale(1.08);
 }
 .diff-tab-body .cm-chunkButtons {
   position: absolute;
@@ -2855,6 +2953,31 @@ button.change-row-main:hover .change-name {
   border: 1px solid var(--diff-del-ink);
   background: var(--surface);
   color: var(--diff-del-ink);
+}
+.diff-tab-body .cm-chunkButtons .diff-revert:hover,
+.diff-tab-body .cm-chunkButtons .diff-revert:focus-visible {
+  background: var(--diff-del-ink);
+  color: var(--surface);
+}
+/* Hovering an undo button previews it: what goes is hatched and struck, what comes back is
+   outlined. */
+.diff-tab-body .cm-editor .cm-line.cm-revertGoing {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--diff-ins-line) 0 6px,
+    var(--surface) 6px 12px
+  );
+  text-decoration: line-through;
+  text-decoration-color: var(--diff-ins-ink);
+  opacity: 0.75;
+}
+.diff-tab-body .cm-editor .cm-line.cm-revertComing {
+  background: var(--diff-del-word);
+  box-shadow: inset 3px 0 0 var(--diff-del-ink);
+}
+.diff-tab-body .cm-deletedChunk.cm-revertComing {
+  outline: 2px solid var(--diff-del-ink);
+  outline-offset: -2px;
 }
 /* <del> strikes whole removed lines by default; only the words that changed are struck. */
 .diff-tab-body .cm-deletedChunk del {
@@ -2906,7 +3029,7 @@ button.change-row-main:hover .change-name {
 }
 .wd-revert {
   position: absolute;
-  bottom: calc(100% + 2px);
+  bottom: calc(100% - 1px);
   left: 0;
   z-index: 2;
   display: inline-flex;
@@ -2930,6 +3053,86 @@ button.change-row-main:hover .change-name {
 .wd-revert:focus-visible {
   opacity: 1;
   pointer-events: auto;
+}
+.wd-revert:hover,
+.wd-revert:focus-visible {
+  background: var(--diff-del-ink);
+  color: var(--surface);
+}
+.wd-revert:active {
+  transform: scale(0.94);
+}
+.wd-change:has(.wd-revert:hover) .wd-ins {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+.wd-change:has(.wd-revert:hover) .wd-del {
+  text-decoration: none;
+  outline: 2px solid var(--diff-del-ink);
+}
+/* "Mudança desfeita · Refazer" */
+.diff-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: calc(100% - 2rem);
+  padding: 0.4rem 0.45rem 0.4rem 0.75rem;
+  border-radius: 10px;
+  background: var(--ink);
+  color: var(--surface);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.25);
+  font-size: 0.85rem;
+  transform: translateX(-50%);
+  animation: diff-toast-in 0.18s ease-out;
+}
+.diff-toast-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--surface) 40%, transparent);
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.diff-toast-action:hover,
+.diff-toast-action:focus-visible {
+  background: color-mix(in srgb, var(--surface) 18%, transparent);
+}
+.diff-toast-close {
+  display: inline-flex;
+  padding: 0.2rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  opacity: 0.7;
+  cursor: pointer;
+}
+.diff-toast-close:hover {
+  opacity: 1;
+}
+@keyframes diff-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .diff-toast {
+    animation: none;
+  }
+  .diff-revert,
+  .wd-revert {
+    transition: none;
+  }
 }
 .word-diff-fold {
   display: block;
