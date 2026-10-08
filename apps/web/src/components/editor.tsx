@@ -1,14 +1,14 @@
 import { indentSelection } from '@codemirror/commands';
 import { syntaxHighlighting } from '@codemirror/language';
 import { diff } from '@codemirror/merge';
-import { Compartment, EditorState, type Extension, type Transaction } from '@codemirror/state';
+import { Compartment, EditorState, type Extension, Prec, type Transaction } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { basicSetup } from 'codemirror';
 import { Heading, MessageSquarePlus, Rows, Type, X } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
-import { yCollab } from 'y-codemirror.next';
+import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 import * as Y from 'yjs';
 import { useMe } from '../auth-hooks';
 import type { CommentScope } from '../comment-scope';
@@ -418,6 +418,10 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           ro.of(EditorState.readOnly.of(readOnly)),
           path.endsWith('.tex') ? latexSupport() : [],
           yCollab(ytext, provider.awareness),
+          // Undo must be Yjs's: basicSetup's history also records the text that arrives from
+          // the server (y-codemirror does not mark it addToHistory: false), so Ctrl+Z right
+          // after opening a file emptied it for every collaborator.
+          Prec.high(keymap.of(yUndoManagerKeymap)),
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
           blameGutter(),
