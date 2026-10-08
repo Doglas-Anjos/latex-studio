@@ -8,8 +8,11 @@ export interface User {
   createdAt: string;
 }
 
+/** `/auth/me`: the user plus whether they govern the platform. */
+export type Me = User & { isAdmin: boolean };
+
 export interface AuthService {
-  me(): Promise<User>;
+  me(): Promise<Me>;
 }
 
 export const AuthServiceToken = createToken<AuthService>('AuthService');
@@ -18,6 +21,6 @@ export class HttpAuthService implements AuthService {
   constructor(private readonly api: ApiClient) {}
 
   me() {
-    return this.api.get<User>('/auth/me');
+    return this.api.get<Me>('/auth/me');
   }
 }

@@ -14,7 +14,8 @@ import {
   Trash2,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
+import { useMe } from '../auth-hooks';
 import { Button } from '../components/button';
 import {
   CopyDialog,
@@ -121,6 +122,11 @@ export function ProjectsPage() {
           <div className="dashboard-heading">
             <h1 id="dashboard-library-title">Projetos</h1>
             {data && <span className="dashboard-count">{projectCount(data.total)}</span>}
+            {useMe().data?.isAdmin && (
+              <Link to="/admin" className="dashboard-admin-link">
+                Administração
+              </Link>
+            )}
           </div>
           <div className="dashboard-controls">
             <label className="search-field">

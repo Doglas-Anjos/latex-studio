@@ -5,6 +5,7 @@ import { RouterProvider } from 'react-router';
 import { Container } from './di/container';
 import { ServiceProvider } from './di/service-provider';
 import { router } from './routes';
+import { AdminServiceToken, HttpAdminService } from './services/admin.service';
 import { ApiClient } from './services/api-client';
 import { AuthServiceToken, HttpAuthService } from './services/auth.service';
 import { CommentServiceToken, HttpCommentService } from './services/comment.service';
@@ -37,6 +38,7 @@ const identity = new FasorxIdentity({
 const api = new ApiClient(identity);
 const container = new Container()
   .register(AuthServiceToken, new HttpAuthService(api))
+  .register(AdminServiceToken, new HttpAdminService(api))
   .register(IdentityToken, identity)
   .register(ProjectServiceToken, new HttpProjectService(api))
   .register(FileServiceToken, new HttpFileService(api))
