@@ -3,6 +3,7 @@ import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
+import { type AuthService, AuthServiceToken } from '../services/auth.service';
 import { type MemberService, MemberServiceToken } from '../services/member.service';
 import {
   type Project,
@@ -64,7 +65,16 @@ function setup(projects = list) {
     <ProjectsPage />,
     new Container()
       .register(ProjectServiceToken, service)
-      .register(MemberServiceToken, {} as MemberService),
+      .register(MemberServiceToken, {} as MemberService)
+      .register(AuthServiceToken, {
+        me: async () => ({
+          id: 'u',
+          email: 'u@test',
+          name: 'U',
+          createdAt: '',
+          isAdmin: false,
+        }),
+      } as AuthService),
   );
   return service;
 }
