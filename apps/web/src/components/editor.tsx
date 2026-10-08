@@ -182,10 +182,6 @@ function setPresence(
 
 function revealLine(view: EditorView, path: string) {
   const { pendingLine, activePath, clearPendingLine } = useWorkspaceStore.getState();
-  if (pendingLine !== null)
-    console.log(
-      `[revealLine] path=${path} activePath=${activePath} pendingLine=${pendingLine} lines=${view.state.doc.lines}`,
-    );
   // Only the jump's target file reveals: activePath is set to it, so the editor the jump came from
   // never consumes pendingLine, and a stale editor can't steal it.
   if (pendingLine === null || activePath !== path) return;
@@ -504,12 +500,17 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       }),
     });
     viewRef.current = view;
+    // A jump to this file takes precedence over the parked scroll: revealLine clears pendingLine
+    // before this rAF runs, so capture it now, or the restore would scroll back over the reveal.
+    const jumpHere =
+      useWorkspaceStore.getState().pendingLine !== null &&
+      useWorkspaceStore.getState().activePath === path;
     // After the first layout, or the scroll position has no height to land in. Until it has
     // happened, leaving keeps the old position (StrictMode remounts right away in development).
     let restored = !restore;
     const restoreFrame = restore
       ? requestAnimationFrame(() => {
-          view.scrollDOM.scrollTo({ top: restore.scrollTop });
+          if (!jumpHere) view.scrollDOM.scrollTo({ top: restore.scrollTop });
           restored = true;
         })
       : 0;
