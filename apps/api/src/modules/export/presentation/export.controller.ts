@@ -61,7 +61,7 @@ export class ExportController {
 
   @RouteConfig(RATE_LIMIT)
   @Post('copy')
-  @RequireProjectRole('viewer')
+  @RequireProjectRole('editor')
   copy(
     @CurrentProject() project: Project,
     @CurrentUser() user: User,
@@ -76,7 +76,7 @@ export class ExportController {
 
   @RouteConfig(RATE_LIMIT)
   @Post('wordcount')
-  @RequireProjectRole('viewer')
+  @RequireProjectRole('editor')
   @HttpCode(202)
   wordCount(@CurrentProject() project: Project): Promise<{ jobId: string }> {
     return this.exporter.requestWordCount(project);
@@ -84,7 +84,7 @@ export class ExportController {
 
   @RouteConfig(RATE_LIMIT)
   @Post('export/:format')
-  @RequireProjectRole('viewer')
+  @RequireProjectRole('editor')
   @HttpCode(202)
   requestExport(
     @CurrentProject() project: Project,

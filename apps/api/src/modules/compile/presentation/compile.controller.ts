@@ -48,8 +48,10 @@ export class CompileController {
   constructor(@Inject(CompileService) private readonly compile: CompileService) {}
 
   @RouteConfig(COMPILE_RATE_LIMIT)
+  // editor: compiling spends a worker slot and writes a build; the web already hides it from
+  // viewers, who still read the last build (GET builds/pdf/log stay viewer).
   @Post('compile')
-  @RequireProjectRole('viewer')
+  @RequireProjectRole('editor')
   @HttpCode(202)
   request(
     @CurrentProject() project: Project,

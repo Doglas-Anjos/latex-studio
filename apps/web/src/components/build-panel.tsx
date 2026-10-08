@@ -471,23 +471,28 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             <GitBranch size={16} aria-hidden="true" />
             Fonte com histórico git (.zip)
           </button>
-          <p className="dialog-list-heading">Exportar como</p>
-          {exportLabels.map(([format, label]) => (
-            <button
-              key={format}
-              type="button"
-              disabled={busy}
-              onClick={withClose(() => exportAs.mutate(format))}
-            >
-              <FileText size={16} aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-          <p className="dialog-list-heading">Ferramentas</p>
-          <button type="button" disabled={busy} onClick={withClose(() => count.mutate())}>
-            <Hash size={16} aria-hidden="true" />
-            Contar palavras
-          </button>
+          {/* Export and word count run worker jobs: editors only, like compile. */}
+          {canCompile && (
+            <>
+              <p className="dialog-list-heading">Exportar como</p>
+              {exportLabels.map(([format, label]) => (
+                <button
+                  key={format}
+                  type="button"
+                  disabled={busy}
+                  onClick={withClose(() => exportAs.mutate(format))}
+                >
+                  <FileText size={16} aria-hidden="true" />
+                  {label}
+                </button>
+              ))}
+              <p className="dialog-list-heading">Ferramentas</p>
+              <button type="button" disabled={busy} onClick={withClose(() => count.mutate())}>
+                <Hash size={16} aria-hidden="true" />
+                Contar palavras
+              </button>
+            </>
+          )}
           {build?.status === 'succeeded' && (
             <>
               <p className="dialog-list-heading">Compilado</p>

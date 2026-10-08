@@ -7,7 +7,7 @@ const requiredRole = (handler: object) => {
   return Reflect.getMetadata(key, handler);
 };
 
-it('lets viewers compile but only editors cancel a build', () => {
-  expect(requiredRole(CompileController.prototype.request)).toBe('viewer');
+it('lets only editors compile and cancel a build', () => {
+  expect(requiredRole(CompileController.prototype.request)).toBe('editor');
   expect(requiredRole(CompileController.prototype.cancel)).toBe('editor');
 });
