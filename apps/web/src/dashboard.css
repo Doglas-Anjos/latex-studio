@@ -139,6 +139,12 @@
   font-size: 0.75rem;
 }
 
+.dashboard-recent-name {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .dashboard-recent-copy strong {
   overflow: hidden;
   font-size: 0.96rem;
@@ -286,6 +292,38 @@
   background: color-mix(in srgb, var(--primary) 7%, var(--surface));
   color: var(--file-tex);
   transition: background-color 160ms ease;
+}
+
+.project-table tbody tr[data-role="reviewer"] .project-link-icon,
+.project-table tbody tr[data-role="viewer"] .project-link-icon {
+  background: color-mix(in srgb, var(--muted) 12%, var(--surface));
+  color: var(--muted);
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.role-badge[data-role="editor"] {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--line));
+  background: color-mix(in srgb, var(--primary) 8%, var(--surface));
+  color: var(--primary);
+}
+
+.role-badge[data-role="reviewer"] {
+  border-color: color-mix(in srgb, var(--mark) 40%, var(--line));
+  background: color-mix(in srgb, var(--mark) 12%, var(--surface));
+  color: var(--mark);
+}
+
+.role-badge[data-role="viewer"] {
+  border-color: var(--line);
+  background: color-mix(in srgb, var(--muted) 10%, var(--surface));
+  color: var(--muted);
 }
 
 .project-table tbody tr:hover .project-link-icon,

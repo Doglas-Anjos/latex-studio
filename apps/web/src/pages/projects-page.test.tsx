@@ -3,6 +3,7 @@ import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
+import { type MemberService, MemberServiceToken } from '../services/member.service';
 import {
   type Project,
   type ProjectListOptions,
@@ -20,10 +21,11 @@ const list: Project[] = [
 ];
 
 function setup(projects = list) {
-  const sorted = [...projects].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const store = [...projects];
+  const sorted = () => [...store].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const service = {
     list: vi.fn().mockImplementation(async (options: ProjectListOptions = {}) => {
-      const filtered = sorted
+      const filtered = sorted()
         .filter((p) =>
           !options.filter || options.filter === 'all'
             ? true
@@ -51,9 +53,19 @@ function setup(projects = list) {
         nextCursor: remaining.length > items.length ? (items.at(-1)?.id ?? null) : null,
       };
     }),
-    remove: vi.fn().mockResolvedValue(undefined),
+    remove: vi.fn().mockImplementation(async (id: string) => {
+      store.splice(
+        store.findIndex((p) => p.id === id),
+        1,
+      );
+    }),
   } as unknown as ProjectService;
-  renderWithApp(<ProjectsPage />, new Container().register(ProjectServiceToken, service));
+  renderWithApp(
+    <ProjectsPage />,
+    new Container()
+      .register(ProjectServiceToken, service)
+      .register(MemberServiceToken, {} as MemberService),
+  );
   return service;
 }
 const bodyRows = () => screen.getAllByRole('row').slice(1);
@@ -144,5 +156,51 @@ describe('ProjectsPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Anterior' }));
     await within(screen.getByRole('table')).findByText('Projeto 11');
     expect(bodyRows()).toHaveLength(10);
+  });
+
+  it('marks reviewer and viewer rows read-only and lets only the owner share', async () => {
+    setup([
+      ...list,
+      { ...base, id: '4', name: 'Revisao', role: 'reviewer', updatedAt: '2026-04-01T10:00:00Z' },
+      { ...base, id: '5', name: 'Leitura', role: 'viewer', updatedAt: '2026-05-01T10:00:00Z' },
+    ]);
+    await screen.findByText('Tese');
+    const viewer = within(bodyRows()[0] as HTMLElement);
+    const reviewer = within(bodyRows()[1] as HTMLElement);
+    expect(viewer.getByText('Leitor')).toBeTruthy();
+    expect(reviewer.getByText('Revisor')).toBeTruthy();
+    for (const row of [viewer, reviewer]) {
+      for (const name of ['Fazer uma cópia', 'Excluir', 'Compartilhar']) {
+        expect(row.queryByRole('button', { name })).toBeNull();
+      }
+    }
+    const owner = within(bodyRows()[4] as HTMLElement); // Tese
+    await userEvent.click(owner.getByRole('button', { name: 'Compartilhar' }));
+    const dialog = screen.getByRole('dialog', { name: 'Compartilhar projeto' });
+    expect(within(dialog).getByText('Tese')).toBeTruthy();
+  });
+
+  it('goes back to page 1 after deleting the only project on page 2', async () => {
+    const many = Array.from({ length: 11 }, (_, index) => ({
+      ...base,
+      id: String(index),
+      name: `Projeto ${String(index).padStart(2, '0')}`,
+      role: 'owner' as const,
+      updatedAt: new Date(2026, 0, index + 1).toISOString(),
+    }));
+    setup(many);
+    await within(await screen.findByRole('table')).findByText('Projeto 10');
+    await userEvent.click(screen.getByRole('button', { name: /Próxima/ }));
+    await within(screen.getByRole('table')).findByText('Projeto 00');
+    expect(bodyRows()).toHaveLength(1);
+    await userEvent.click(
+      within(bodyRows()[0] as HTMLElement).getByRole('button', { name: 'Excluir' }),
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Excluir projeto' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Excluir' }));
+    // Page 1 now holds every project, so the pagination bar may go away: check the rows instead.
+    await within(screen.getByRole('table')).findByText('Projeto 10');
+    expect(bodyRows()).toHaveLength(10);
+    expect(screen.queryByText(/Página 2/)).toBeNull();
   });
 });

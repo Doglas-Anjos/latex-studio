@@ -154,6 +154,23 @@
   background: var(--chrome-line);
 }
 
+/* RoleBadge is styled for the light surface; make it read on the dark bar. */
+.wsh-header .role-badge[data-role] {
+  flex: none;
+  margin-left: 0.15rem;
+  border-color: var(--chrome-line);
+  background: var(--chrome-bg-raised);
+  color: var(--chrome-muted);
+}
+.wsh-header .role-badge[data-role="reviewer"] {
+  color: var(--chrome-accent);
+}
+
+.wsh-share {
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
 /* Tablet and down: trim padding/gaps so the brand, project name, surface
    switch and actions keep to one row instead of crowding each other. */
 @media (max-width: 48rem) {
@@ -179,7 +196,8 @@
   .wsh-brand .brand-suffix {
     display: none;
   }
-  .wsh-back span {
+  .wsh-back span,
+  .wsh-share span {
     display: none;
   }
   .wsh-back {

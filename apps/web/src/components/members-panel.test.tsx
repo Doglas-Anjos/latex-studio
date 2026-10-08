@@ -36,7 +36,7 @@ describe('MembersPanel', () => {
   it('lists members with initials, chip and role select for the owner', async () => {
     const service = fakeService();
     renderWithApp(
-      <MembersPanel projectId="p1" isOwner />,
+      <MembersPanel project={{ id: 'p1', name: 'Tese' }} isOwner />,
       new Container().register(MemberServiceToken, service),
     );
     expect(await screen.findByText('ana@example.com')).toBeTruthy();
@@ -49,7 +49,7 @@ describe('MembersPanel', () => {
     const list = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(members);
     const service = fakeService({ list });
     renderWithApp(
-      <MembersPanel projectId="p1" isOwner />,
+      <MembersPanel project={{ id: 'p1', name: 'Tese' }} isOwner />,
       new Container().register(MemberServiceToken, service),
     );
     expect(await screen.findByText('Não foi possível carregar os membros.')).toBeTruthy();
@@ -61,12 +61,13 @@ describe('MembersPanel', () => {
     const invite = vi.fn().mockResolvedValue(members);
     const service = fakeService({ invite });
     renderWithApp(
-      <MembersPanel projectId="p1" isOwner />,
+      <MembersPanel project={{ id: 'p1', name: 'Tese' }} isOwner />,
       new Container().register(MemberServiceToken, service),
     );
     await userEvent.click(await screen.findByRole('button', { name: 'Convidar membro' }));
-    const dialog = screen.getByRole('dialog', { name: 'Convidar membro' });
+    const dialog = screen.getByRole('dialog', { name: 'Compartilhar projeto' });
     const emailField = within(dialog).getByLabelText('E-mail');
+    expect(within(dialog).getByText('Tese')).toBeTruthy();
     expect(emailField).toBe(document.activeElement);
     await userEvent.type(emailField, 'novo@example.com');
     await userEvent.click(within(dialog).getByRole('radio', { name: /Revisor/ }));
@@ -78,11 +79,11 @@ describe('MembersPanel', () => {
     const invite = vi.fn().mockRejectedValue(new Error('E-mail já convidado'));
     const service = fakeService({ invite });
     renderWithApp(
-      <MembersPanel projectId="p1" isOwner />,
+      <MembersPanel project={{ id: 'p1', name: 'Tese' }} isOwner />,
       new Container().register(MemberServiceToken, service),
     );
     await userEvent.click(await screen.findByRole('button', { name: 'Convidar membro' }));
-    const dialog = screen.getByRole('dialog', { name: 'Convidar membro' });
+    const dialog = screen.getByRole('dialog', { name: 'Compartilhar projeto' });
     await userEvent.type(within(dialog).getByLabelText('E-mail'), 'novo@example.com');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Enviar convite' }));
     expect(await within(dialog).findByText('E-mail já convidado')).toBeTruthy();
@@ -95,7 +96,7 @@ describe('MembersPanel', () => {
     const remove = vi.fn().mockResolvedValue(undefined);
     const service = fakeService({ remove });
     renderWithApp(
-      <MembersPanel projectId="p1" isOwner />,
+      <MembersPanel project={{ id: 'p1', name: 'Tese' }} isOwner />,
       new Container().register(MemberServiceToken, service),
     );
     await userEvent.click(await screen.findByRole('button', { name: 'Remover Ana' }));
@@ -112,7 +113,7 @@ describe('MembersPanel', () => {
   it('hides the invite button and role controls for a non-owner', async () => {
     const service = fakeService();
     renderWithApp(
-      <MembersPanel projectId="p1" isOwner={false} />,
+      <MembersPanel project={{ id: 'p1', name: 'Tese' }} isOwner={false} />,
       new Container().register(MemberServiceToken, service),
     );
     await screen.findByText('ana@example.com');

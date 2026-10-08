@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Plus,
   Search,
+  Share2,
   Trash2,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
@@ -23,12 +24,18 @@ import {
   RemoveDialog,
 } from '../components/dashboard/dialogs';
 import { HelpDialog } from '../components/dashboard/help-dialog';
+import { InviteDialog, openInvite } from '../components/members-panel';
 import { Menu } from '../components/menu';
+import { ROLE_ICON, RoleBadge } from '../components/role-badge';
 import { useService } from '../di/service-provider';
-import { type Project, type ProjectFilter, ProjectServiceToken } from '../services/project.service';
+import {
+  type Project,
+  type ProjectFilter,
+  ProjectServiceToken,
+  type Role,
+} from '../services/project.service';
 
 const dateFmt = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
-const roleLabel = { owner: 'Dono', editor: 'Editor', reviewer: 'Revisor', viewer: 'Leitor' };
 const projectCount = (n: number) => `${n} ${n === 1 ? 'projeto' : 'projetos'}`;
 
 const PAGE_SIZE = 10;
@@ -47,10 +54,12 @@ export function ProjectsPage() {
   const [importMode, setImportMode] = useState<ImportMode>('zip');
   const [copying, setCopying] = useState<Project | null>(null);
   const [removing, setRemoving] = useState<Project | null>(null);
+  const [sharing, setSharing] = useState<Project | null>(null);
   const createRef = useRef<HTMLDialogElement>(null);
   const importRef = useRef<HTMLDialogElement>(null);
   const copyRef = useRef<HTMLDialogElement>(null);
   const removeRef = useRef<HTMLDialogElement>(null);
+  const shareRef = useRef<HTMLDialogElement>(null);
   const helpRef = useRef<HTMLDialogElement>(null);
 
   const search = query.trim();
@@ -95,6 +104,10 @@ export function ProjectsPage() {
   const openCopy = (p: Project) => {
     setCopying(p);
     copyRef.current?.showModal();
+  };
+  const openShare = (p: Project) => {
+    setSharing(p);
+    openInvite(shareRef.current);
   };
   const openRemove = (p: Project) => {
     setRemoving(p);
@@ -173,6 +186,7 @@ export function ProjectsPage() {
             rows={rows}
             onOpen={open}
             onCopy={openCopy}
+            onShare={openShare}
             onDownload={(id) => download.mutate(id)}
             onRemove={openRemove}
           />
@@ -199,6 +213,7 @@ export function ProjectsPage() {
       <CreateDialog dialogRef={createRef} onDone={open} />
       <ImportDialog dialogRef={importRef} mode={importMode} setMode={setImportMode} onDone={open} />
       <CopyDialog dialogRef={copyRef} project={copying} onDone={open} />
+      <InviteDialog dialogRef={shareRef} project={sharing} />
       <RemoveDialog dialogRef={removeRef} project={removing} onDone={() => setRemoving(null)} />
     </div>
   );
@@ -215,7 +230,10 @@ function RecentProject({ project, onOpen }: { project: Project; onOpen: (id: str
       <FileText className="dashboard-recent-icon" size={19} aria-hidden="true" />
       <span className="dashboard-recent-copy">
         <span>Último projeto</span>
-        <strong>{project.name}</strong>
+        <span className="dashboard-recent-name">
+          <strong>{project.name}</strong>
+          <RoleBadge role={project.role} />
+        </span>
         <time dateTime={project.updatedAt}>{dateFmt.format(new Date(project.updatedAt))}</time>
       </span>
       <span className="dashboard-recent-action" aria-hidden="true">
@@ -292,12 +310,14 @@ function ProjectTable({
   rows,
   onOpen,
   onCopy,
+  onShare,
   onDownload,
   onRemove,
 }: {
   rows: Project[];
   onOpen: (id: string) => void;
   onCopy: (p: Project) => void;
+  onShare: (p: Project) => void;
   onDownload: (id: string) => void;
   onRemove: (p: Project) => void;
 }) {
@@ -314,18 +334,18 @@ function ProjectTable({
       </thead>
       <tbody>
         {rows.map((p) => (
-          <tr key={p.id}>
+          <tr key={p.id} data-role={p.role}>
             <td>
               <button type="button" className="project-link" onClick={() => onOpen(p.id)}>
                 <span className="project-link-icon">
-                  <FileText size={17} aria-hidden="true" />
+                  <RowIcon role={p.role} />
                 </span>
                 <span className="project-link-text">
                   <strong>{p.name}</strong>
                   <small>{p.mainFile}</small>
                 </span>
               </button>
-              {p.role !== 'owner' && <span className="muted"> {roleLabel[p.role]}</span>}
+              <RoleBadge role={p.role} />
             </td>
             <td data-label="Última modificação">
               <Clock3 size={13} className="project-date-icon" aria-hidden="true" />
@@ -336,6 +356,11 @@ function ProjectTable({
                 <IconButton label="Abrir" onClick={() => onOpen(p.id)}>
                   <FolderOpen size={16} />
                 </IconButton>
+                {p.role === 'owner' && (
+                  <IconButton label="Compartilhar" onClick={() => onShare(p)}>
+                    <Share2 size={16} />
+                  </IconButton>
+                )}
                 {(p.role === 'owner' || p.role === 'editor') && (
                   <IconButton label="Fazer uma cópia" onClick={() => onCopy(p)}>
                     <Copy size={16} />
@@ -356,6 +381,11 @@ function ProjectTable({
       </tbody>
     </table>
   );
+}
+
+function RowIcon({ role }: { role: Role }) {
+  const Icon = role === 'reviewer' || role === 'viewer' ? ROLE_ICON[role] : FileText;
+  return <Icon size={17} aria-hidden="true" />;
 }
 
 function IconButton({

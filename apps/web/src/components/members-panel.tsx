@@ -7,19 +7,9 @@ import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { Dialog } from './dialog';
 import { Form } from './form';
+import { ROLE_HINT, ROLE_LABEL } from './role-badge';
 
-const ROLE_LABEL: Record<Member['role'], string> = {
-  owner: 'Dono',
-  editor: 'Editor',
-  reviewer: 'Revisor',
-  viewer: 'Leitor',
-};
 const ASSIGNABLE: AssignableRole[] = ['editor', 'reviewer', 'viewer'];
-const ROLE_HINT: Record<AssignableRole, string> = {
-  editor: 'Edita arquivos, compila e comenta.',
-  reviewer: 'Comenta e acompanha alterações, sem editar arquivos.',
-  viewer: 'Apenas visualiza o projeto.',
-};
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -28,7 +18,14 @@ function initials(name: string): string {
   return (first + last).toUpperCase() || '?';
 }
 
-export function MembersPanel({ projectId, isOwner }: { projectId: string; isOwner: boolean }) {
+export function MembersPanel({
+  project,
+  isOwner,
+}: {
+  project: { id: string; name: string };
+  isOwner: boolean;
+}) {
+  const projectId = project.id;
   const service = useService(MemberServiceToken);
   const queryClient = useQueryClient();
   const members = useQuery({
@@ -43,16 +40,8 @@ export function MembersPanel({ projectId, isOwner }: { projectId: string; isOwne
   });
   const online = new Set(useWorkspaceStore((s) => s.peers).map((p) => p.name));
   const inviteRef = useRef<HTMLDialogElement>(null);
-  const inviteEmailRef = useRef<HTMLInputElement>(null);
   const removeRef = useRef<HTMLDialogElement>(null);
   const [removing, setRemoving] = useState<Member | null>(null);
-
-  // The dialog mounts closed, so autoFocus on the input never fires; focus it
-  // explicitly once showModal has run (it otherwise lands on the X button).
-  const openInvite = () => {
-    inviteRef.current?.showModal();
-    inviteEmailRef.current?.focus();
-  };
 
   const askRemove = (m: Member) => {
     setRemoving(m);
@@ -63,7 +52,7 @@ export function MembersPanel({ projectId, isOwner }: { projectId: string; isOwne
     <section className="members-panel" aria-label="Membros">
       {isOwner && (
         <div className="members-toolbar">
-          <Button variant="primary" size="compact" onClick={openInvite}>
+          <Button variant="primary" size="compact" onClick={() => openInvite(inviteRef.current)}>
             <UserPlus size={14} aria-hidden="true" /> Convidar membro
           </Button>
         </div>
@@ -142,12 +131,7 @@ export function MembersPanel({ projectId, isOwner }: { projectId: string; isOwne
 
       {setRole.error && <p className="form-error">{setRole.error.message}</p>}
 
-      <InviteDialog
-        dialogRef={inviteRef}
-        emailRef={inviteEmailRef}
-        projectId={projectId}
-        onDone={refresh}
-      />
+      <InviteDialog dialogRef={inviteRef} project={project} />
       <RemoveMemberDialog
         dialogRef={removeRef}
         projectId={projectId}
@@ -158,28 +142,32 @@ export function MembersPanel({ projectId, isOwner }: { projectId: string; isOwne
   );
 }
 
-function InviteDialog({
+// The dialog mounts closed, so autoFocus on the input never fires; focus it
+// explicitly once showModal has run (it otherwise lands on the X button).
+export function openInvite(dialog: HTMLDialogElement | null) {
+  dialog?.showModal();
+  dialog?.querySelector<HTMLInputElement>('input[type="email"]')?.focus();
+}
+
+export function InviteDialog({
   dialogRef,
-  emailRef,
-  projectId,
-  onDone,
+  project,
 }: {
   dialogRef: RefObject<HTMLDialogElement | null>;
-  emailRef: RefObject<HTMLInputElement | null>;
-  projectId: string;
-  onDone: () => void;
+  project: { id: string; name: string } | null;
 }) {
   const service = useService(MemberServiceToken);
   const formId = useId();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<AssignableRole>('editor');
+  const queryClient = useQueryClient();
   const invite = useMutation({
-    mutationFn: () => service.invite(projectId, email.trim(), role),
+    mutationFn: () => service.invite(project?.id ?? '', email.trim(), role),
     onSuccess: () => {
       dialogRef.current?.close();
       setEmail('');
       setRole('editor');
-      onDone();
+      queryClient.invalidateQueries({ queryKey: ['members', project?.id] });
     },
   });
 
@@ -206,9 +194,9 @@ function InviteDialog({
   return (
     <Dialog
       ref={dialogRef}
-      title="Convidar membro"
+      title="Compartilhar projeto"
       icon={<UserPlus size={18} aria-hidden="true" />}
-      kicker="Novo convite"
+      kicker={project?.name}
       description="A pessoa recebe acesso imediato ao projeto com o papel escolhido abaixo."
       pending={invite.isPending}
       footer={
@@ -228,7 +216,6 @@ function InviteDialog({
     >
       <Form id={formId} onSubmit={submit}>
         <Form.Field
-          ref={emailRef}
           label="E-mail"
           type="email"
           value={email}

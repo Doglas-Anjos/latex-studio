@@ -42,7 +42,7 @@ export function Sidebar({
           <HistoryPanel projectId={project.id} canEdit={canEdit} path={path} />
         )}
         {view === 'members' && (
-          <MembersPanel projectId={project.id} isOwner={project.role === 'owner'} />
+          <MembersPanel project={project} isOwner={project.role === 'owner'} />
         )}
       </div>
     </aside>

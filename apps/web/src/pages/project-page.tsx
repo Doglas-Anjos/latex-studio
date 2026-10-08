@@ -1,12 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Code2, FileText, PanelRightClose, PanelRightOpen, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Code2,
+  FileText,
+  PanelRightClose,
+  PanelRightOpen,
+  Share2,
+  X,
+} from 'lucide-react';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Brand } from '../components/brand';
 import { Button } from '../components/button';
 import { holdSessions } from '../components/collab-sessions';
 import { Editor } from '../components/editor';
+import { InviteDialog, openInvite } from '../components/members-panel';
 import { PdfViewer } from '../components/pdf-viewer';
+import { RoleBadge } from '../components/role-badge';
 import { ThemeToggle } from '../components/theme-toggle';
 import { ActivityBar, sidebarViewIcons, viewLabels } from '../components/workspace/activity-bar';
 import { BottomPanel } from '../components/workspace/bottom-panel';
@@ -31,6 +41,7 @@ export function ProjectPage() {
   const { projectId = '' } = useParams();
   const projects = useService(ProjectServiceToken);
   const root = useRef<HTMLDivElement>(null);
+  const shareRef = useRef<HTMLDialogElement>(null);
   const openTab = useWorkspaceStore((s) => s.openTab);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const pdfWidth = useSettingsStore((s) => s.pdfWidth);
@@ -129,6 +140,7 @@ export function ProjectPage() {
           <span className="wsh-project-name" title={project.name}>
             {project.name}
           </span>
+          <RoleBadge role={project.role} />
         </div>
         {compact && (
           <fieldset className="wsh-segmented">
@@ -158,6 +170,19 @@ export function ProjectPage() {
           </fieldset>
         )}
         <div className="wsh-end">
+          {project.role === 'owner' && (
+            <Button
+              variant="ghost"
+              size="compact"
+              className="wsh-share"
+              aria-label="Compartilhar projeto"
+              title="Compartilhar projeto"
+              onClick={() => openInvite(shareRef.current)}
+            >
+              <Share2 size={16} aria-hidden="true" />
+              <span>Compartilhar</span>
+            </Button>
+          )}
           <Link
             to="/"
             className="wsh-back"
@@ -250,6 +275,7 @@ export function ProjectPage() {
         </div>
       </div>
       <ActiveStatusBar projectId={project.id} role={project.role} />
+      {project.role === 'owner' && <InviteDialog dialogRef={shareRef} project={project} />}
     </div>
   );
 }
