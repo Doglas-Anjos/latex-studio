@@ -79,8 +79,18 @@
   color: var(--muted);
 }
 
+/* Every control on the matrix row is 2rem tall (the compact button's height) so inputs, chips
+   and button share one baseline instead of stepping up and down. */
 .formula-matrix input {
   width: 4rem;
+  height: 2rem;
+  box-sizing: border-box;
+  padding: 0 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
 }
 
 .formula-chips {
@@ -91,7 +101,7 @@
 
 .formula-chips button {
   min-width: 2.25rem;
-  height: 2.1rem;
+  height: 2rem;
   padding: 0 0.5rem;
   border: 1px solid var(--line);
   border-radius: 6px;
