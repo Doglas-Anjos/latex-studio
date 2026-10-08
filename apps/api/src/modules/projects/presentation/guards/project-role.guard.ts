@@ -22,6 +22,8 @@ declare module 'fastify' {
   interface FastifyRequest {
     project?: Project;
     projectRole?: ProjectRole;
+    /** True when a superadmin reached this project without being a member. */
+    viaAdmin?: boolean;
   }
 }
 
@@ -65,6 +67,7 @@ export class ProjectRoleGuard implements CanActivate {
     }
     request.project = project;
     request.projectRole = role;
+    request.viaAdmin = !membership && admin;
     return true;
   }
 }

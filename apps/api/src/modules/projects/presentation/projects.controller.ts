@@ -43,8 +43,15 @@ export class ProjectsController {
 
   @Get(':projectId')
   @RequireProjectRole('viewer')
-  get(@Req() request: FastifyRequest, @CurrentProject() project: Project): ProjectWithRole {
-    return { ...project, role: request.projectRole ?? 'viewer' };
+  get(
+    @Req() request: FastifyRequest,
+    @CurrentProject() project: Project,
+  ): ProjectWithRole & { viaAdmin: boolean } {
+    return {
+      ...project,
+      role: request.projectRole ?? 'viewer',
+      viaAdmin: request.viaAdmin ?? false,
+    };
   }
 
   // Echoes the role like GET does: clients cache this response as the project, and a response
