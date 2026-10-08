@@ -10,6 +10,8 @@ import { ProjectRoleGuard, RequireProjectRole } from './project-role.guard';
 class Routes {
   @RequireProjectRole('editor')
   edit() {}
+  @RequireProjectRole('viewer')
+  view() {}
 }
 
 const OWNER = '00000000-0000-4000-8000-000000000001';
@@ -21,7 +23,7 @@ describe('ProjectRoleGuard', () => {
 
   beforeEach(async () => {
     projects = new FakeProjects();
-    guard = new ProjectRoleGuard(new Reflector(), projects);
+    guard = new ProjectRoleGuard(new Reflector(), projects, { SUPERADMIN_EMAILS: '' } as never);
     projectId = (await projects.create({ id: randomUUID(), name: 'P' }, OWNER)).id;
   });
 
@@ -54,5 +56,26 @@ describe('ProjectRoleGuard', () => {
     await expect(result).resolves.toBe(true);
     expect(request.project?.id).toBe(projectId);
     expect(request.projectRole).toBe('editor');
+  });
+
+  it('lets a superadmin view a project they are not a member of, but not edit it', async () => {
+    const adminGuard = new ProjectRoleGuard(new Reflector(), projects, {
+      SUPERADMIN_EMAILS: 'admin@x.test',
+    } as never);
+    const ctx = (handler: () => void) =>
+      ({
+        switchToHttp: () => ({
+          getRequest: () => ({
+            params: { projectId },
+            user: { id: 'stranger', email: 'admin@x.test' },
+          }),
+        }),
+        getHandler: () => handler,
+        getClass: () => Routes,
+      }) as unknown as ExecutionContext;
+    await expect(adminGuard.canActivate(ctx(Routes.prototype.view))).resolves.toBe(true);
+    await expect(adminGuard.canActivate(ctx(Routes.prototype.edit))).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 });

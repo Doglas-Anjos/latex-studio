@@ -45,6 +45,11 @@ const envSchema = baseSchema
     AUTH_ISSUER: optional(z.string().min(1)),
     AUTH_AUDIENCE: optional(z.string().min(1)),
     AUTH_MAX_TOKEN_TTL_S: z.coerce.number().int().positive().default(900),
+    // Platform superadmins, as a comma-separated list of e-mails. They can view and govern every
+    // project and see all users, regardless of membership. Operator-controlled, so it works the
+    // same on the hosted instance and on a self-hosted university install. Empty = no admins
+    // (except the local user in local mode).
+    SUPERADMIN_EMAILS: optional(z.string()),
   })
   .refine((c) => c.AUTH_JWKS_URL || c.AUTH_SECRET || new URL(c.APP_URL).hostname === 'localhost', {
     message: 'AUTH_JWKS_URL or AUTH_SECRET is required unless APP_URL is localhost',

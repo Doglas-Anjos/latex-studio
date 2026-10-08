@@ -1,5 +1,6 @@
 import { ConfigModule, DatabaseModule } from '@latex-studio/core';
 import { Controller, Get, Module } from '@nestjs/common';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { Public } from './modules/auth/presentation/decorators';
@@ -28,6 +29,7 @@ class HealthController {
     DatabaseModule,
     AuditModule,
     AuthModule,
+    AdminModule,
     ProjectsModule,
     FilesModule,
     CollabModule,

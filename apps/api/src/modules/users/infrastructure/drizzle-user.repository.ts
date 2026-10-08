@@ -1,7 +1,7 @@
 import { DATABASE, type Database } from '@latex-studio/core';
 import { users } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { count, desc, eq, ilike, or, sql } from 'drizzle-orm';
 import type { Identity, User } from '../domain/user';
 import type { UserRepository } from '../domain/user.repository';
 
@@ -38,5 +38,22 @@ export class DrizzleUserRepository implements UserRepository {
       })
       .returning(publicColumns);
     return row as User;
+  }
+
+  async list({ search, limit, offset }: { search?: string; limit: number; offset: number }) {
+    // Escape LIKE wildcards in the admin's search text (Postgres LIKE escape is backslash).
+    const term = search?.trim().replace(/[%_]/g, '$&');
+    const where = term
+      ? or(ilike(users.email, `%${term}%`), ilike(users.name, `%${term}%`))
+      : undefined;
+    const items = await this.db
+      .select(publicColumns)
+      .from(users)
+      .where(where)
+      .orderBy(desc(users.createdAt))
+      .limit(limit)
+      .offset(offset);
+    const [row] = await this.db.select({ total: count() }).from(users).where(where);
+    return { items, total: Number(row?.total ?? 0) };
   }
 }

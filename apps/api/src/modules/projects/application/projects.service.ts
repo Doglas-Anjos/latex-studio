@@ -200,10 +200,15 @@ export class ProjectsService {
     if ((await this.projects.roleOf(project.id, user.id)) !== 'owner') {
       throw new ForbiddenException('Only the owner can delete a project');
     }
+    await this.forceRemove(project, user);
+  }
+
+  /** Deletes without the owner check: for a platform superadmin governing any project. */
+  async forceRemove(project: Project, actor: User): Promise<void> {
     await this.projects.delete(project.id);
     this.sync?.revoke(project.id);
     await this.storage.remove(project.id);
-    await this.audit?.record(user.id, 'project.delete', project.id, { name: project.name });
+    await this.audit?.record(actor.id, 'project.delete', project.id, { name: project.name });
   }
 
   private async assertProjectCap(owner: User) {
