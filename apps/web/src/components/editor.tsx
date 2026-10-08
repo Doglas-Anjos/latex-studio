@@ -159,6 +159,20 @@ function AuthImage({ projectId, path, zoom }: { projectId: string; path: string;
   ) : null;
 }
 
+/** The name and colour collaborators see on this client's cursor. */
+function setPresence(
+  awareness: { setLocalStateField: (field: string, value: unknown) => void },
+  me: { id: string; name?: string | null; email: string },
+) {
+  const color = peerColor(me.id);
+  awareness.setLocalStateField('user', {
+    id: me.id,
+    name: me.name || me.email,
+    color,
+    colorLight: `${color}33`,
+  });
+}
+
 function revealLine(view: EditorView) {
   const { pendingLine, clearPendingLine } = useWorkspaceStore.getState();
   if (pendingLine === null) return;
@@ -182,6 +196,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const history = useService(HistoryServiceToken);
   const files = useService(FileServiceToken);
   const me = useMe().data;
+  const meRef = useRef(me);
+  meRef.current = me;
   const [gone, setGone] = useState(false);
   const viewRef = useRef<EditorView | null>(null);
   // Read before React detaches the view (a layout cleanup runs first); a detached scroller says 0.
@@ -304,10 +320,12 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     // view is rebuilt here, so coming back to a tab needs no reconnect or full re-sync.
     const session = openSession(projectId, path, async () => (await identity.token()) ?? '');
     const { doc, provider, ytext, undo } = session;
-    // A parked session cleared its presence; restore it before the cursor label is set again.
-    if (provider.awareness?.getLocalState() === null) provider.awareness.setLocalState({});
     // Cursor and scroll from the last visit, unless the text changed length meanwhile.
     const restore = session.parked?.length === ytext.length ? session.parked : null;
+    // "Parked" means no view; a session failing auth while parked is closed (collab-sessions.ts).
+    session.parked = null;
+    // Own cursor label from here too: a role change re-runs this effect but not the [me] one.
+    if (provider.awareness && meRef.current) setPresence(provider.awareness, meRef.current);
     ytextRef.current = ytext;
     const wrap = new Compartment();
     const ro = new Compartment();
@@ -547,11 +565,18 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       cancelAnimationFrame(restoreFrame);
       session.parked = {
         selection: view.state.selection.toJSON(),
-        scrollTop: restored ? leftAt.current : (restore?.scrollTop ?? 0),
+        // Still attached on a role change (no unmount, so no layout cleanup ran).
+        scrollTop: !restored
+          ? (restore?.scrollTop ?? 0)
+          : view.scrollDOM.isConnected
+            ? view.scrollDOM.scrollTop
+            : leftAt.current,
         length: view.state.doc.length,
       };
-      // Collaborators should not see a cursor in a file this tab is no longer showing.
-      provider.awareness?.setLocalState(null);
+      // Collaborators should not see a cursor in a file this tab is no longer showing. An empty
+      // state, not null: y-protocols only renews (and Hocuspocus only echoes) a non-null state,
+      // and a silent socket is dropped and reconnected every 30 s.
+      provider.awareness?.setLocalState({});
       view.destroy();
       // A vanished file's session was dropped: its connection ends with the view. Open tabs keep
       // theirs; closing the tab ends it once the last edit has synced.
@@ -574,14 +599,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   // Own cursor label; separate so a late /me answer does not rebuild the editor.
   useEffect(() => {
     const awareness = providerRef.current?.awareness;
-    if (!awareness || !me) return;
-    const color = peerColor(me.id);
-    awareness.setLocalStateField('user', {
-      id: me.id,
-      name: me.name || me.email,
-      color,
-      colorLight: `${color}33`,
-    });
+    if (awareness && me) setPresence(awareness, me);
   }, [me]);
 
   // Rebuild highlights when comments change.

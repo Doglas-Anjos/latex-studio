@@ -4,6 +4,7 @@ import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Brand } from '../components/brand';
 import { Button } from '../components/button';
+import { holdSessions } from '../components/collab-sessions';
 import { Editor } from '../components/editor';
 import { PdfViewer } from '../components/pdf-viewer';
 import { ThemeToggle } from '../components/theme-toggle';
@@ -47,6 +48,7 @@ export function ProjectPage() {
   const mainFile = project?.mainFile;
   const openedFor = useRef<string | null>(null);
 
+  useEffect(() => holdSessions(), []);
   // Tabs, peers and the active file belong to one project. The guard keeps StrictMode's second
   // effect pass from wiping the main-file tab opened just below.
   useEffect(() => {

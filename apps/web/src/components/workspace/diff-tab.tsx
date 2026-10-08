@@ -166,7 +166,8 @@ function useLiveText(projectId: string, path: string, enabled: boolean) {
 /** The live text, re-read 250 ms after edits stop; only for views that render it themselves. */
 function useYText(ytext: Y.Text | null, enabled: boolean) {
   const [text, setText] = useState('');
-  useEffect(() => {
+  // Layout effect: an empty first frame would read as "the whole file was deleted".
+  useLayoutEffect(() => {
     if (!ytext || !enabled) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const update = () => {

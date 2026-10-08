@@ -98,11 +98,16 @@ export function openSession(
   session.provider.on('unsyncedChanges', ({ number }: { number: number }) =>
     markUnsynced(session.provider, number > 0),
   );
+  // Access revoked or the file gone while no view shows it: end the session instead of retrying,
+  // so the next visit starts fresh and the editor's own failure handling freezes the text.
+  session.provider.on('authenticationFailed', () => {
+    if (session.parked && isOpenSession(session)) closeSession(key);
+  });
   sessions.set(key, session);
   useWorkspaceStore.getState().setConnection('connecting');
   for (const k of sessions.keys()) {
     if (sessions.size <= MAX_SESSIONS) break;
-    if (k !== key) closeSession(k);
+    if (k !== key && !sessions.get(k)?.provider.hasUnsyncedChanges) closeSession(k);
   }
   return session;
 }
@@ -128,6 +133,22 @@ export function dropSession(key: string) {
 }
 
 export const isOpenSession = (session: CollabSession) => sessions.get(session.key) === session;
+
+let holders = 0;
+/**
+ * Held by the project page while it is mounted: leaving it (back to the dashboard) closes every
+ * session. Counted and deferred so StrictMode's unmount/remount in development keeps them.
+ */
+export function holdSessions(): () => void {
+  holders++;
+  return () => {
+    holders--;
+    setTimeout(() => {
+      if (holders > 0) return;
+      for (const key of [...sessions.keys()]) closeSession(key);
+    });
+  };
+}
 
 // A closed tab (or a project switch, which empties the tabs) ends its session. Deferred one task so
 // the editor view bound to it has unmounted first.
