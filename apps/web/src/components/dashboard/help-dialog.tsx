@@ -30,8 +30,6 @@ const sections: [string, string][] = [
   ],
 ];
 
-export const HELP_SEEN_KEY = 'latex-studio.help-seen';
-
 export function HelpDialog({ dialogRef }: { dialogRef: RefObject<HTMLDialogElement | null> }) {
   return (
     <Dialog

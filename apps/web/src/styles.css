@@ -1666,75 +1666,7 @@ select.role-chip {
   clip-path: inset(50%);
   white-space: nowrap;
 }
-.welcome-hero {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2.5rem;
-  padding: 2.5rem 0;
-}
-.welcome-copy {
-  flex: 1 1 20rem;
-  max-width: 28rem;
-}
-.welcome-copy h2 {
-  font-weight: 700;
-  font-size: 2.1rem;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
-  margin: 0 0 1rem;
-}
-.welcome-copy p {
-  color: var(--muted);
-  font-size: 1.05rem;
-  margin: 0 0 1.5rem;
-}
-.welcome-hero .actions {
-  display: flex;
-  gap: 0.75rem;
-}
-.doc-preview-card {
-  flex: 1 1 18rem;
-  max-width: 23rem;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--mark);
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-.doc-preview-head {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.85rem;
-  border-bottom: 1px solid var(--chrome-line);
-  background: var(--chrome-bg);
-  color: var(--chrome-muted);
-  font-size: 0.75rem;
-}
-.doc-preview {
-  margin: 0;
-  padding: 1rem 1.1rem;
-  font-family: var(--editor-font);
-  font-size: 0.85rem;
-  line-height: 1.7;
-  color: var(--ink);
-  overflow: auto;
-}
-.tok-cmd {
-  color: var(--syn-command);
-}
-.tok-env {
-  color: var(--syn-env);
-}
-.tok-str {
-  color: var(--syn-string);
-}
 @media (max-width: 48rem) {
-  .col-owner {
-    display: none;
-  }
   .project-table,
   .project-table thead,
   .project-table tbody,
@@ -1764,9 +1696,6 @@ select.role-chip {
     display: flex;
     justify-content: flex-start;
     padding-top: 0.4rem;
-  }
-  .doc-preview-card {
-    display: none;
   }
 }
 @media (max-width: 36rem) {

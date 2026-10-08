@@ -1,0 +1,418 @@
+/* Projects dashboard: a compact workspace, with the projects as the main content. */
+.app-main:has(.dashboard) {
+  max-width: 70rem;
+  padding: 2rem clamp(1rem, 4vw, 2.5rem) 2.5rem;
+}
+
+.dashboard {
+  gap: 1.25rem;
+  --dashboard-hover: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  --dashboard-hover-line: color-mix(in srgb, var(--primary) 38%, var(--line));
+}
+
+.dashboard-library {
+  display: grid;
+  gap: 1rem;
+}
+
+.dashboard-toolbar {
+  align-items: end;
+}
+
+.dashboard-heading {
+  display: flex;
+}
+
+.dashboard-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+}
+
+.dashboard-heading h1 {
+  margin: 0;
+  font: 600 1.9rem / 1.2 var(--font-ui);
+  letter-spacing: -0.025em;
+}
+
+.dashboard-count {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.dashboard-recent {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.035);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.dashboard-recent:hover,
+.dashboard-recent:focus-visible {
+  border-color: var(--dashboard-hover-line);
+  background: var(--dashboard-hover);
+  box-shadow: 0 7px 20px rgb(0 0 0 / 0.08);
+  transform: translateY(-1px);
+}
+
+.dashboard-recent-icon {
+  flex: none;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0.45rem;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--primary) 9%, var(--surface));
+  color: var(--file-tex);
+  transition: background-color 160ms ease;
+}
+
+.dashboard-recent:hover .dashboard-recent-icon,
+.dashboard-recent:focus-visible .dashboard-recent-icon {
+  background: color-mix(in srgb, var(--primary) 16%, var(--surface));
+}
+
+.dashboard-recent-copy {
+  display: grid;
+  min-width: 0;
+  line-height: 1.3;
+}
+
+.dashboard-recent-copy > span,
+.dashboard-recent-copy time {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.dashboard-recent-copy strong {
+  overflow: hidden;
+  font-size: 0.96rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-recent-action {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: none;
+  margin-left: auto;
+  color: var(--primary);
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.dashboard-recent-arrow {
+  transition: transform 160ms ease;
+}
+
+.dashboard-recent:hover .dashboard-recent-arrow,
+.dashboard-recent:focus-visible .dashboard-recent-arrow {
+  transform: translateX(3px);
+}
+
+.dashboard-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.search-field input[type="search"] {
+  width: 16rem;
+  min-height: 2.5rem;
+  border-radius: 6px;
+}
+
+.filter-tabs {
+  margin-top: 0.15rem;
+}
+
+.filter-tabs button[aria-pressed="true"] {
+  border-bottom-color: var(--primary);
+  background: transparent;
+  color: var(--ink);
+}
+
+.project-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.project-table th {
+  padding-top: 0.8rem;
+  padding-bottom: 0.8rem;
+  background: color-mix(in srgb, var(--paper) 50%, var(--surface));
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.project-table td {
+  padding-top: 0.8rem;
+  padding-bottom: 0.8rem;
+  font-size: 0.88rem;
+}
+
+.project-table tbody tr {
+  transition: background-color 160ms ease;
+}
+
+.project-table tbody tr:hover,
+.project-table tbody tr:focus-within {
+  background: var(--dashboard-hover);
+}
+
+.project-table tbody tr:hover td:first-child,
+.project-table tbody tr:focus-within td:first-child {
+  border-left-color: var(--primary);
+}
+
+.project-link {
+  gap: 0.65rem;
+  max-width: 100%;
+  text-align: left;
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+
+.project-link:hover {
+  text-decoration: none;
+}
+
+.project-link-icon {
+  display: grid;
+  place-items: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  border: 0;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  transition: background-color 160ms ease;
+}
+
+.project-table tbody tr:hover .project-link-icon,
+.project-table tbody tr:focus-within .project-link-icon {
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+}
+
+.project-link-text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.project-link-text strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-link:hover .project-link-text strong {
+  text-decoration: underline;
+}
+
+.project-link-text small {
+  margin-top: 0.18rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 400;
+}
+
+.project-date-icon {
+  display: none;
+}
+
+.dashboard .row-action-btn {
+  border-radius: 5px;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.dashboard .row-action-btn:hover {
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface));
+  color: var(--primary);
+}
+
+.dashboard-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.dashboard-pagination > div {
+  display: flex;
+  gap: 0.45rem;
+}
+
+.dashboard-pagination .btn {
+  min-width: 6rem;
+}
+
+.dashboard-empty {
+  padding: 1.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.dashboard-empty h2 {
+  margin: 0 0 0.25rem;
+  font: 600 1.05rem / 1.4 var(--font-ui);
+}
+
+.dashboard-empty p {
+  margin: 0 0 1rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dashboard-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.dashboard-empty-search {
+  text-align: center;
+}
+
+.dashboard-empty-search > svg {
+  color: var(--muted);
+}
+
+.dashboard-empty-search p {
+  margin-bottom: 0.5rem;
+}
+
+.dashboard-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 48rem) {
+  .project-table {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  .project-table tbody {
+    display: grid;
+    gap: 0.6rem;
+  }
+  .project-table tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.55rem 0.5rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+  }
+  .project-table tbody tr:hover,
+  .project-table tbody tr:focus-within {
+    border-color: var(--dashboard-hover-line);
+    box-shadow: 0 4px 12px rgb(0 0 0 / 0.06);
+  }
+  .project-table td {
+    min-width: 0;
+    padding: 0;
+  }
+  .project-table td:first-child {
+    grid-column: 1 / -1;
+    border-left: 0;
+  }
+  .project-table td[data-label] {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    grid-column: 1;
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  .project-table td[data-label]::before {
+    display: none;
+  }
+  .project-date-icon {
+    display: block;
+    flex: none;
+  }
+  .project-table .row-actions-cell {
+    grid-column: 2;
+  }
+  .project-table .row-actions {
+    justify-content: flex-end;
+    padding-top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-recent,
+  .dashboard-recent-icon,
+  .dashboard-recent-arrow,
+  .project-table tbody tr,
+  .project-link-icon,
+  .dashboard .row-action-btn {
+    transition: none;
+  }
+  .dashboard-recent:hover,
+  .dashboard-recent:focus-visible,
+  .dashboard-recent:hover .dashboard-recent-arrow,
+  .dashboard-recent:focus-visible .dashboard-recent-arrow {
+    transform: none;
+  }
+}
+
+@media (max-width: 36rem) {
+  .app-main:has(.dashboard) {
+    padding: 1.25rem 1rem 2rem;
+  }
+  .dashboard-toolbar {
+    align-items: stretch;
+  }
+  .dashboard-heading {
+    justify-content: space-between;
+  }
+  .dashboard-controls {
+    flex-direction: row;
+    justify-content: stretch;
+  }
+  .search-field {
+    flex: 1 1 100%;
+  }
+  .search-field input[type="search"] {
+    width: 100%;
+  }
+  .new-menu {
+    width: 100%;
+  }
+}

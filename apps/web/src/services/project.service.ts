@@ -14,6 +14,21 @@ export interface Project {
   role: Role;
 }
 
+export type ProjectFilter = 'all' | 'mine' | 'shared';
+
+export interface ProjectListOptions {
+  limit?: number;
+  filter?: ProjectFilter;
+  search?: string;
+  cursor?: string | null;
+}
+
+export interface ProjectListPage {
+  items: Project[];
+  total: number;
+  nextCursor: string | null;
+}
+
 /**
  * What a write to a project echoes back: the project, with `role` optional because the caller's
  * own role is not part of what was written. Callers merge it onto what they already know instead
@@ -27,7 +42,7 @@ export type ImportInput =
   | { name: string; files: { file: File; path: string }[] };
 
 export interface ProjectService {
-  list(): Promise<Project[]>;
+  list(options?: ProjectListOptions): Promise<ProjectListPage>;
   get(id: string): Promise<Project>;
   create(name: string): Promise<Project>;
   remove(id: string): Promise<void>;
@@ -45,8 +60,14 @@ export const ProjectServiceToken = createToken<ProjectService>('ProjectService')
 export class HttpProjectService implements ProjectService {
   constructor(private readonly api: ApiClient) {}
 
-  list() {
-    return this.api.get<Project[]>('/projects');
+  list(options: ProjectListOptions = {}) {
+    const params = new URLSearchParams();
+    if (options.limit) params.set('limit', String(options.limit));
+    if (options.filter && options.filter !== 'all') params.set('filter', options.filter);
+    if (options.search) params.set('search', options.search);
+    if (options.cursor) params.set('cursor', options.cursor);
+    const query = params.toString();
+    return this.api.get<ProjectListPage>(`/projects${query ? `?${query}` : ''}`);
   }
 
   get(id: string) {
