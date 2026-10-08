@@ -28,6 +28,7 @@ import { CommitDto, CommitFileDto, RestoreDto } from './history.dto';
 export class HistoryController {
   constructor(@Inject(HistoryService) private readonly history: HistoryService) {}
 
+  @RouteConfig({ rateLimit: { max: 60, timeWindow: '1 minute' } })
   @Get()
   @RequireProjectRole('viewer')
   log(
@@ -37,18 +38,25 @@ export class HistoryController {
     return this.history.log(project, Math.min(Math.max(limit, 1), 200));
   }
 
+  @RouteConfig({ rateLimit: { max: 60, timeWindow: '1 minute' } })
   @Get('changes')
   @RequireProjectRole('viewer')
-  changes(@CurrentProject() project: Project, @Query('from') from = '', @Query('to') to = '') {
+  changes(
+    @CurrentProject() project: Project,
+    @Query('from') from: string = '',
+    @Query('to') to: string = '',
+  ) {
     return this.history.changes(project, from, to);
   }
 
+  @RouteConfig({ rateLimit: { max: 120, timeWindow: '1 minute' } })
   @Get('status')
   @RequireProjectRole('viewer')
   status(@CurrentProject() project: Project) {
     return this.history.status(project);
   }
 
+  @RouteConfig({ rateLimit: { max: 30, timeWindow: '1 minute' } })
   @Get('file-log')
   @RequireProjectRole('viewer')
   fileLog(
