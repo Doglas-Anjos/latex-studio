@@ -54,39 +54,13 @@ function setup() {
   return { projects };
 }
 
-describe('BuildPanel download dialog', () => {
-  beforeEach(() => {
-    useSettingsStore.getState().reset();
-    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
-      this.setAttribute('open', '');
-    });
-    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
-      this.removeAttribute('open');
-    });
-  });
-  afterEach(cleanup);
-
-  it('opens from the Baixar button and closes after downloading the source', async () => {
-    const { projects } = setup();
-    const dialog = document.querySelector('dialog') as HTMLDialogElement;
-    expect(dialog.hasAttribute('open')).toBe(false);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Baixar' }));
-    expect(dialog.hasAttribute('open')).toBe(true);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Fonte (.zip)' }));
-    expect(projects.downloadSource).toHaveBeenCalledWith('p1');
-    expect(dialog.hasAttribute('open')).toBe(false);
-  });
-});
-
 describe('BuildPanel compact bar and logs toggle', () => {
   beforeEach(() => {
     useSettingsStore.getState().reset();
   });
   afterEach(cleanup);
 
-  it('keeps compile, status and download visible while logs stay closed, and the toggle reveals them', async () => {
+  it('keeps compile, status and word count visible while logs stay closed, and the toggle reveals them', async () => {
     const build = {
       id: 'b1',
       projectId: 'p1',
@@ -124,7 +98,7 @@ describe('BuildPanel compact bar and logs toggle', () => {
 
     expect(await screen.findByText('Falhou')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Compilar' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Baixar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Palavras' })).toBeTruthy();
     expect(screen.queryByText('Undefined control sequence')).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Mostrar logs' }));

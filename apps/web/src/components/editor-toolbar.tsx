@@ -78,12 +78,15 @@ export function EditorToolbar({
   readOnly,
   isTex,
   children,
+  end,
 }: {
   viewRef: RefObject<EditorView | null>;
   readOnly: boolean;
   isTex: boolean;
   /** Extra actions (comments) placed after the insert groups. */
   children?: ReactNode;
+  /** Right-aligned actions (download) placed just before the Código/Visual toggle. */
+  end?: ReactNode;
 }) {
   const mode = useSettingsStore((s) => s.editorMode);
   const setSettings = useSettingsStore((s) => s.set);
@@ -192,6 +195,7 @@ export function EditorToolbar({
         </>
       )}
       <span className="etb-spacer" />
+      {end}
       {isTex && (
         <fieldset className="etb-mode">
           <legend className="sr-only">Modo do editor</legend>

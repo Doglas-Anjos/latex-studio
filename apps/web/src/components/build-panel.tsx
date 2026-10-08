@@ -1,16 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Archive,
   Ban,
   Check,
   ChevronDown,
   ChevronUp,
   CircleCheck,
   CircleX,
-  Download,
-  FileDown,
-  FileText,
-  GitBranch,
   Hash,
   Info,
   Loader2,
@@ -31,11 +26,10 @@ import {
 import { FileServiceToken } from '../services/file.service';
 import { PackageServiceToken } from '../services/package.service';
 import { ProjectServiceToken } from '../services/project.service';
-import { type ExportFormat, ToolsServiceToken, type WordCount } from '../services/tools.service';
+import { ToolsServiceToken, type WordCount } from '../services/tools.service';
 import { useSettingsStore } from '../settings-store';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
-import { Dialog } from './dialog';
 import { useBuilds } from './use-builds';
 import { waitForJob } from './use-tools-job';
 
@@ -56,12 +50,6 @@ const statusIcons: Record<Build['status'], typeof CircleCheck> = {
   timeout: CircleX,
   cancelled: Ban,
 };
-
-const exportLabels: [ExportFormat, string][] = [
-  ['docx', 'DOCX'],
-  ['md', 'Markdown'],
-  ['html', 'HTML'],
-];
 
 /**
  * Why a build that ended badly lists no error, or `null` when there is nothing to explain. Some
@@ -236,13 +224,6 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
       queryClient.invalidateQueries({ queryKey: ['history', projectId] });
     },
   });
-  const exportAs = useMutation({
-    mutationFn: async (format: ExportFormat) => {
-      const { jobId } = await tools.requestExport(projectId, format);
-      await waitFor(jobId);
-      await tools.downloadJobFile(projectId, jobId, `project.${format}`);
-    },
-  });
   const count = useMutation({
     mutationFn: async () => {
       const { jobId } = await tools.wordCount(projectId);
@@ -252,12 +233,7 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
         : `${r.words} palavras · ${r.headers} em títulos · ${r.captions} em legendas`;
     },
   });
-  const busy = exportAs.isPending || count.isPending || formatAll.isPending;
-  const downloadRef = useRef<HTMLDialogElement>(null);
-  const withClose = (action: () => void) => () => {
-    action();
-    downloadRef.current?.close();
-  };
+  const busy = count.isPending || formatAll.isPending;
   const ToggleIcon = open ? ChevronDown : ChevronUp;
   const toggleLabel = open ? 'Ocultar logs' : 'Mostrar logs';
 
@@ -423,8 +399,17 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             )}
           </fieldset>
         )}
-        <Button variant="ghost" size="compact" onClick={() => downloadRef.current?.showModal()}>
-          Baixar
+        {/* Download/export moved to the editor toolbar; word count (a worker job, editors only)
+            stays here next to the build. */}
+        <Button
+          variant="ghost"
+          size="compact"
+          disabled={!canCompile || busy}
+          title="Contar palavras do projeto"
+          onClick={() => count.mutate()}
+        >
+          <Hash size={14} aria-hidden="true" />
+          Palavras
         </Button>
         <button
           type="button"
@@ -438,65 +423,6 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
         </button>
       </div>
       {isActive(build) && !stuck && <div className="build-progress" aria-hidden="true" />}
-      <Dialog
-        ref={downloadRef}
-        title="Baixar"
-        icon={<Download size={18} aria-hidden="true" />}
-        kicker="Exportar projeto"
-        footer={
-          <div className="actions">
-            <Button variant="ghost" onClick={() => downloadRef.current?.close()}>
-              Fechar
-            </Button>
-          </div>
-        }
-      >
-        <div className="dialog-list">
-          <p className="dialog-list-heading">Código-fonte</p>
-          <button type="button" onClick={withClose(() => projects.downloadSource(projectId))}>
-            <Archive size={16} aria-hidden="true" />
-            Fonte (.zip)
-          </button>
-          <button type="button" onClick={withClose(() => projects.downloadSource(projectId, true))}>
-            <GitBranch size={16} aria-hidden="true" />
-            Fonte com histórico git (.zip)
-          </button>
-          {/* Export and word count run worker jobs: editors only, like compile. */}
-          {canCompile && (
-            <>
-              <p className="dialog-list-heading">Exportar como</p>
-              {exportLabels.map(([format, label]) => (
-                <button
-                  key={format}
-                  type="button"
-                  disabled={busy}
-                  onClick={withClose(() => exportAs.mutate(format))}
-                >
-                  <FileText size={16} aria-hidden="true" />
-                  {label}
-                </button>
-              ))}
-              <p className="dialog-list-heading">Ferramentas</p>
-              <button type="button" disabled={busy} onClick={withClose(() => count.mutate())}>
-                <Hash size={16} aria-hidden="true" />
-                Contar palavras
-              </button>
-            </>
-          )}
-          {build?.status === 'succeeded' && (
-            <>
-              <p className="dialog-list-heading">Compilado</p>
-              <button
-                type="button"
-                onClick={withClose(() => compile.downloadPdf(projectId, build.id))}
-              >
-                <FileDown size={16} aria-hidden="true" />
-                PDF
-              </button>
-            </>
-          )}
-        </div>
-      </Dialog>
       {open && (
         <div className="build-details">
           {build && (
@@ -509,7 +435,6 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             </Button>
           )}
           {start.error && <p className="form-error">{start.error.message}</p>}
-          {exportAs.error && <p className="form-error">{exportAs.error.message}</p>}
           {count.error && <p className="form-error">{count.error.message}</p>}
           {busy && <p className="status-note">Processando…</p>}
           {count.data && <p className="status-note">{count.data}</p>}
