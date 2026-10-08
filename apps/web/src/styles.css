@@ -699,6 +699,10 @@ a {
 .dialog:not([open]) {
   display: none;
 }
+.dialog[data-wide] {
+  width: min(100% - 2rem, 64rem);
+  max-height: min(92vh, 52rem);
+}
 .dialog::backdrop {
   background: rgb(20 23 31 / 0.5);
   backdrop-filter: blur(2px);
@@ -917,42 +921,6 @@ a {
 .editor-host {
   flex: 1;
   min-height: 0;
-}
-.comment-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  padding: 0.3rem 0.5rem;
-  border-bottom: 1px solid var(--line);
-  background: var(--paper);
-}
-.comment-toolbar-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--muted);
-  font-size: 0.75rem;
-  cursor: pointer;
-}
-.comment-toolbar-btn:hover,
-.comment-toolbar-btn:focus-visible {
-  color: var(--ink);
-  border-color: var(--focus);
-}
-.comment-toolbar-btn-primary {
-  color: var(--primary-ink);
-  background: var(--primary);
-  border-color: var(--primary);
-}
-.comment-toolbar-btn-primary:hover,
-.comment-toolbar-btn-primary:focus-visible {
-  color: var(--primary-ink);
-  border-color: var(--primary);
-  opacity: 0.9;
 }
 .preview {
   padding: 1rem;

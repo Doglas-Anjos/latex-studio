@@ -54,7 +54,11 @@ import {
 } from './editor-comments';
 import { referenceCompletions, referenceExtensions, setReferenceIndex } from './editor-references';
 import { editorTheme, latexHighlight } from './editor-theme';
+import { EditorToolbar } from './editor-toolbar';
+import { visualMode } from './editor-visual';
+import { toggleCommand } from './latex-commands';
 import { latexSupport } from './latex-language';
+import { Menu } from './menu';
 import { peerColor } from './presence';
 import { useZoom } from './use-zoom';
 import { approxWords } from './word-count';
@@ -344,6 +348,19 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     const ro = new Compartment();
     setGone(false);
     const wrapping = (on: boolean) => (on ? EditorView.lineWrapping : []);
+    const isTex = path.endsWith('.tex');
+    const visual = new Compartment();
+    // \input chips open the file only if it exists (LaTeX adds .tex; paths are from the root).
+    const openFile = (target: string) =>
+      queryClient
+        .fetchQuery({ queryKey: ['files', projectId], queryFn: () => files.list(projectId) })
+        .then((list) => {
+          if (list.some((f) => f.path === target))
+            useWorkspaceStore.getState().setActivePath(target);
+        })
+        .catch(() => {});
+    const visualFor = (mode: 'code' | 'visual') =>
+      isTex && mode === 'visual' ? visualMode({ openFile }) : [];
     let wordTimer: ReturnType<typeof setTimeout> | undefined;
 
     /** Builds a snapshot of `scope`'s target now, so it survives the user moving to the panel. */
@@ -435,6 +452,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           syntaxHighlighting(latexHighlight),
           editorTheme,
           wrap.of(wrapping(useSettingsStore.getState().lineWrapping)),
+          visual.of(visualFor(useSettingsStore.getState().editorMode)),
           ro.of(EditorState.readOnly.of(readOnly)),
           path.endsWith('.tex')
             ? latexSupport({ autocomplete: referenceCompletions(refIndexRef) })
@@ -445,6 +463,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           // the server (y-codemirror does not mark it addToHistory: false), so Ctrl+Z right
           // after opening a file emptied it for every collaborator.
           Prec.high(keymap.of(yUndoManagerKeymap)),
+          isTex && !readOnly
+            ? Prec.high(
+                keymap.of([
+                  { key: 'Mod-b', run: toggleCommand('textbf') },
+                  { key: 'Mod-i', run: toggleCommand('textit') },
+                ]),
+              )
+            : [],
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
           blameGutter(),
@@ -521,6 +547,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     const unsubWrap = useSettingsStore.subscribe((s, prev) => {
       if (s.lineWrapping !== prev.lineWrapping)
         view.dispatch({ effects: wrap.reconfigure(wrapping(s.lineWrapping)) });
+      if (s.editorMode !== prev.editorMode)
+        view.dispatch({ effects: visual.reconfigure(visualFor(s.editorMode)) });
     });
     const awareness = provider.awareness;
     providerRef.current = provider;
@@ -598,7 +626,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       // theirs; closing the tab ends it once the last edit has synced.
       if (!isOpenSession(session)) closeWhenSynced(provider, doc);
     };
-  }, [projectId, path, readOnly, canComment, identity.token, files]);
+  }, [projectId, path, readOnly, canComment, identity.token, files, queryClient]);
 
   useEffect(() => {
     const text = baseText ?? null;
@@ -632,26 +660,35 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
 
   return (
     <div className="editor" ref={editorBoxRef}>
-      {canComment && (
-        <div className="comment-toolbar" role="toolbar" aria-label="Comentar no editor">
-          {SCOPE_SHORTCUTS.map(({ scope, hint }) => {
-            if (scope === 'selection' && !hasSelection) return null;
-            const Icon = SCOPE_ICON[scope];
-            return (
-              <button
-                key={scope}
-                type="button"
-                className={`comment-toolbar-btn${scope === 'selection' ? ' comment-toolbar-btn-primary' : ''}`}
-                title={`Comentar ${SCOPE_LABELS[scope].toLowerCase()} (${hint})`}
-                onClick={() => requestCommentRef.current(scope)}
-              >
-                <Icon size={14} aria-hidden="true" />
-                {SCOPE_LABELS[scope]}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <EditorToolbar viewRef={viewRef} readOnly={readOnly} isTex={path.endsWith('.tex')}>
+        {canComment && (
+          <Menu
+            label={
+              <span title="Comentar">
+                <MessageSquarePlus size={16} aria-hidden="true" />
+                <span className="sr-only">Comentar</span>
+              </span>
+            }
+            triggerClassName="etb-btn"
+          >
+            {SCOPE_SHORTCUTS.map(({ scope, hint }) => {
+              const Icon = SCOPE_ICON[scope];
+              return (
+                <button
+                  key={scope}
+                  type="button"
+                  disabled={scope === 'selection' && !hasSelection}
+                  onClick={() => requestCommentRef.current(scope)}
+                >
+                  <Icon size={14} aria-hidden="true" />
+                  <span>Comentar {SCOPE_LABELS[scope].toLowerCase()}</span>
+                  <kbd className="etb-hint">{hint}</kbd>
+                </button>
+              );
+            })}
+          </Menu>
+        )}
+      </EditorToolbar>
       {gone && (
         <p className="form-error" role="alert">
           Arquivo removido ou renomeado

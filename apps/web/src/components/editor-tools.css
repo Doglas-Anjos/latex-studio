@@ -1,0 +1,106 @@
+/* Editor toolbar: formatting, inserts, Code/Visual switch and search above the editor. */
+.etb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 0.2rem 0.4rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+.etb-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.etb-sep {
+  width: 1px;
+  height: 1.25rem;
+  margin: 0 0.3rem;
+  background: var(--line);
+}
+.etb-spacer {
+  flex: 1;
+}
+.etb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.4rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.etb-btn > span {
+  display: inline-flex;
+}
+.etb-btn:hover,
+.etb .menu[open] > .etb-btn,
+.etb-btn:has(+ .etb-popover:popover-open) {
+  color: var(--ink);
+  background: color-mix(in srgb, var(--line) 70%, transparent);
+}
+.etb-btn:focus-visible,
+.etb-mode button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.etb-mode {
+  display: inline-flex;
+  margin: 0 0.35rem 0 0;
+  padding: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--line) 60%, transparent);
+}
+.etb-mode button {
+  border: 0;
+  border-radius: 999px;
+  padding: 0.25rem 0.8rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: none;
+  cursor: pointer;
+}
+.etb-mode button[aria-pressed="true"] {
+  color: var(--primary-ink);
+  background: var(--primary);
+}
+/* Native popover: placed under its button from JS; the UA centres it otherwise. */
+.etb-popover {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(26rem, 100vw - 1rem);
+  max-height: min(24rem, 70vh);
+  overflow: auto;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+.etb .menu-list {
+  font-size: 0.85rem;
+}
+.etb .menu-list button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+.etb-hint {
+  margin-left: auto;
+  padding-left: 1rem;
+  font-family: var(--editor-font);
+  font-size: 0.75rem;
+  color: var(--muted);
+}

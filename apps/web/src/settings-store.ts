@@ -53,6 +53,8 @@ export interface Settings {
   editorFont: string;
   fontSize: number;
   lineWrapping: boolean;
+  /** Visual renders headings, emphasis, math and lists over the source (.tex only). */
+  editorMode: 'code' | 'visual';
   sidebarWidth: number;
   pdfWidth: number;
   panelHeight: number;
@@ -79,6 +81,7 @@ const defaults: Settings = {
   editorFont: 'ui-monospace, "Cascadia Code", Consolas, monospace',
   fontSize: 14,
   lineWrapping: true,
+  editorMode: 'code',
   sidebarWidth: 260,
   pdfWidth: 480,
   panelHeight: 220,
