@@ -16,6 +16,7 @@ export function Dialog({
   description,
   tone,
   pending,
+  wide,
   footer,
   children,
 }: {
@@ -31,6 +32,8 @@ export function Dialog({
   tone?: 'danger';
   /** While true, blocks the Escape key and the X from closing the dialog mid-mutation. */
   pending?: boolean | undefined;
+  /** Editors and tools (formula, table) that need room, not a short form. */
+  wide?: boolean;
   /** Actions pinned below the scrollable body; stay visible without scrolling. */
   footer?: ReactNode;
   children: ReactNode;
@@ -41,6 +44,7 @@ export function Dialog({
         ref={ref}
         className="dialog"
         data-tone={tone}
+        data-wide={wide || undefined}
         aria-label={title}
         onCancel={(e) => {
           if (pending) e.preventDefault();

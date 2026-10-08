@@ -1,0 +1,141 @@
+.formula {
+  display: grid;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.math-palette-tabs {
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+}
+
+.math-palette-tabs button {
+  flex: none;
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.math-palette-tabs button[aria-pressed="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--primary);
+}
+
+.math-palette-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  max-height: 9.5rem;
+  overflow-y: auto;
+  padding-top: 0.5rem;
+}
+
+.math-palette-grid button {
+  min-width: 2.25rem;
+  height: 2.25rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.math-palette-grid button:hover {
+  background: var(--paper);
+  border-color: var(--primary);
+}
+
+.math-palette-tabs button:focus-visible,
+.math-palette-grid button:focus-visible,
+.formula-modes label:has(:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.formula-matrix {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.formula-matrix label,
+.formula-label {
+  display: grid;
+  gap: 0.15rem;
+  color: var(--muted);
+}
+
+.formula-matrix input {
+  width: 4rem;
+}
+
+.formula-code {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  font-family: var(--editor-font, monospace);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem;
+}
+
+.formula-preview {
+  min-height: 3.5rem;
+  overflow-x: auto;
+  padding: 0.5rem;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.formula-modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.formula-modes label {
+  position: relative;
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.formula-modes label:has(:checked) {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+.formula-modes input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.formula-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
