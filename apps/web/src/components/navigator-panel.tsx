@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Image as ImageIcon, Sigma, Table2 } from 'lucide-react';
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
 import { FileServiceToken } from '../services/file.service';
 import {
@@ -155,7 +155,7 @@ function FigureRow({
   return (
     <button type="button" className="nav-item nav-figure" onClick={onOpen}>
       {src ? (
-        <BlobImage projectId={projectId} path={src} className="nav-thumb" />
+        <BlobImage projectId={projectId} path={src} className="nav-thumb" lazy />
       ) : (
         <div className="nav-thumb nav-thumb-empty" />
       )}
@@ -164,18 +164,49 @@ function FigureRow({
   );
 }
 
+/** True once `ref`'s element has been near the viewport; stays true. When !enabled, true at once. */
+function useInView(ref: RefObject<Element | null>, enabled: boolean): boolean {
+  const [inView, setInView] = useState(!enabled);
+  useEffect(() => {
+    if (inView) return;
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setInView(true);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: '250px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [ref, inView]);
+  return inView;
+}
+
+/**
+ * Loads an auth'd project image into a blob URL. `lazy` (list thumbnails) defers the fetch until the
+ * placeholder is near the viewport, so opening the panel doesn't fetch and decode every figure at once.
+ */
 function BlobImage({
   projectId,
   path,
   className,
+  lazy = false,
 }: {
   projectId: string;
   path: string;
   className: string;
+  lazy?: boolean;
 }) {
   const files = useService(FileServiceToken);
+  const holder = useRef<HTMLDivElement>(null);
+  const inView = useInView(holder, lazy);
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
+    if (!inView) return;
     let live = true;
     let obj: string | null = null;
     files
@@ -190,11 +221,11 @@ function BlobImage({
       live = false;
       if (obj) URL.revokeObjectURL(obj);
     };
-  }, [files, projectId, path]);
+  }, [inView, files, projectId, path]);
   return url ? (
-    <img className={className} src={url} alt="" />
+    <img className={className} src={url} alt="" decoding="async" />
   ) : (
-    <div className={`${className} nav-thumb-empty`} />
+    <div ref={holder} className={`${className} nav-thumb-empty`} />
   );
 }
 
