@@ -17,10 +17,12 @@ export class AdminService {
     @Inject(ProjectsService) private readonly projectsService: ProjectsService,
   ) {}
 
-  listUsers(opts: { search?: string; limit: number; page: number }) {
+  listUsers(opts: { search?: string; limit?: number; page?: number }) {
+    const limit = opts.limit ?? 25;
+    const page = opts.page ?? 0;
     return this.users.list({
-      limit: opts.limit,
-      offset: opts.page * opts.limit,
+      limit,
+      offset: page * limit,
       ...(opts.search ? { search: opts.search } : {}),
     });
   }

@@ -12,7 +12,8 @@ import {
 import { CurrentUser } from '../../auth/presentation/decorators';
 import type { User } from '../../users/domain/user';
 import { AdminService } from '../application/admin.service';
-import type { ListUsersDto, UserProjectsDto } from './admin.dto';
+// biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
+import { ListUsersDto, UserProjectsDto } from './admin.dto';
 import { AdminGuard } from './admin.guard';
 
 @Controller('admin')
@@ -27,7 +28,7 @@ export class AdminController {
 
   @Get('users/:userId/projects')
   userProjects(@Param('userId', ParseUUIDPipe) userId: string, @Query() dto: UserProjectsDto) {
-    return this.admin.userProjects(userId, dto.limit);
+    return this.admin.userProjects(userId, dto.limit ?? 50);
   }
 
   @Delete('projects/:projectId')
