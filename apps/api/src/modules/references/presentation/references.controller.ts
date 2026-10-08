@@ -15,4 +15,10 @@ export class ReferencesController {
   index(@CurrentProject() project: Project) {
     return this.references.index(project);
   }
+
+  @Get('outline')
+  @RequireProjectRole('viewer')
+  outline(@CurrentProject() project: Project) {
+    return this.references.outline(project);
+  }
 }
