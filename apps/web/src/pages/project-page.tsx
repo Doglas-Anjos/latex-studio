@@ -6,6 +6,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Share2,
+  ShieldAlert,
   X,
 } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
@@ -28,6 +29,7 @@ import { TabBar } from '../components/workspace/tab-bar';
 import { useMatchMedia } from '../components/workspace/use-match-media';
 import { useSidebarVisibility } from '../components/workspace/use-sidebar-visibility';
 import { useService } from '../di/service-provider';
+import { FileServiceToken } from '../services/file.service';
 import { ProjectServiceToken, type Role } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
 import { useWorkspaceStore } from '../workspace-store';
@@ -230,10 +232,22 @@ export function ProjectPage() {
           </dialog>
         )}
         <div className="main-column">
+          {project.viaAdmin && (
+            <div className="admin-view-banner" role="status">
+              <ShieldAlert size={15} aria-hidden="true" />
+              <span>
+                Modo administrador. Você não é membro deste projeto: leitura apenas, sem edição.
+              </span>
+            </div>
+          )}
           <div className="surface-row">
             <div className="editor-pane">
               <TabBar />
-              <ActivePane project={project} canEdit={canEdit} />
+              <ActivePane
+                project={project}
+                canEdit={canEdit}
+                viaAdmin={project.viaAdmin === true}
+              />
             </div>
             {(!compact || surface === 'pdf') &&
               (pdfWidth === 0 && !compact ? (
@@ -290,9 +304,11 @@ const activeTabOf = (s: ReturnType<typeof useWorkspaceStore.getState>) =>
 function ActivePane({
   project,
   canEdit,
+  viaAdmin,
 }: {
   project: { id: string; role: Role };
   canEdit: boolean;
+  viaAdmin: boolean;
 }) {
   const activeTab = useWorkspaceStore(activeTabOf);
   return (
@@ -302,8 +318,16 @@ function ActivePane({
     >
       {!activeTab ? (
         <p className="status-note pane-empty">
-          Nenhum arquivo aberto. Escolha um arquivo na barra lateral para editar.
+          Nenhum arquivo aberto. Escolha um arquivo na barra lateral para{' '}
+          {viaAdmin ? 'ver' : 'editar'}.
         </p>
+      ) : viaAdmin && activeTab.kind === 'file' ? (
+        // Admins read the file over REST, with no live collab session (they are not members).
+        <AdminFileView
+          key={`${project.id}/${activeTab.path}`}
+          projectId={project.id}
+          path={activeTab.path}
+        />
       ) : activeTab.kind === 'diff' ? (
         <DiffTab
           key={activeTab.id}
@@ -331,4 +355,31 @@ function ActiveStatusBar({ projectId, role }: { projectId: string; role: Role })
     return tab?.kind === 'file' ? tab.path : null;
   });
   return <StatusBar projectId={projectId} role={role} path={path} />;
+}
+
+const ADMIN_TEXT_EXT = /\.(tex|bib|sty|cls|txt|md|json|ya?ml|csv|log)$/i;
+
+/** Read-only file view for an admin who is not a member: content over REST, no collab session. */
+function AdminFileView({ projectId, path }: { projectId: string; path: string }) {
+  const files = useService(FileServiceToken);
+  const isText = ADMIN_TEXT_EXT.test(path);
+  const { data, isPending, error } = useQuery({
+    queryKey: ['admin-file', projectId, path],
+    queryFn: () => files.blob(projectId, path).then((b) => b.text()),
+    enabled: isText,
+  });
+  if (!isText) {
+    return (
+      <p className="status-note pane-empty">
+        Pré-visualização indisponível para este tipo de arquivo no modo administrador.
+      </p>
+    );
+  }
+  if (isPending) return <p className="status-note pane-empty">Carregando…</p>;
+  if (error) return <p className="form-error pane-empty">Erro ao carregar o arquivo.</p>;
+  return (
+    <pre className="admin-file-view">
+      <code>{data}</code>
+    </pre>
+  );
 }

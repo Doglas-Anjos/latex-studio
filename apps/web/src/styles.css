@@ -3832,3 +3832,31 @@ button.log-row:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Admin read-only project view */
+.admin-view-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: color-mix(in srgb, var(--warn) 14%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--warn) 45%, transparent);
+  color: var(--ink);
+  font-size: 0.82rem;
+}
+.admin-view-banner svg {
+  flex: none;
+  color: var(--warn);
+}
+.admin-file-view {
+  margin: 0;
+  height: 100%;
+  overflow: auto;
+  padding: 0.75rem 1rem;
+  background: var(--paper);
+  font-family: var(--editor-font, ui-monospace, monospace);
+  font-size: var(--editor-font-size, 13px);
+  line-height: 1.5;
+  white-space: pre;
+  tab-size: 2;
+}

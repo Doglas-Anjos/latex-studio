@@ -12,6 +12,8 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   role: Role;
+  /** True when the current user reached this project as a platform admin, not a member. */
+  viaAdmin?: boolean;
 }
 
 export type ProjectFilter = 'all' | 'mine' | 'shared';
