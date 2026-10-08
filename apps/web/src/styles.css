@@ -4408,6 +4408,9 @@ button.log-row:hover {
   left: auto;
   right: 0;
   min-width: 14rem;
+  /* The menu lives in the dark header, whose --chrome-ink the items would inherit onto the light
+     popover; pin the surface ink so they stay readable. */
+  color: var(--ink);
 }
 .pdf-download-menu .menu-list button {
   display: flex;
