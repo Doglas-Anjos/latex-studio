@@ -48,6 +48,11 @@ export function watchCancel(abort: AbortController, cancelled: () => Promise<boo
   }, ms);
 }
 
+/** Shown in the build panel; see COMPILE_ALLOW_LUALATEX in the config schema. */
+export const LUALATEX_OFF =
+  'LuaLaTeX está desativado neste servidor: o Lua do LuaTeX consegue ler e gravar arquivos fora do ' +
+  'projeto. Use XeLaTeX (também suporta fontspec) ou pdfLaTeX.';
+
 @Processor(COMPILE_QUEUE)
 export class CompileProcessor extends WorkerHost implements OnApplicationBootstrap {
   private readonly logger = new Logger(CompileProcessor.name);
@@ -85,6 +90,10 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
       .returning();
     if (!build) return;
 
+    if (build.engine === 'lualatex' && !this.config.COMPILE_ALLOW_LUALATEX) {
+      await this.finish(buildId, { status: 'failed', errors: [{ message: LUALATEX_OFF }] });
+      return;
+    }
     let tmp: string | undefined;
     try {
       const repoDir = this.repos.resolve(projectId);

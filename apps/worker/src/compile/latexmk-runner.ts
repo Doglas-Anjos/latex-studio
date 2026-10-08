@@ -17,8 +17,8 @@ const ENGINE_FLAGS: Record<Engine, string[]> = {
   pdflatex: ['-pdf'],
   xelatex: ['-pdfxe'],
   // No `--safer`: luaotfload (so fontspec, i.e. nearly every LuaLaTeX document) refuses to run
-  // under it. Lua's io/os are still fenced by shell_escape=f and kpathsea's paranoid
-  // openin_any/openout_any (both honoured by LuaTeX), plus the container limits.
+  // under it. Without it, Lua's io.input/io.output and os.getenv are NOT fenced by kpathsea's
+  // paranoid mode, so the compile processor refuses this engine unless COMPILE_ALLOW_LUALATEX.
   lualatex: ['-pdflua'],
 };
 const WINDOWS = process.platform === 'win32';
@@ -28,8 +28,9 @@ const DRAFT_WRAPPER = 'latex-studio-draft.tex';
 /**
  * Runs latexmk without a shell, with a wall-clock timeout and a minimal environment.
  *
- * Memory, pids and network are limited by the worker container (`mem_limit`, `pids_limit`,
- * `network_mode: none`), not here: there is no portable per-process memory cap without a shell
+ * Memory and pids are limited by the worker container (`mem_limit`, `pids_limit`), not here. The
+ * worker shares the internal network with Postgres and Redis, and TeX runs as the worker's user:
+ * file isolation rests on kpathsea's paranoid mode (pdfTeX, XeTeX), not on an OS sandbox: there is no portable per-process memory cap without a shell
  * `ulimit`, so COMPILE_MEMORY_MB is enforced by docker-compose.
  *
  * `spawn` (argument array, no shell) instead of `execFile`: execFile's timeout only kills

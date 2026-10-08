@@ -14,6 +14,13 @@ const baseSchema = z.object({
   MAX_UPLOAD_MB: z.coerce.number().positive().default(50),
   PROJECT_QUOTA_MB: z.coerce.number().positive().default(500),
   MAX_PROJECTS_PER_USER: z.coerce.number().int().positive().default(50),
+  // LuaTeX's io.input/io.output and os.getenv bypass kpathsea's paranoid mode, so a document can
+  // read and write any file the worker can (other projects, /proc/<worker>/environ). Only for a
+  // server whose every user is trusted, until compiles run in an OS sandbox.
+  COMPILE_ALLOW_LUALATEX: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 const optional = (schema: z.ZodType<string>) =>
