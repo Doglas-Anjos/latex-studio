@@ -64,6 +64,26 @@ packages/git-store, packages/latex-tools   Classes puras (git, parsers LaTeX)
 docker/         Imagens da API, do worker (TeX Live) e do web (Caddy)
 ```
 
+## Corretor ortográfico
+
+A verificação roda no servidor (Hunspell via WebAssembly, em `apps/api`), então dicionários de
+qualquer tamanho funcionam. Hoje vêm português (Brasil) e inglês (EUA). Para **adicionar um idioma**
+basta um dicionário Hunspell empacotado — a coleção [`dictionaries`](https://github.com/wooorm/dictionaries)
+traz dezenas (`dictionary-es`, `dictionary-fr`, `dictionary-de`, `dictionary-it`, ...):
+
+1. Instale o pacote na API: `pnpm --filter @latex-studio/api add dictionary-es`.
+2. Em `apps/api/src/modules/spellcheck/infrastructure/hunspell-speller.ts`, mapeie o idioma:
+   adicione a chave em `PACKAGE` (`es: 'dictionary-es'`) e um ramo em `dictKey`
+   (`lang.startsWith('es') ? 'es' : ...`).
+3. Libere a tag BCP-47 em `apps/api/src/modules/spellcheck/presentation/spellcheck.dto.ts`
+   (`SPELL_LANGS`, ex.: `'es-ES'`) — o endpoint recusa idiomas fora dessa lista.
+4. Ofereça no seletor em `apps/web/src/components/settings-dialog.tsx` (`SPELL_LANGS`,
+   ex.: `['es-ES', 'Español']`).
+5. Rebuild da API (`pnpm --filter @latex-studio/api build`) e cite a licença do dicionário na
+   seção Licença abaixo.
+
+Cada dicionário carrega uma vez e fica em memória; não há limite prático de idiomas além da RAM.
+
 ## Segurança
 
 Resumo em [SECURITY.md](SECURITY.md) e na seção "Segurança" de [docs/architecture.md](docs/architecture.md). Vulnerabilidades: use o aviso de segurança privado do GitHub.
