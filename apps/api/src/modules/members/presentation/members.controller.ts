@@ -9,9 +9,10 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Req,
 } from '@nestjs/common';
 import { CurrentUser } from '../../auth/presentation/decorators';
-import type { Project } from '../../projects/domain/project';
+import type { Project, ProjectRole } from '../../projects/domain/project';
 import type { Member } from '../../projects/domain/project.repository';
 import {
   CurrentProject,
@@ -28,8 +29,13 @@ export class MembersController {
 
   @Get()
   @RequireProjectRole('viewer')
-  list(@CurrentProject() project: Project): Promise<Member[]> {
-    return this.members.list(project);
+  async list(
+    @CurrentProject() project: Project,
+    @Req() request: { projectRole?: ProjectRole },
+  ): Promise<Array<Omit<Member, 'email'> & { email?: string }>> {
+    const members = await this.members.list(project);
+    // Addresses are for the owner, who manages membership; collaborators see names and roles.
+    return request.projectRole === 'owner' ? members : members.map(({ email: _, ...m }) => m);
   }
 
   @Post()

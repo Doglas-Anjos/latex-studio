@@ -34,6 +34,11 @@ describe('scrubLogPaths', () => {
     expect(scrubLogPaths(log, '/tmp/ls-build-x1')).toBe(log);
   });
 
+  it('works without a working copy, for tool error messages', () => {
+    const msg = 'Command failed: pandoc /tmp/ls-build-x1/main.tex -o /srv/builds/p/exports/1.docx';
+    expect(scrubLogPaths(msg, '')).toBe('Command failed: pandoc main.tex -o 1.docx');
+  });
+
   it('feeds the parser a file name, not a server path', () => {
     const log = String.raw`C:\Users\ana\AppData\Local\Programs\MiKTeX\tex/latex/abntex2\abntex2.cls:483: LaTeX Error: Something broke.`;
     const { errors } = parseLatexLog(scrubLogPaths(log, '/tmp/x'));

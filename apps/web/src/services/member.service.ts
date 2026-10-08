@@ -5,7 +5,8 @@ import type { Role } from './project.service';
 export interface Member {
   userId: string;
   name: string;
-  email: string;
+  /** Only sent to the project owner. */
+  email?: string;
   role: Role;
 }
 

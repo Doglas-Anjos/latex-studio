@@ -25,5 +25,7 @@ export function scrubLogPaths(log: string, workDir: string): string {
     .filter(Boolean)
     .map(escapeRegExp);
   const root = `${workDir.startsWith('/') ? SEP : ''}${segments.join(SEP)}${SEP}`;
-  return log.replace(new RegExp(root, 'gi'), '').replace(ABSOLUTE_DIRS, '');
+  // No working copy known (e.g. a tool's error message): only the generic rule applies.
+  const relative = segments.length ? log.replace(new RegExp(root, 'gi'), '') : log;
+  return relative.replace(ABSOLUTE_DIRS, '');
 }

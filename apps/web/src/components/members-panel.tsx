@@ -97,9 +97,11 @@ export function MembersPanel({ projectId, isOwner }: { projectId: string; isOwne
                   {m.name}
                   {online.has(m.name) && <span className="online-dot" title="Online" />}
                 </span>
-                <span className="member-email muted" title={m.email}>
-                  {m.email}
-                </span>
+                {m.email && (
+                  <span className="member-email muted" title={m.email}>
+                    {m.email}
+                  </span>
+                )}
               </span>
               <span className="member-role-row">
                 {isOwner && m.role !== 'owner' ? (

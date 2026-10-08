@@ -9,6 +9,7 @@ import {
   TOOLS_QUEUE,
   type ToolJobData,
 } from '@latex-studio/core';
+import { scrubLogPaths } from '@latex-studio/latex-tools';
 import { InjectQueue } from '@nestjs/bullmq';
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Queue } from 'bullmq';
@@ -116,7 +117,8 @@ export class ExportService {
     return {
       state,
       ...(state === 'completed' && { result }),
-      ...(state === 'failed' && { error: job.failedReason }),
+      // Tool errors quote their command line: no server paths in what the browser gets.
+      ...(state === 'failed' && { error: scrubLogPaths(job.failedReason ?? '', '') }),
     };
   }
 
