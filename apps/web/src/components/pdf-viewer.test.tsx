@@ -89,13 +89,16 @@ describe('PdfViewer pages', () => {
 
   it('draws only pages near the viewport and frees the ones scrolled far away', async () => {
     let onEntries: (e: { target: Element; isIntersecting: boolean }[]) => void = () => {};
+    let observed = 0;
     vi.stubGlobal(
       'IntersectionObserver',
       class {
         constructor(cb: typeof onEntries) {
           onEntries = cb;
         }
-        observe() {}
+        observe() {
+          observed += 1;
+        }
         disconnect() {}
       },
     );
@@ -103,7 +106,9 @@ describe('PdfViewer pages', () => {
       <PdfViewer projectId="p1" />,
       new Container().register(CompileServiceToken, fake()),
     );
-    await waitFor(() => expect(document.querySelectorAll('.pdf-page')).toHaveLength(2));
+    // The observer is created in a passive effect after the pages render; under load the pages
+    // can be in the DOM before it exists, so wait for it to watch them before firing entries.
+    await waitFor(() => expect(observed).toBeGreaterThanOrEqual(2));
     const [p1, p2] = document.querySelectorAll('.pdf-page');
     await act(async () => {
       onEntries([
