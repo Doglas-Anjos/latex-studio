@@ -2,6 +2,7 @@ import { HighlightStyle, syntaxHighlighting, syntaxTree } from '@codemirror/lang
 import { type EditorState, type Extension, type Range, StateField } from '@codemirror/state';
 import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view';
 import { tags as t } from '@lezer/highlight';
+import { inputPaths } from './editor-helpers';
 import { renderMath } from './katex';
 import { latexTags } from './latex-language';
 
@@ -34,7 +35,7 @@ class MathWidget extends WidgetType {
 class ChipWidget extends WidgetType {
   constructor(
     private readonly path: string,
-    private readonly openFile: (path: string) => void,
+    private readonly openFile: (paths: string[]) => void,
   ) {
     super();
   }
@@ -48,9 +49,7 @@ class ChipWidget extends WidgetType {
     icon.className = 'cm-vis-chip-icon';
     icon.title = 'Abrir arquivo';
     icon.textContent = '↗';
-    icon.addEventListener('click', () =>
-      this.openFile(/\.[^/\\]+$/.test(this.path) ? this.path : `${this.path}.tex`),
-    );
+    icon.addEventListener('click', () => this.openFile(inputPaths(this.path, false)));
     const label = document.createElement('span');
     label.className = 'cm-vis-chip-label';
     label.textContent = this.path;
@@ -115,7 +114,7 @@ function mathDeco(state: EditorState, from: number, to: number, tex: string, dis
 
 export function buildDecorations(
   state: EditorState,
-  openFile: (path: string) => void,
+  openFile: (paths: string[]) => void,
 ): DecorationSet {
   const { doc } = state;
   const out: Range<Decoration>[] = [];
@@ -276,7 +275,7 @@ const theme = EditorView.baseTheme({
  * ponytail: rebuilds the whole document on each change/selection; restrict to visible ranges
  * and map the rest if long documents lag.
  */
-export function visualMode(opts: { openFile: (path: string) => void }): Extension {
+export function visualMode(opts: { openFile: (paths: string[]) => void }): Extension {
   const field = StateField.define<DecorationSet>({
     create: (state) => buildDecorations(state, opts.openFile),
     update(value, tr) {

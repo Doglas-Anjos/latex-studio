@@ -52,8 +52,8 @@ import {
   selectionAffordance,
   setComposerTarget,
 } from './editor-comments';
+import { editorHelpers } from './editor-helpers';
 import { referenceCompletions, referenceExtensions, setReferenceIndex } from './editor-references';
-import { tableEditButtons } from './editor-table-edit';
 import { editorTheme, latexHighlight } from './editor-theme';
 import { EditorToolbar } from './editor-toolbar';
 import { visualMode } from './editor-visual';
@@ -353,13 +353,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     const wrapping = (on: boolean) => (on ? EditorView.lineWrapping : []);
     const isTex = path.endsWith('.tex');
     const visual = new Compartment();
-    // \input chips open the file only if it exists (LaTeX adds .tex; paths are from the root).
-    const openFile = (target: string) =>
+    // \input chips and Ctrl+click open a file only if it exists; with candidates (\includegraphics
+    // without extension) the first existing one wins. Paths are from the project root.
+    const openFile = (paths: string[]) =>
       queryClient
         .fetchQuery({ queryKey: ['files', projectId], queryFn: () => files.list(projectId) })
         .then((list) => {
-          if (list.some((f) => f.path === target))
-            useWorkspaceStore.getState().setActivePath(target);
+          const hit = paths.find((p) => list.some((f) => f.path === p));
+          if (hit) useWorkspaceStore.getState().setActivePath(hit);
         })
         .catch(() => {});
     const visualFor = (mode: 'code' | 'visual') =>
@@ -474,8 +475,11 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
                 ]),
               )
             : [],
-          isTex && !readOnly
-            ? tableEditButtons(() => useWorkspaceStore.getState().setEditorDialog('table'))
+          isTex
+            ? editorHelpers({
+                openDialog: (d) => useWorkspaceStore.getState().setEditorDialog(d),
+                openFile,
+              })
             : [],
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
