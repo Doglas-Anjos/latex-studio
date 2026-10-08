@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localLabels, usages } from './editor-references';
+import { findDefPos, localLabels, usages } from './editor-references';
 
 describe('usages', () => {
   it('finds \\ref and \\cite keys with kind and position, skipping comments', () => {
@@ -33,5 +33,26 @@ describe('usages', () => {
 describe('localLabels', () => {
   it('collects \\label keys from code only', () => {
     expect([...localLabels('\\label{a}\n% \\label{b}\n\\label{c}')]).toEqual(['a', 'c']);
+  });
+});
+
+describe('findDefPos', () => {
+  it('locates a \\label by its key, regardless of line', () => {
+    const doc = 'line one\n\\begin{equation}\n  x=1 \\label{eq:bounds}\n\\end{equation}';
+    const pos = findDefPos(doc, 'ref', 'eq:bounds');
+    expect(pos).not.toBeNull();
+    expect(doc.slice(pos ?? 0).startsWith('\\label{eq:bounds}')).toBe(true);
+  });
+
+  it('locates a .bib entry and a \\bibitem for a cite key', () => {
+    expect(findDefPos('@article{vaswani2017,\n  title={x},\n}', 'cite', 'vaswani2017')).toBe(0);
+    const tex = 'text\n\\bibitem{smith2020} Smith, J.';
+    expect(findDefPos(tex, 'cite', 'smith2020')).toBe(tex.indexOf('\\bibitem'));
+  });
+
+  it('returns null for an unknown or regex-special key', () => {
+    expect(findDefPos('\\label{a.b}', 'ref', 'missing')).toBeNull();
+    expect(findDefPos('\\label{a.b}', 'ref', 'a.b')).toBe(0);
+    expect(findDefPos('\\label{axb}', 'ref', 'a.b')).toBeNull();
   });
 });

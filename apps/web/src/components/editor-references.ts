@@ -140,6 +140,24 @@ function keyAt(doc: string, pos: number): Usage | null {
   return null;
 }
 
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Character offset where a key is DEFINED in the given live text, or null. Searching the live doc
+ * (not the disk-built index line) keeps the jump correct when the file has unsaved edits.
+ */
+export function findDefPos(doc: string, kind: 'ref' | 'cite', key: string): number | null {
+  const k = escapeRe(key);
+  const re =
+    kind === 'ref'
+      ? new RegExp(`\\\\label\\s{0,10}\\{${k}\\}`)
+      : new RegExp(
+          `@[a-zA-Z]{1,40}\\s{0,10}\\{\\s{0,10}${k}\\s{0,10},|\\\\bibitem\\s{0,10}(?:\\[[^\\]]{0,200}\\])?\\s{0,10}\\{${k}\\}`,
+        );
+  const m = re.exec(doc);
+  return m ? m.index : null;
+}
+
 /**
  * Marks unresolved keys and jumps to a definition on Ctrl/Cmd+click. `path` is the open file so a
  * same-file target scrolls in place and a cross-file one opens the other tab.
@@ -178,20 +196,59 @@ export function referenceExtensions(opts: {
       );
       if (!def) return false;
       event.preventDefault();
-      if (def.path === opts.path) {
-        const line = view.state.doc.line(Math.min(Math.max(def.line, 1), view.state.doc.lines));
-        view.dispatch({
-          selection: { anchor: line.from },
-          effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
-        });
-        view.focus();
+      // The index tells which file defines the key; the exact line is searched in that file's live
+      // text (drift-proof) once it is open. A .bib has no resolver and never drifts, so its entry
+      // is reached by the index line directly.
+      if (def.path.endsWith('.tex')) {
+        useWorkspaceStore.getState().openDefinition(def.path, hit.kind, hit.key);
       } else {
         useWorkspaceStore.getState().goToLine(def.path, def.line);
       }
       return true;
     },
   });
-  return [marks, jump];
+  // Resolves a pending definition jump by searching this file's live text; retries until the file
+  // (which may have just opened) has synced enough to contain it.
+  const resolver = ViewPlugin.fromClass(
+    class {
+      private view: EditorView | null;
+      private readonly unsub: () => void;
+      constructor(view: EditorView) {
+        this.view = view;
+        this.tryReveal();
+        this.unsub = useWorkspaceStore.subscribe((s, prev) => {
+          if (s.pendingDef !== prev.pendingDef) this.tryReveal();
+        });
+      }
+      update(u: ViewUpdate) {
+        if (u.docChanged) this.tryReveal();
+      }
+      private tryReveal() {
+        const view = this.view;
+        if (!view) return;
+        const pd = useWorkspaceStore.getState().pendingDef;
+        if (!pd || pd.path !== opts.path) return;
+        const found = findDefPos(view.state.doc.toString(), pd.kind, pd.key);
+        if (found !== null) {
+          const line = view.state.doc.lineAt(found);
+          view.dispatch({
+            selection: { anchor: line.from },
+            effects: EditorView.scrollIntoView(line.from, { y: 'center' }),
+          });
+          view.focus();
+          useWorkspaceStore.getState().clearPendingDef();
+        } else if (view.state.doc.length > 0) {
+          // The file is loaded but no longer defines the key (renamed/removed since indexing).
+          useWorkspaceStore.getState().clearPendingDef();
+        }
+      }
+      destroy() {
+        this.unsub();
+        this.view = null;
+      }
+    },
+  );
+  return [marks, jump, resolver];
 }
 
 /** Completes \ref/\cite keys from the project index; the regex handles a still-open brace. */

@@ -95,6 +95,11 @@ interface WorkspaceState {
   setActivePath: (path: string | null) => void;
   goToLine: (path: string, line: number) => void;
   clearPendingLine: () => void;
+  /** A definition to reveal by searching the target file's live text, so the jump is right even
+   * when the file has unsaved edits (the disk-based index line would be stale). */
+  pendingDef: { path: string; kind: 'ref' | 'cite'; key: string } | null;
+  openDefinition: (path: string, kind: 'ref' | 'cite', key: string) => void;
+  clearPendingDef: () => void;
   /** Mark a comment active without moving the editor (click on a highlight). */
   setActiveComment: (id: string | null) => void;
   /** Mark a comment active and scroll the editor to it. */
@@ -133,6 +138,7 @@ const initial = {
   commentJump: null,
   commentFocus: null,
   commentMenu: null,
+  pendingDef: null,
 } satisfies Partial<WorkspaceState>;
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
@@ -188,12 +194,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setActivePath: (path) =>
     set((s) => ({
       pendingLine: null,
+      pendingDef: null,
       activeCommentId: null,
       ...(path === null ? { activePath: null } : opened(s, { kind: 'file', path })),
     })),
   goToLine: (path, pendingLine) =>
     set((s) => ({ pendingLine, ...opened(s, { kind: 'file', path }) })),
   clearPendingLine: () => set({ pendingLine: null }),
+  openDefinition: (path, kind, key) =>
+    set((s) => ({ pendingDef: { path, kind, key }, ...opened(s, { kind: 'file', path }) })),
+  clearPendingDef: () => set({ pendingDef: null }),
   setActiveComment: (activeCommentId) => set({ activeCommentId }),
   revealComment: (id) => set({ activeCommentId: id, commentJump: { id } }),
   focusComment: (id, edit = false) =>
