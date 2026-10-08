@@ -77,7 +77,7 @@ export function ActivityBar({
       >
         <Settings size={20} aria-hidden="true" />
       </button>
-      <SettingsDialog ref={settings} />
+      <SettingsDialog ref={settings} projectId={projectId} />
     </nav>
   );
 }

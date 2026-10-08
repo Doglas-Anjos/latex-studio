@@ -1,5 +1,8 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Code2, FileText, Palette, Settings as SettingsIcon, SpellCheck } from 'lucide-react';
 import { type ReactNode, type RefObject, useRef, useState } from 'react';
+import { useService } from '../di/service-provider';
+import { type Project, ProjectServiceToken } from '../services/project.service';
 import {
   type DiffView,
   type Settings,
@@ -7,8 +10,15 @@ import {
   type SyntaxToken,
   useSettingsStore,
 } from '../settings-store';
+import { activeTheme, SYNTAX_THEMES } from '../syntax-themes';
 import { Button } from './button';
 import { Dialog } from './dialog';
+
+const ENGINES: [Project['engine'], string][] = [
+  ['pdflatex', 'pdfLaTeX'],
+  ['xelatex', 'XeLaTeX'],
+  ['lualatex', 'LuaLaTeX'],
+];
 
 // Bundled fonts (main.tsx) render the same on every machine; "Sistema" is the OS monospace.
 const FONTS: [label: string, value: string][] = [
@@ -75,7 +85,13 @@ const CATEGORIES: { id: Category; label: string; icon: ReactNode }[] = [
 ];
 
 /** Local preferences (saved in this browser), grouped like Overleaf's settings. */
-export function SettingsDialog({ ref }: { ref: RefObject<HTMLDialogElement | null> }) {
+export function SettingsDialog({
+  ref,
+  projectId,
+}: {
+  ref: RefObject<HTMLDialogElement | null>;
+  projectId: string;
+}) {
   const [cat, setCat] = useState<Category>('editor');
   return (
     <Dialog
@@ -108,7 +124,7 @@ export function SettingsDialog({ ref }: { ref: RefObject<HTMLDialogElement | nul
         <div className="settings-main">
           {cat === 'editor' && <EditorPanel />}
           {cat === 'spelling' && <SpellingPanel />}
-          {cat === 'compile' && <CompilePanel />}
+          {cat === 'compile' && <CompilePanel projectId={projectId} />}
           {cat === 'appearance' && <AppearancePanel />}
         </div>
       </div>
@@ -246,11 +262,44 @@ function SpellingPanel() {
   );
 }
 
-function CompilePanel() {
+function CompilePanel({ projectId }: { projectId: string }) {
   const s = useSettingsStore();
   const { set } = s;
+  const projects = useService(ProjectServiceToken);
+  const queryClient = useQueryClient();
+  const { data: project } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => projects.get(projectId),
+  });
+  const canEdit = project?.role === 'owner' || project?.role === 'editor';
+  const setEngine = useMutation({
+    mutationFn: (engine: Project['engine']) => projects.update(projectId, { engine }),
+    // Keep the caller's role on the cached project (the write echoes none); see build-panel.
+    onSuccess: (p) =>
+      queryClient.setQueryData<Project>(['project', projectId], (prev) =>
+        prev ? { ...prev, ...p, role: p.role ?? prev.role } : undefined,
+      ),
+  });
   return (
     <div className="settings-section">
+      <Row
+        title="Motor LaTeX"
+        description="pdfLaTeX é o padrão; fontspec e polyglossia exigem XeLaTeX ou LuaLaTeX. Salvo no projeto."
+        control={
+          <select
+            aria-label="Motor LaTeX"
+            value={project?.engine ?? 'pdflatex'}
+            disabled={!canEdit || !project || setEngine.isPending}
+            onChange={(e) => setEngine.mutate(e.target.value as Project['engine'])}
+          >
+            {ENGINES.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        }
+      />
       <Row
         title="Compilação automática"
         description="Recompila alguns segundos após você parar de digitar."
@@ -376,6 +425,33 @@ function AppearancePanel() {
         ))}
       </fieldset>
       <h3 className="settings-h3">Cores de sintaxe</h3>
+      <Row
+        title="Paleta"
+        description="Aplica um conjunto de cores pronto (com o tema claro/escuro combinado). Ajuste fino abaixo."
+        control={
+          <select
+            aria-label="Paleta de cores"
+            value={
+              Object.keys(s.syntax).length === 0 ? 'default' : activeTheme(s.syntax) || 'custom'
+            }
+            onChange={(e) => {
+              const t = SYNTAX_THEMES[e.target.value];
+              if (t) set({ theme: t.theme, syntax: { ...t.syntax } });
+              else if (e.target.value === 'default') set({ syntax: {} });
+            }}
+          >
+            <option value="default">Padrão do tema</option>
+            {Object.entries(SYNTAX_THEMES).map(([id, t]) => (
+              <option key={id} value={id}>
+                {t.label}
+              </option>
+            ))}
+            {activeTheme(s.syntax) === '' && Object.keys(s.syntax).length > 0 && (
+              <option value="custom">Personalizado</option>
+            )}
+          </select>
+        }
+      />
       <div className="color-grid">
         {SYNTAX_TOKENS.map(({ token, label }) => (
           <label key={token} className="check">
