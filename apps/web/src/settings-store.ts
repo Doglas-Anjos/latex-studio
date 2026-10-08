@@ -43,7 +43,14 @@ export const SYNTAX_TOKENS: { token: SyntaxToken; label: string }[] = [
 ];
 
 export type ThemeSetting = 'light' | 'dark' | 'system';
-export type SidebarView = 'files' | 'changes' | 'packages' | 'comments' | 'history' | 'members';
+export type SidebarView =
+  | 'files'
+  | 'navigator'
+  | 'changes'
+  | 'packages'
+  | 'comments'
+  | 'history'
+  | 'members';
 /** Diff layout; 'auto' lets the available width pick split vs unified. */
 export type DiffView = 'split' | 'unified' | 'words' | 'auto';
 

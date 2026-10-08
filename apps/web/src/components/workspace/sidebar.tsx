@@ -5,6 +5,7 @@ import { CommentsPanel } from '../comments-panel';
 import { FileTree } from '../file-tree';
 import { HistoryPanel } from '../history-panel';
 import { MembersPanel } from '../members-panel';
+import { NavigatorPanel } from '../navigator-panel';
 import { PackagesPanel } from '../packages-panel';
 import { viewLabels } from './activity-bar';
 import { ChangesView } from './changes-view';
@@ -33,6 +34,7 @@ export function Sidebar({
         {view === 'files' && (
           <FileTree projectId={project.id} canEdit={canEdit} mainFile={project.mainFile} />
         )}
+        {view === 'navigator' && <NavigatorPanel projectId={project.id} />}
         {view === 'changes' && <ChangesView projectId={project.id} canEdit={canEdit} />}
         {view === 'packages' && <PackagesPanel projectId={project.id} canEdit={canEdit} />}
         {view === 'comments' && (

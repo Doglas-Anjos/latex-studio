@@ -8,8 +8,44 @@ export interface ReferenceIndex {
   citeKeys: RefLocation[];
 }
 
+export interface FigureItem {
+  caption: string;
+  label?: string;
+  image?: string;
+  path: string;
+  line: number;
+}
+export interface TableItem {
+  caption: string;
+  label?: string;
+  source?: string;
+  path: string;
+  line: number;
+}
+export interface EquationItem {
+  label?: string;
+  source: string;
+  path: string;
+  line: number;
+}
+export interface AcronymItem {
+  key: string;
+  short: string;
+  long: string;
+  path: string;
+  line: number;
+}
+/** Figures, tables, equations and acronyms of a project, for the navigator panel. */
+export interface DocumentOutline {
+  figures: FigureItem[];
+  tables: TableItem[];
+  equations: EquationItem[];
+  acronyms: AcronymItem[];
+}
+
 export interface ReferenceService {
   index(projectId: string): Promise<ReferenceIndex>;
+  outline(projectId: string): Promise<DocumentOutline>;
 }
 
 export const ReferenceServiceToken = createToken<ReferenceService>('ReferenceService');
@@ -19,5 +55,9 @@ export class HttpReferenceService implements ReferenceService {
 
   index(projectId: string) {
     return this.api.get<ReferenceIndex>(`/projects/${projectId}/references`);
+  }
+
+  outline(projectId: string) {
+    return this.api.get<DocumentOutline>(`/projects/${projectId}/references/outline`);
   }
 }

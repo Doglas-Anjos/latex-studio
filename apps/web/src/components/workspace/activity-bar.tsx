@@ -2,6 +2,7 @@ import {
   Files,
   GitCompare,
   History,
+  ListTree,
   type LucideIcon,
   MessageSquare,
   Package,
@@ -15,6 +16,7 @@ import { AppearanceDialog } from '../appearance-dialog';
 
 export const viewLabels: Record<SidebarView, string> = {
   files: 'Arquivos',
+  navigator: 'Navegador',
   changes: 'Mudanças',
   packages: 'Bibliotecas',
   comments: 'Comentários',
@@ -23,6 +25,7 @@ export const viewLabels: Record<SidebarView, string> = {
 };
 export const sidebarViewIcons: Record<SidebarView, LucideIcon> = {
   files: Files,
+  navigator: ListTree,
   changes: GitCompare,
   packages: Package,
   comments: MessageSquare,
