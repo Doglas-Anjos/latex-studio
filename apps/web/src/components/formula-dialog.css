@@ -4,31 +4,39 @@
   min-width: 0;
 }
 
+/* Category picker as wrapping pills: all categories stay visible, no horizontal scrollbar. */
 .math-palette-tabs {
   margin: 0;
-  padding: 0;
+  padding: 0 0 0.6rem;
   min-width: 0;
   display: flex;
-  gap: 0.25rem;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  border: 0;
   border-bottom: 1px solid var(--line);
 }
 
 .math-palette-tabs button {
   flex: none;
-  padding: 0.35rem 0.6rem;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
   color: var(--muted);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   cursor: pointer;
 }
 
-.math-palette-tabs button[aria-pressed="true"] {
+.math-palette-tabs button:hover {
+  border-color: var(--primary);
   color: var(--ink);
-  border-bottom-color: var(--primary);
+}
+
+.math-palette-tabs button[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
 }
 
 .math-palette-grid {
