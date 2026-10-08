@@ -45,6 +45,9 @@ async function* hashing(source: AsyncIterable<Uint8Array>, hash: Hash) {
   }
 }
 
+/** Placeholder that keeps an empty folder in the repository; hidden by the file tree. */
+export const FOLDER_KEEP = '.keep';
+
 /** The file at `path`, or every file under the folder `path`. */
 async function filesUnder(files: ProjectFiles, path: string) {
   return (await files.repo.listFiles()).filter(
@@ -144,7 +147,8 @@ export class FilesService {
       const files = this.storage.open(project.id);
       if (await pathExists(files, path)) throw new ConflictException(`${path} already exists`);
       await assertQuota(files, this.quota, 0);
-      await files.write(`${path}/.gitkeep`, '');
+      // Git keeps no empty folders. Not `.gitkeep`: SafePath refuses every `.git*` name.
+      await files.write(`${path}/${FOLDER_KEEP}`, '');
       await files.repo.commitAll(`Create folder ${path}`, author(user));
     });
   }
@@ -161,7 +165,8 @@ export class FilesService {
       const files = this.storage.open(project.id);
       const listed = await files.repo.listFiles();
       const sizes = new Map(listed.map((f) => [f.path, f.size]));
-      const budget = { left: this.quota - listed.reduce((sum, f) => sum + f.size, 0) };
+      const used = listed.reduce((sum, f) => sum + f.size, 0) + (await files.repo.storedBytes());
+      const budget = { left: this.quota - used };
       let folder = '';
       const written = new Map<string, UploadedFile['change']>();
       const created: string[] = [];

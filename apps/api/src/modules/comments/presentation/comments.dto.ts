@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -42,6 +43,7 @@ export class CreateCommentDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Max(10_000_000)
   line?: number;
 
   @IsString()

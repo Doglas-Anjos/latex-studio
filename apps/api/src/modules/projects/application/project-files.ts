@@ -59,7 +59,11 @@ export async function assertQuota(
   const used = (await files.repo.listFiles())
     .filter((f) => f.path !== replacing)
     .reduce((sum, f) => sum + f.size, 0);
-  if (used + incomingBytes > quotaBytes) throw new PayloadTooLargeException(QUOTA_EXCEEDED);
+  // History too: every save adds objects, and a quota on the working tree alone never fills.
+  const history = await files.repo.storedBytes();
+  if (used + history + incomingBytes > quotaBytes) {
+    throw new PayloadTooLargeException(QUOTA_EXCEEDED);
+  }
 }
 
 /**

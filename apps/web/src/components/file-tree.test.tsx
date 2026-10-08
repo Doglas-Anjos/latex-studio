@@ -45,6 +45,12 @@ describe('FileTree', () => {
     expect(classifyFile('Makefile')).toBe('generic');
   });
 
+  it('shows an empty folder from its placeholder without listing the placeholder', () => {
+    const tree = buildTree([{ path: 'main.tex' }, { path: 'figs/.keep' }]);
+    expect(tree.map((n) => n.name)).toEqual(['figs', 'main.tex']);
+    expect(tree[0]?.children).toEqual([]);
+  });
+
   it('puts folders first and nests files', () => {
     const tree = buildTree([{ path: 'main.tex' }, { path: 'chapters/intro.tex' }]);
     expect(tree.map((n) => n.name)).toEqual(['chapters', 'main.tex']);

@@ -3,6 +3,8 @@ import type { FastifyRequest } from 'fastify';
 import type { UploadPart } from '../application/project-files';
 
 export const UPLOAD_RATE_LIMIT = { rateLimit: { max: 30, timeWindow: '1 minute' } };
+/** Whole-file writes commit each time; the global limit would let one client write 300/min. */
+export const WRITE_RATE_LIMIT = { rateLimit: { max: 60, timeWindow: '1 minute' } };
 export const IMPORT_RATE_LIMIT = { rateLimit: { max: 5, timeWindow: '1 minute' } };
 
 /**

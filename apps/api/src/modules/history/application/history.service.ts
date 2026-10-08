@@ -1,4 +1,5 @@
 import { basename } from 'node:path/posix';
+import { APP_CONFIG, type AppConfig } from '@latex-studio/core';
 import {
   BadRequestException,
   ConflictException,
@@ -8,7 +9,7 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
-import { author, checkPath } from '../../projects/application/project-files';
+import { assertQuota, author, checkPath } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
 import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/project-storage';
@@ -26,6 +27,7 @@ export class HistoryService {
     @Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage,
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
+    @Inject(APP_CONFIG) private readonly config: Pick<AppConfig, 'PROJECT_QUOTA_MB'>,
   ) {}
 
   log(project: Project, limit = 50) {
@@ -146,6 +148,12 @@ export class HistoryService {
     const content = await this.fileAt(project, sha, path);
     return this.lock.run(project.id, async () => {
       const files = this.storage.open(project.id);
+      await assertQuota(
+        files,
+        this.config.PROJECT_QUOTA_MB * 1024 * 1024,
+        content.byteLength,
+        path,
+      );
       await files.write(path, content);
       const created = await files.repo.commitAll(
         `Restore ${path} from ${sha.slice(0, 7)}`,

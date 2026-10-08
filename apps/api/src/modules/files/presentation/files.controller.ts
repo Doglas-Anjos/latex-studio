@@ -21,7 +21,11 @@ import {
   CurrentProject,
   RequireProjectRole,
 } from '../../projects/presentation/guards/project-role.guard';
-import { UPLOAD_RATE_LIMIT, withParts } from '../../projects/presentation/multipart';
+import {
+  UPLOAD_RATE_LIMIT,
+  WRITE_RATE_LIMIT,
+  withParts,
+} from '../../projects/presentation/multipart';
 import type { User } from '../../users/domain/user';
 import { FilesService, type UploadedFile } from '../application/files.service';
 import { CONTENT_TYPES } from './content-types';
@@ -78,6 +82,7 @@ export class FilesController {
     return this.files.rename(project, user, dto.from, dto.to);
   }
 
+  @RouteConfig(WRITE_RATE_LIMIT)
   @Put('files/*')
   @RequireProjectRole('editor')
   @HttpCode(204)

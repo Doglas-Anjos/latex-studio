@@ -53,7 +53,7 @@ export class HistoryController {
   @RequireProjectRole('viewer')
   fileLog(
     @CurrentProject() project: Project,
-    @Query('path') path = '',
+    @Query('path') path: string = '',
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
   ) {
     return this.history.fileLog(project, path, Math.min(Math.max(limit, 1), 200));
@@ -62,7 +62,7 @@ export class HistoryController {
   @Get('blame')
   @RouteConfig({ rateLimit: { max: 30, timeWindow: '1 minute' } })
   @RequireProjectRole('viewer')
-  blame(@CurrentProject() project: Project, @Query('path') path = '') {
+  blame(@CurrentProject() project: Project, @Query('path') path: string = '') {
     return this.history.blame(project, path);
   }
 
@@ -73,7 +73,7 @@ export class HistoryController {
   async file(
     @CurrentProject() project: Project,
     @Query('sha') sha = '',
-    @Query('path') path = '',
+    @Query('path') path: string = '',
   ): Promise<StreamableFile> {
     const content = await this.history.fileAt(project, sha, path);
     const type = CONTENT_TYPES[extname(path).toLowerCase()];

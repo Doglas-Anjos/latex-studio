@@ -6,7 +6,13 @@ import {
   parseManifest,
   renderPackagesTex,
 } from '@latex-studio/latex-tools';
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  PayloadTooLargeException,
+} from '@nestjs/common';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import { author } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
@@ -19,6 +25,7 @@ import {
 import type { User } from '../../users/domain/user';
 
 const MANIFEST = 'latex-packages.json';
+const MAX_MANIFEST_BYTES = 256 * 1024;
 const TEX = 'latex-packages.tex';
 const MAX_SCAN_BYTES = 1024 * 1024;
 
@@ -140,6 +147,11 @@ export class PackagesService {
 
   private async read(files: ProjectFiles): Promise<PackageManifest> {
     if (!(await files.isFile(MANIFEST))) return [];
-    return parseManifest((await files.repo.readFile(MANIFEST)).toString());
+    // An editor can upload any file under this name; parsing 50 MB of JSON blocks the server.
+    const head = await files.readHead(MANIFEST, MAX_MANIFEST_BYTES + 1);
+    if (head.length > MAX_MANIFEST_BYTES) {
+      throw new PayloadTooLargeException(`${MANIFEST} is larger than 256 KB`);
+    }
+    return parseManifest(head.toString());
   }
 }

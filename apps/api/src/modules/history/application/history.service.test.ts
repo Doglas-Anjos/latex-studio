@@ -40,7 +40,7 @@ describe('HistoryService', () => {
       BUILDS_DIR: join(dir, 'builds'),
     } as AppConfig);
     sync = new FakeDocumentSync();
-    service = new HistoryService(storage, new ProjectLock(), sync);
+    service = new HistoryService(storage, new ProjectLock(), sync, { PROJECT_QUOTA_MB: 1 });
     await storage.init(project.id);
   });
 
@@ -187,7 +187,7 @@ describe('HistoryService.commitFile against the real collaborative stack', () =>
     );
     hocuspocus = createHocuspocus(collab);
     const sync = new HocuspocusDocumentSync(hocuspocus, docsRepo, storage, projects);
-    service = new HistoryService(storage, lock, sync);
+    service = new HistoryService(storage, lock, sync, { PROJECT_QUOTA_MB: 1 });
   });
 
   afterEach(async () => {

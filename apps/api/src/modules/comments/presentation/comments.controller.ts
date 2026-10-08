@@ -31,7 +31,7 @@ export class CommentsController {
   @RequireProjectRole('viewer')
   list(
     @CurrentProject() project: Project,
-    @Query('path') path = '',
+    @Query('path') path: string = '',
     @Query('resolved') resolved?: string,
   ): Promise<Comment[]> {
     return this.comments.list(project, path, resolved !== 'false');
@@ -59,7 +59,7 @@ export class CommentsController {
   }
 
   @Delete(':id')
-  @RequireProjectRole('viewer')
+  @RequireProjectRole('reviewer')
   @HttpCode(204)
   remove(
     @CurrentProject() project: Project,
@@ -81,7 +81,7 @@ export class CommentsController {
   }
 
   @Delete(':id/replies/:replyId')
-  @RequireProjectRole('viewer')
+  @RequireProjectRole('reviewer')
   @HttpCode(204)
   removeReply(
     @CurrentProject() project: Project,

@@ -22,6 +22,7 @@ const BLAME_DIFF_BUDGET_MS = 1000;
 /** Commits + texts per `${head}:${path}`, the costly part that does not depend on the working tree. */
 const blameCache = new Map<string, Promise<{ oids: string[]; texts: string[] }>>();
 const baselineCache = new Map<string, Promise<unknown>>();
+const storedBytesCache = new Map<string, { bytes: number; at: number }>();
 const remember = <T>(cache: Map<string, Promise<T>>, key: string, make: () => Promise<T>) => {
   const hit = cache.get(key);
   if (hit) return hit;
@@ -69,6 +70,32 @@ export class GitRepository {
     const dest = join(this.dir, to);
     await fs.promises.mkdir(dirname(dest), { recursive: true });
     await fs.promises.rename(join(this.dir, from), dest);
+  }
+
+  /**
+   * Bytes of history on disk (`.git/objects`), counted toward the project quota: otherwise
+   * rewriting one file over and over grows the repository without bound.
+   * ponytail: walks the object store, cached 30 s per repository; writes inside that window can
+   * overshoot the quota by what the rate limits allow. Keep a running total if that matters.
+   */
+  async storedBytes(): Promise<number> {
+    const hit = storedBytesCache.get(this.dir);
+    if (hit && Date.now() - hit.at < 30_000) return hit.bytes;
+    const walk = async (dir: string): Promise<number> => {
+      const entries = await fs.promises.readdir(dir, { withFileTypes: true }).catch(() => []);
+      const sizes = await Promise.all(
+        entries.map(async (e) => {
+          const p = join(dir, e.name);
+          if (e.isDirectory()) return walk(p);
+          return e.isFile() ? (await fs.promises.stat(p)).size : 0;
+        }),
+      );
+      return sizes.reduce((a, b) => a + b, 0);
+    };
+    const bytes = await walk(join(this.dir, '.git', 'objects'));
+    if (storedBytesCache.size > 1000) storedBytesCache.clear();
+    storedBytesCache.set(this.dir, { bytes, at: Date.now() });
+    return bytes;
   }
 
   async listFiles(): Promise<Array<{ path: string; size: number }>> {

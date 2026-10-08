@@ -90,6 +90,9 @@ interface TreeNode {
   children?: TreeNode[]; // present only for folders
 }
 
+/** Kept in sync with FOLDER_KEEP in the API's files.service.ts. */
+const FOLDER_KEEP = '.keep';
+
 export function buildTree(files: ProjectFile[]): TreeNode[] {
   const root: TreeNode = { name: '', path: '', children: [] };
   for (const { path } of files) {
@@ -98,6 +101,8 @@ export function buildTree(files: ProjectFile[]): TreeNode[] {
     parts.forEach((name, i) => {
       const nodePath = parts.slice(0, i + 1).join('/');
       const isFile = i === parts.length - 1;
+      // The server's placeholder for an empty folder: the folder shows, the file does not.
+      if (isFile && name === FOLDER_KEEP) return;
       let node = dir.children?.find((c) => c.name === name && !c.children === isFile);
       if (!node) {
         node = isFile ? { name, path: nodePath } : { name, path: nodePath, children: [] };
