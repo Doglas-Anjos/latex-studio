@@ -3,6 +3,7 @@ import * as pdfjs from 'pdfjs-dist';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
 import { CompileServiceToken } from '../services/compile.service';
+import { DownloadButton } from './download-button';
 import { useBuilds } from './use-builds';
 import { useZoom } from './use-zoom';
 import { ZoomControls } from './zoom-controls';
@@ -15,7 +16,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 /** A loaded document plus page 1's size at scale 1, which sizes every placeholder. */
 type Doc = { pdf: PDFDocumentProxy; width: number; height: number };
 
-export function PdfViewer({ projectId }: { projectId: string }) {
+export function PdfViewer({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {
   const compile = useService(CompileServiceToken);
   const { data: builds } = useBuilds(projectId);
   // useBuilds lists only the newest builds: after a run of failures the last good one drops out
@@ -124,11 +125,14 @@ export function PdfViewer({ projectId }: { projectId: string }) {
 
   return (
     <div className="pdf-viewer">
-      {buildId && !error && (
-        <div className="zoom-bar">
+      {/* Always here so the PDF (and the project source) can be downloaded whenever this pane is
+          shown — even when the editor is collapsed. */}
+      <div className="pdf-bar">
+        <DownloadButton projectId={projectId} canEdit={canEdit} />
+        {buildId && !error && (
           <ZoomControls zoom={zoom} zoomIn={zoomIn} zoomOut={zoomOut} reset={reset} />
-        </div>
-      )}
+        )}
+      </div>
       <div ref={body} className="pdf-viewer-body">
         {!buildId && <p className="status-note">Compile o projeto para ver o PDF.</p>}
         {error && <p className="form-error">Não foi possível exibir o PDF.</p>}

@@ -41,10 +41,10 @@ export function DownloadButton({ projectId, canEdit }: { projectId: string; canE
   };
 
   return (
-    <div className="etb-download">
+    <div className="pdf-download">
       <button
         type="button"
-        className="etb-btn etb-download-main"
+        className="pdf-download-main"
         disabled={!pdfReady}
         title={pdfReady ? 'Baixar o PDF compilado' : 'Compile o projeto para baixar o PDF'}
         onClick={downloadPdf}
@@ -54,8 +54,8 @@ export function DownloadButton({ projectId, canEdit }: { projectId: string; canE
       </button>
       <Menu
         label={<span className="sr-only">Mais opções de download</span>}
-        triggerClassName="etb-btn etb-download-caret"
-        className="etb-download-menu"
+        triggerClassName="pdf-download-caret"
+        className="pdf-download-menu"
       >
         <button type="button" disabled={!pdfReady} onClick={downloadPdf}>
           <FileDown size={16} aria-hidden="true" /> PDF
@@ -78,7 +78,7 @@ export function DownloadButton({ projectId, canEdit }: { projectId: string; canE
             </button>
           ))}
       </Menu>
-      {exportAs.isPending && <span className="etb-download-busy">Exportando…</span>}
+      {exportAs.isPending && <span className="pdf-download-busy">Exportando…</span>}
     </div>
   );
 }

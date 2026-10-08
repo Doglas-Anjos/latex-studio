@@ -4339,3 +4339,82 @@ button.log-row:hover {
   white-space: pre;
   tab-size: 2;
 }
+
+/* PDF pane toolbar: download split button on the left, zoom on the right (always shown so the PDF
+   and source can be downloaded even when the editor is collapsed). */
+.pdf-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.pdf-download {
+  display: inline-flex;
+  align-items: stretch;
+}
+.pdf-download-main,
+.pdf-download-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2rem;
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.pdf-download-main {
+  gap: 0.35rem;
+  padding: 0 0.7rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 6px 0 0 6px;
+}
+.pdf-download-caret {
+  min-width: 1.7rem;
+  padding: 0;
+  border-left: 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--muted);
+  list-style: none;
+}
+.pdf-download-main:hover:not(:disabled),
+.pdf-download-caret:hover {
+  background: var(--paper);
+}
+.pdf-download-main:disabled {
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.pdf-download-main:focus-visible,
+.pdf-download-caret:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.pdf-download-menu {
+  display: inline-flex;
+}
+.pdf-download-menu > summary::after {
+  margin-left: 0;
+}
+.pdf-download-menu .menu-list {
+  left: auto;
+  right: 0;
+  min-width: 14rem;
+}
+.pdf-download-menu .menu-list button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+.pdf-download-busy {
+  font-size: 0.75rem;
+  color: var(--muted);
+}

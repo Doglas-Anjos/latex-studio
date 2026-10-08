@@ -4,6 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
 import { type Build, type CompileService, CompileServiceToken } from '../services/compile.service';
+import { type ProjectService, ProjectServiceToken } from '../services/project.service';
+import { type ToolsService, ToolsServiceToken } from '../services/tools.service';
 import { renderWithApp } from '../test/render';
 import { PdfViewer } from './pdf-viewer';
 
@@ -49,14 +51,21 @@ const fake = (): CompileService => ({
   cancel: vi.fn(),
 });
 
+// PdfViewer now hosts the download split button, which resolves these services on mount.
+const renderViewer = (service: CompileService) =>
+  renderWithApp(
+    <PdfViewer projectId="p1" canEdit={false} />,
+    new Container()
+      .register(CompileServiceToken, service)
+      .register(ProjectServiceToken, {} as unknown as ProjectService)
+      .register(ToolsServiceToken, {} as unknown as ToolsService),
+  );
+
 describe('PdfViewer zoom', () => {
   afterEach(() => cleanup());
 
   it('starts at 100% and shows ctrl+wheel/button zoom, clamped and resettable', async () => {
-    renderWithApp(
-      <PdfViewer projectId="p1" />,
-      new Container().register(CompileServiceToken, fake()),
-    );
+    renderViewer(fake());
 
     const group = await screen.findByRole('group', { name: 'Zoom' });
     expect(within(group).getByText('100%')).toBeTruthy();
@@ -102,10 +111,7 @@ describe('PdfViewer pages', () => {
         disconnect() {}
       },
     );
-    renderWithApp(
-      <PdfViewer projectId="p1" />,
-      new Container().register(CompileServiceToken, fake()),
-    );
+    renderViewer(fake());
     // The observer is created in a passive effect after the pages render; under load the pages
     // can be in the DOM before it exists, so wait for it to watch them before firing entries.
     await waitFor(() => expect(observed).toBeGreaterThanOrEqual(2));
@@ -128,10 +134,7 @@ describe('PdfViewer pages', () => {
       .fn()
       .mockResolvedValueOnce([{ ...build, id: 'b2', status: 'running' }, build])
       .mockResolvedValue(['f1', 'f2', 'f3', 'f4', 'f5'].map(failed));
-    renderWithApp(
-      <PdfViewer projectId="p1" />,
-      new Container().register(CompileServiceToken, service),
-    );
+    renderViewer(service);
     await waitFor(() => expect(document.querySelectorAll('.pdf-page')).toHaveLength(2));
     await waitFor(() => expect(service.builds).toHaveBeenCalledTimes(2), { timeout: 3000 });
     expect(screen.queryByText('Compile o projeto para ver o PDF.')).toBeNull();

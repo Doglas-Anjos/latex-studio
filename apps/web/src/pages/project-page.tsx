@@ -276,7 +276,7 @@ export function ProjectPage() {
                       </button>
                     </div>
                   )}
-                  <PdfViewer projectId={project.id} />
+                  <PdfViewer projectId={project.id} canEdit={canEdit} />
                 </>
               ))}
           </div>

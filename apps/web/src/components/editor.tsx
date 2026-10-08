@@ -40,7 +40,6 @@ import {
 } from './collab-sessions';
 import { commentGutter } from './comment-gutter';
 import { CommentMenu } from './comment-menu';
-import { DownloadButton } from './download-button';
 import { blameGutter, blameVisible, setBlame } from './editor-blame';
 import { changeGutter, DIFF_LIMITS, setChangeBase } from './editor-changes';
 import {
@@ -682,14 +681,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
 
   return (
     <div className="editor" ref={editorBoxRef}>
-      <EditorToolbar
-        viewRef={viewRef}
-        readOnly={readOnly}
-        isTex={path.endsWith('.tex')}
-        end={
-          <DownloadButton projectId={projectId} canEdit={role === 'owner' || role === 'editor'} />
-        }
-      >
+      <EditorToolbar viewRef={viewRef} readOnly={readOnly} isTex={path.endsWith('.tex')}>
         {canComment && (
           <Menu
             label={
