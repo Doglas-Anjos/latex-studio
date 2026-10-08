@@ -66,6 +66,9 @@ interface WorkspaceState {
   setWordCount: (n: number | null) => void;
   editorCommands: EditorCommands | null;
   setEditorCommands: (c: EditorCommands | null) => void;
+  /** Helper open over the editor; also opened from the "Editar tabela" button in the text. */
+  editorDialog: 'formula' | 'table' | null;
+  setEditorDialog: (d: 'formula' | 'table' | null) => void;
   peers: Peer[];
   setPeers: (p: Peer[]) => void;
   blameOn: boolean;
@@ -118,6 +121,7 @@ const initial = {
   connection: 'connecting' as Connection,
   wordCount: null,
   editorCommands: null,
+  editorDialog: null,
   peers: [] as Peer[],
   blameOn: false,
   activePath: null,
@@ -166,6 +170,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setConnection: (connection) => set({ connection }),
   setWordCount: (wordCount) => set({ wordCount }),
   setEditorCommands: (editorCommands) => set({ editorCommands }),
+  setEditorDialog: (editorDialog) => set({ editorDialog }),
   setPeers: (peers) =>
     set((s) =>
       s.peers.length === peers.length &&

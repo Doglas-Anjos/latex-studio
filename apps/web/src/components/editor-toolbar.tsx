@@ -17,17 +17,10 @@ import {
   Table,
   Undo2,
 } from 'lucide-react';
-import {
-  type ReactNode,
-  type RefObject,
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from 'react';
+import { type ReactNode, type RefObject, useCallback, useEffect, useId, useRef } from 'react';
 import { yUndoManagerKeymap } from 'y-codemirror.next';
 import { useSettingsStore } from '../settings-store';
+import { useWorkspaceStore } from '../workspace-store';
 import { FormulaDialog, MathPalette } from './formula-dialog';
 import {
   insertList,
@@ -94,8 +87,11 @@ export function EditorToolbar({
 }) {
   const mode = useSettingsStore((s) => s.editorMode);
   const setSettings = useSettingsStore((s) => s.set);
-  const [dialog, setDialog] = useState<'formula' | 'table' | null>(null);
-  const closeDialog = useCallback(() => setDialog(null), []);
+  const dialog = useWorkspaceStore((s) => s.editorDialog);
+  const setDialog = useWorkspaceStore((s) => s.setEditorDialog);
+  const closeDialog = useCallback(() => setDialog(null), [setDialog]);
+  // The state lives in the store: a helper left open must not reopen over the next file.
+  useEffect(() => closeDialog, [closeDialog]);
   const run = (cmd: Command | undefined) => {
     const view = viewRef.current;
     if (!view || !cmd) return;

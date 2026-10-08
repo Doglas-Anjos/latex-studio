@@ -53,6 +53,7 @@ import {
   setComposerTarget,
 } from './editor-comments';
 import { referenceCompletions, referenceExtensions, setReferenceIndex } from './editor-references';
+import { tableEditButtons } from './editor-table-edit';
 import { editorTheme, latexHighlight } from './editor-theme';
 import { EditorToolbar } from './editor-toolbar';
 import { visualMode } from './editor-visual';
@@ -179,12 +180,18 @@ function setPresence(
   });
 }
 
-function revealLine(view: EditorView) {
-  const { pendingLine, clearPendingLine } = useWorkspaceStore.getState();
-  if (pendingLine === null) return;
-  // A just-opened file (cross-file jump) reveals before Yjs fills it; wait for the target line
-  // to exist, then the 'synced' handler calls this again. Otherwise it clamps to line 1.
-  if (pendingLine > view.state.doc.lines && view.state.doc.length === 0) return;
+function revealLine(view: EditorView, path: string) {
+  const { pendingLine, activePath, clearPendingLine } = useWorkspaceStore.getState();
+  if (pendingLine !== null)
+    console.log(
+      `[revealLine] path=${path} activePath=${activePath} pendingLine=${pendingLine} lines=${view.state.doc.lines}`,
+    );
+  // Only the jump's target file reveals: activePath is set to it, so the editor the jump came from
+  // never consumes pendingLine, and a stale editor can't steal it.
+  if (pendingLine === null || activePath !== path) return;
+  // A just-opened file fills its doc from Yjs after mount; wait until the target line exists. The
+  // retry on docChanged (and 'synced') calls this again once yCollab flushes the content.
+  if (pendingLine > view.state.doc.lines) return;
   const line = view.state.doc.line(Math.min(Math.max(pendingLine, 1), view.state.doc.lines));
   view.dispatch({
     selection: { anchor: line.from },
@@ -471,6 +478,9 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
                 ]),
               )
             : [],
+          isTex && !readOnly
+            ? tableEditButtons(() => useWorkspaceStore.getState().setEditorDialog('table'))
+            : [],
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
           blameGutter(),
@@ -481,6 +491,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
               setHasSelection(sel.from !== sel.to);
             }
             if (!u.docChanged) return;
+            // A pending cross-file jump reveals once Yjs has flushed enough lines into the doc.
+            revealLine(u.view, path);
             if (u.transactions.some(isLocalEdit)) useWorkspaceStore.getState().bumpDocVersion();
             clearTimeout(wordTimer);
             wordTimer = setTimeout(
@@ -542,7 +554,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       }
     };
     // A "go to line" request may arrive before or after the first sync.
-    const onSynced = () => revealLine(view);
+    const onSynced = () => revealLine(view, path);
     provider.on('synced', onSynced);
     const unsubWrap = useSettingsStore.subscribe((s, prev) => {
       if (s.lineWrapping !== prev.lineWrapping)
@@ -582,10 +594,10 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     };
     provider.on('close', onClose);
     const unsubscribe = useWorkspaceStore.subscribe((s, prev) => {
-      if (s.pendingLine !== null && s.pendingLine !== prev.pendingLine) revealLine(view);
+      if (s.pendingLine !== null && s.pendingLine !== prev.pendingLine) revealLine(view, path);
       if (s.commentJump && s.commentJump !== prev.commentJump) revealComment(s.commentJump.id);
     });
-    revealLine(view);
+    revealLine(view, path);
     return () => {
       closed = true;
       unsubscribe();
