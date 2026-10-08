@@ -213,13 +213,7 @@ function InviteDialog({
       pending={invite.isPending}
       footer={
         <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={invite.isPending}
-          >
-            Cancelar
-          </Button>
+          <Dialog.Cancel />
           <Button
             variant="primary"
             type="submit"
@@ -304,13 +298,7 @@ function RemoveMemberDialog({
       pending={remove.isPending}
       footer={
         <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={remove.isPending}
-          >
-            Cancelar
-          </Button>
+          <Dialog.Cancel />
           <Button variant="danger" onClick={() => remove.mutate()} disabled={remove.isPending}>
             {remove.isPending ? 'Removendo…' : 'Remover'}
           </Button>

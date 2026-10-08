@@ -456,13 +456,7 @@ export function HistoryPanel({
         pending={restore.isPending}
         footer={
           <div className="actions">
-            <Button
-              variant="ghost"
-              onClick={() => restoreDialog.current?.close()}
-              disabled={restore.isPending}
-            >
-              Cancelar
-            </Button>
+            <Dialog.Cancel />
             <Button
               variant="danger"
               onClick={() => restoreTarget && restore.mutate(restoreTarget)}

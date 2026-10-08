@@ -312,13 +312,7 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
         pending={discard.isPending}
         footer={
           <div className="actions">
-            <Button
-              variant="ghost"
-              onClick={() => discardDialog.current?.close()}
-              disabled={discard.isPending}
-            >
-              Cancelar
-            </Button>
+            <Dialog.Cancel />
             <Button
               variant="danger"
               onClick={() => discardTarget && discard.mutate(discardTarget)}

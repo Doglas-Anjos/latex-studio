@@ -45,20 +45,8 @@ export function CreateDialog({
       pending={create.isPending}
       footer={
         <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={create.isPending}
-          >
-            Cancelar
-          </Button>
-          <Button
-            variant="primary"
-            type="submit"
-            form={formId}
-            disabled={create.isPending}
-            loading={create.isPending}
-          >
+          <Dialog.Cancel />
+          <Button variant="primary" type="submit" form={formId} loading={create.isPending}>
             {create.isPending ? 'Criando…' : 'Criar'}
           </Button>
         </div>
@@ -133,13 +121,7 @@ export function ImportDialog({
       pending={imported.isPending}
       footer={
         <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={imported.isPending}
-          >
-            Cancelar
-          </Button>
+          <Dialog.Cancel />
           <Button
             variant="primary"
             type="submit"
@@ -245,20 +227,8 @@ export function CopyDialog({
       pending={copy.isPending}
       footer={
         <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={copy.isPending}
-          >
-            Cancelar
-          </Button>
-          <Button
-            variant="primary"
-            type="submit"
-            form={formId}
-            disabled={copy.isPending}
-            loading={copy.isPending}
-          >
+          <Dialog.Cancel />
+          <Button variant="primary" type="submit" form={formId} loading={copy.isPending}>
             {copy.isPending ? 'Copiando…' : 'Copiar'}
           </Button>
         </div>
@@ -302,13 +272,7 @@ export function RemoveDialog({
       pending={remove.isPending}
       footer={
         <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={remove.isPending}
-          >
-            Cancelar
-          </Button>
+          <Dialog.Cancel />
           <Button variant="danger" onClick={() => remove.mutate()} disabled={remove.isPending}>
             {remove.isPending ? 'Excluindo…' : 'Excluir'}
           </Button>

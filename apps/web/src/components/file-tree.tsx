@@ -507,13 +507,7 @@ function UploadDialog({
           </div>
         ) : (
           <div className="actions">
-            <Button
-              variant="ghost"
-              onClick={() => dialogRef.current?.close()}
-              disabled={mutation.isPending}
-            >
-              Cancelar
-            </Button>
+            <Dialog.Cancel />
             <Button
               variant="primary"
               type="submit"
@@ -750,13 +744,7 @@ function PathDialog({
       pending={mutation.isPending}
       footer={
         <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={mutation.isPending}
-          >
-            Cancelar
-          </Button>
+          <Dialog.Cancel />
           <Button
             variant="primary"
             type="submit"
@@ -867,13 +855,7 @@ function RenameDialog({
       pending={mutation.isPending}
       footer={
         <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={mutation.isPending}
-          >
-            Cancelar
-          </Button>
+          <Dialog.Cancel />
           <Button variant="primary" type="submit" form={formId} disabled={mutation.isPending}>
             {mutation.isPending ? 'Salvando…' : 'Renomear'}
           </Button>
@@ -934,13 +916,7 @@ function DeleteDialog({
       pending={mutation.isPending}
       footer={
         <div className="actions">
-          <Button
-            variant="ghost"
-            onClick={() => dialogRef.current?.close()}
-            disabled={mutation.isPending}
-          >
-            Cancelar
-          </Button>
+          <Dialog.Cancel />
           <Button
             variant="danger"
             onClick={() => !mutation.isPending && mutation.mutate()}
