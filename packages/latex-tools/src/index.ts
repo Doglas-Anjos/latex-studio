@@ -1,6 +1,7 @@
 export * from './engine';
 export * from './log-parser';
 export * from './main-file';
+export * from './document-outline';
 export * from './package-manifest';
 export * from './reference-index';
 export * from './scrub-paths';
