@@ -200,7 +200,9 @@ export function DiffTab(props: {
   const [width, setWidth] = useState<number | null>(null);
   const splitTooNarrow = width !== null && width < SPLIT_MIN_WIDTH;
   // The user's explicit pick wins, except a split with no room for two columns.
-  const [modeOverride, setModeOverride] = useState<ViewMode | null>(null);
+  // Persisted so the chosen layout survives tab switches and reloads.
+  const diffView = useSettingsStore((s) => s.diffView);
+  const modeOverride: ViewMode | null = diffView === 'auto' ? null : diffView;
   const mode: ViewMode =
     modeOverride === 'split' && splitTooNarrow
       ? 'unified'
@@ -216,7 +218,7 @@ export function DiffTab(props: {
   // the timer when the same kind repeats.
   const [notice, setNotice] = useState<{ kind: 'revert' | 'pdf'; n: number } | null>(null);
   const chooseMode = (m: ViewMode) => {
-    setModeOverride(m);
+    setSettings({ diffView: m });
     if (m === 'split' && splitTooNarrow && pdfWidth > 0) {
       pdfBefore.current = pdfWidth;
       setSettings({ pdfWidth: 0 });
@@ -374,8 +376,15 @@ export function DiffTab(props: {
         ...(editable && { revertControls: 'a-to-b', renderRevertControl: splitControl }),
       });
       const view = merge;
+      // MergeView rebuilds a revert button in its own async measure phase (e.g. when a chunk
+      // reappears after Ctrl+Z), after our docChanged listener already ran. Re-stretch then, or the
+      // fresh button keeps the library's small default size instead of spanning the chunk.
+      const strip = merge.dom.querySelector('.cm-merge-revert');
+      const stripObserver = strip ? new MutationObserver(stretchReverts) : null;
+      stripObserver?.observe(strip as Element, { childList: true });
       return () => {
         cancelAnimationFrame(frame);
+        stripObserver?.disconnect();
         view.destroy();
       };
     }
@@ -509,7 +518,7 @@ export function DiffTab(props: {
                 className="diff-toast-action"
                 onClick={() => {
                   setSettings({ pdfWidth: pdfBefore.current || 480 });
-                  setModeOverride('unified');
+                  setSettings({ diffView: 'unified' });
                   setNotice(null);
                 }}
               >

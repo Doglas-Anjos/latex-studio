@@ -44,6 +44,8 @@ export const SYNTAX_TOKENS: { token: SyntaxToken; label: string }[] = [
 
 export type ThemeSetting = 'light' | 'dark' | 'system';
 export type SidebarView = 'files' | 'changes' | 'packages' | 'comments' | 'history' | 'members';
+/** Diff layout; 'auto' lets the available width pick split vs unified. */
+export type DiffView = 'split' | 'unified' | 'words' | 'auto';
 
 export interface Settings {
   theme: ThemeSetting;
@@ -55,6 +57,8 @@ export interface Settings {
   pdfWidth: number;
   panelHeight: number;
   sidebarView: SidebarView;
+  /** Remembered diff layout across tabs and reloads. */
+  diffView: DiffView;
   panelOpen: boolean;
   /** Compile a few seconds after the document stops changing. */
   autoCompile: boolean;
@@ -79,6 +83,7 @@ const defaults: Settings = {
   pdfWidth: 480,
   panelHeight: 220,
   sidebarView: 'files',
+  diffView: 'auto',
   panelOpen: false,
   autoCompile: false,
   draftMode: false,
