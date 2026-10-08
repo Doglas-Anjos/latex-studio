@@ -14,6 +14,7 @@ import { Link, useParams } from 'react-router';
 import { Brand } from '../components/brand';
 import { Button } from '../components/button';
 import { holdSessions } from '../components/collab-sessions';
+import { DownloadButton } from '../components/download-button';
 import { Editor } from '../components/editor';
 import { InviteDialog, openInvite } from '../components/members-panel';
 import { PdfViewer } from '../components/pdf-viewer';
@@ -172,6 +173,8 @@ export function ProjectPage() {
           </fieldset>
         )}
         <div className="wsh-end">
+          <DownloadButton projectId={project.id} canEdit={canEdit} />
+          <span className="wsh-divider" aria-hidden="true" />
           {project.role === 'owner' && (
             <Button
               variant="ghost"
@@ -276,7 +279,7 @@ export function ProjectPage() {
                       </button>
                     </div>
                   )}
-                  <PdfViewer projectId={project.id} canEdit={canEdit} />
+                  <PdfViewer projectId={project.id} />
                 </>
               ))}
           </div>

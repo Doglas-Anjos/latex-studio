@@ -15,10 +15,10 @@ const EXPORTS: [ExportFormat, string][] = [
 ];
 
 /**
- * Split button by the editor's mode toggle: the main action downloads the compiled PDF (the
- * default), and the caret offers the project source and the Word/Markdown/HTML exports. Shown to
- * everyone (viewers can download the PDF and source); only editors see the exports, which run a
- * worker job.
+ * Split button in the workspace header, next to the Código/PDF switch so it reaches whether the
+ * code or the PDF is on screen: the main action downloads the compiled PDF (the default), and the
+ * caret offers the project source and the Word/Markdown/HTML exports. Shown to everyone (viewers
+ * can download the PDF and source); only editors see the exports, which run a worker job.
  */
 export function DownloadButton({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {
   const compile = useService(CompileServiceToken);

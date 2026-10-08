@@ -4340,18 +4340,19 @@ button.log-row:hover {
   tab-size: 2;
 }
 
-/* PDF pane toolbar: download split button on the left, zoom on the right (always shown so the PDF
-   and source can be downloaded even when the editor is collapsed). */
+/* PDF pane toolbar: zoom, right-aligned (shown only once a build is on screen). */
 .pdf-bar {
   flex: none;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 0.5rem;
   padding: 0.3rem 0.4rem;
   background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
+/* Download split button: it lives in the dark workspace header (next to the Código/PDF switch), so
+   it always reaches, whether the code or the PDF is on screen. Styled with the chrome tokens. */
 .pdf-download {
   display: inline-flex;
   align-items: stretch;
@@ -4362,9 +4363,9 @@ button.log-row:hover {
   align-items: center;
   justify-content: center;
   height: 2rem;
-  border: 1px solid var(--line);
+  border: 1px solid var(--chrome-line);
   background: none;
-  color: var(--ink);
+  color: var(--chrome-ink);
   font: inherit;
   cursor: pointer;
 }
@@ -4380,15 +4381,15 @@ button.log-row:hover {
   padding: 0;
   border-left: 0;
   border-radius: 0 6px 6px 0;
-  color: var(--muted);
+  color: var(--chrome-muted);
   list-style: none;
 }
 .pdf-download-main:hover:not(:disabled),
 .pdf-download-caret:hover {
-  background: var(--paper);
+  background: var(--chrome-line);
 }
 .pdf-download-main:disabled {
-  color: var(--muted);
+  color: var(--chrome-muted);
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -4416,5 +4417,5 @@ button.log-row:hover {
 }
 .pdf-download-busy {
   font-size: 0.75rem;
-  color: var(--muted);
+  color: var(--chrome-muted);
 }

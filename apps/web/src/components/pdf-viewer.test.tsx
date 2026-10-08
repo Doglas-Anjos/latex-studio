@@ -4,8 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
 import { type Build, type CompileService, CompileServiceToken } from '../services/compile.service';
-import { type ProjectService, ProjectServiceToken } from '../services/project.service';
-import { type ToolsService, ToolsServiceToken } from '../services/tools.service';
 import { renderWithApp } from '../test/render';
 import { PdfViewer } from './pdf-viewer';
 
@@ -51,14 +49,10 @@ const fake = (): CompileService => ({
   cancel: vi.fn(),
 });
 
-// PdfViewer now hosts the download split button, which resolves these services on mount.
 const renderViewer = (service: CompileService) =>
   renderWithApp(
-    <PdfViewer projectId="p1" canEdit={false} />,
-    new Container()
-      .register(CompileServiceToken, service)
-      .register(ProjectServiceToken, {} as unknown as ProjectService)
-      .register(ToolsServiceToken, {} as unknown as ToolsService),
+    <PdfViewer projectId="p1" />,
+    new Container().register(CompileServiceToken, service),
   );
 
 describe('PdfViewer zoom', () => {
