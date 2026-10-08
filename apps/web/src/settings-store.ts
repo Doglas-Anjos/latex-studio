@@ -146,7 +146,13 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'latex-studio.settings',
-      version: 1,
+      version: 2,
+      // v1 persisted stopOnFirstError on. That was stricter than Overleaf, and before the compiler
+      // got latexmk -f, "off" never actually produced a PDF — so no stored `true` is a real choice.
+      // Flip existing browsers to the new default so compile-through works for everyone, not only
+      // fresh installs.
+      migrate: (persisted) =>
+        ({ ...(persisted as Settings), stopOnFirstError: false }) as SettingsState,
       storage: createJSONStorage(() => storage),
     },
   ),

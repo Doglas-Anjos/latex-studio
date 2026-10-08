@@ -27,6 +27,14 @@ describe('settings store', () => {
     expect(useSettingsStore.getState().theme).toBe('dark');
   });
 
+  it('migrates a v1 blob to stopOnFirstError off, keeping other fields', async () => {
+    const v1 = { state: { theme: 'dark', stopOnFirstError: true }, version: 1 };
+    localStorage.setItem('latex-studio.settings', JSON.stringify(v1));
+    await useSettingsStore.persist.rehydrate();
+    expect(useSettingsStore.getState().stopOnFirstError).toBe(false);
+    expect(useSettingsStore.getState().theme).toBe('dark');
+  });
+
   it('reset restores defaults', () => {
     useSettingsStore.getState().set({ theme: 'dark', fontSize: 20, syntax: { math: '#fff' } });
     useSettingsStore.getState().reset();
