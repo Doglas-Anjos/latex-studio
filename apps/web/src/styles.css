@@ -1302,12 +1302,18 @@ kbd {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.45rem 0.1rem;
+  padding: 0.45rem 0.4rem;
+  border-radius: 6px;
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--muted);
   cursor: pointer;
   list-style: none;
+  transition: background-color 0.12s ease;
+}
+.nav-section > summary:hover {
+  background: var(--paper);
+  color: var(--ink);
 }
 .nav-section > summary::-webkit-details-marker {
   display: none;
@@ -1355,14 +1361,28 @@ kbd {
   font-size: 0.8rem;
   text-align: left;
   cursor: pointer;
+  transition:
+    background-color 0.12s ease,
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    transform 0.06s ease;
 }
 .nav-item:hover {
-  background: var(--paper);
-  border-color: var(--line);
+  background: color-mix(in srgb, var(--primary) 8%, var(--paper));
+  border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
+}
+.nav-item:active {
+  transform: scale(0.98);
+  background: color-mix(in srgb, var(--primary) 16%, var(--paper));
 }
 .nav-item:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nav-item {
+    transition: none;
+  }
 }
 .nav-item-text {
   overflow: hidden;
@@ -1392,21 +1412,57 @@ kbd {
   align-items: stretch;
   gap: 0.3rem;
 }
+.nav-ico {
+  flex: none;
+  color: var(--muted);
+}
+/* Table render, shown large in the preview dialog. */
 .nav-table-preview {
   overflow: auto;
-  max-height: 8rem;
+  max-width: 100%;
+  max-height: 60vh;
   border: 1px solid var(--line);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--surface);
 }
 .nav-table-preview table {
   border-collapse: collapse;
-  font-size: 0.72rem;
+  font-size: 0.85rem;
 }
 .nav-table-preview td {
-  padding: 0.15rem 0.3rem;
+  padding: 0.3rem 0.5rem;
   border: 1px solid var(--line);
   white-space: nowrap;
+}
+/* Preview dialog body: a big image, formula or table, with the caption under it. */
+.nav-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  min-width: 0;
+}
+.nav-preview-img {
+  max-width: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+}
+.nav-preview-caption {
+  margin: 0;
+  max-width: 44rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+.nav-eq-full {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  padding: 1rem 0.5rem;
+  font-size: 1.15rem;
 }
 /* KaTeX can paint outside its box (negative kern/raisebox); clip vertically, scroll wide ones. */
 .nav-eq {

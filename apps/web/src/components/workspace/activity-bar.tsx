@@ -16,20 +16,20 @@ import { AppearanceDialog } from '../appearance-dialog';
 
 export const viewLabels: Record<SidebarView, string> = {
   files: 'Arquivos',
-  navigator: 'Navegador',
   changes: 'Mudanças',
   packages: 'Bibliotecas',
   comments: 'Comentários',
   history: 'Histórico',
+  navigator: 'Navegador',
   members: 'Membros',
 };
 export const sidebarViewIcons: Record<SidebarView, LucideIcon> = {
   files: Files,
-  navigator: ListTree,
   changes: GitCompare,
   packages: Package,
   comments: MessageSquare,
   history: History,
+  navigator: ListTree,
   members: Users,
 };
 

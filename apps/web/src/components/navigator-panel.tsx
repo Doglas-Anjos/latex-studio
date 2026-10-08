@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { Image as ImageIcon, Sigma, Table2 } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
 import { FileServiceToken } from '../services/file.service';
@@ -10,6 +11,8 @@ import {
   type TableItem,
 } from '../services/reference.service';
 import { useWorkspaceStore } from '../workspace-store';
+import { Button } from './button';
+import { Dialog } from './dialog';
 import { inputPaths } from './editor-helpers';
 import { renderMath } from './katex';
 import { type Align, coveredBy, parseLatex, type TableModel } from './table-latex';
@@ -22,10 +25,16 @@ const ALIGN: Record<Align, 'left' | 'center' | 'right'> = {
 
 const jump = (path: string, line: number) => useWorkspaceStore.getState().goToLine(path, line);
 
-/** The project's figures, tables, equations and acronyms, each jumping to source, with a preview. */
+type Preview =
+  | { kind: 'figure'; item: FigureItem }
+  | { kind: 'table'; item: TableItem }
+  | { kind: 'equation'; item: EquationItem };
+
+/** The project's figures, tables, equations and acronyms: a rendered preview on click, jump to source. */
 export function NavigatorPanel({ projectId }: { projectId: string }) {
   const refs = useService(ReferenceServiceToken);
   const files = useService(FileServiceToken);
+  const [preview, setPreview] = useState<Preview | null>(null);
   const outline = useQuery({
     queryKey: ['references', projectId, 'outline'],
     queryFn: () => refs.outline(projectId),
@@ -46,18 +55,32 @@ export function NavigatorPanel({ projectId }: { projectId: string }) {
     <div className="navigator">
       <Section title="Figuras" count={figures.length}>
         {figures.map((f) => (
-          <FigureRow key={`${f.path}:${f.line}`} item={f} projectId={projectId} fileSet={fileSet} />
+          <FigureRow
+            key={`${f.path}:${f.line}`}
+            item={f}
+            projectId={projectId}
+            fileSet={fileSet}
+            onOpen={() => setPreview({ kind: 'figure', item: f })}
+          />
         ))}
       </Section>
       <Section title="Tabelas" count={tables.length}>
         {tables.map((t) => (
-          <TableRow key={`${t.path}:${t.line}`} item={t} />
+          <TableRow
+            key={`${t.path}:${t.line}`}
+            item={t}
+            onOpen={() => setPreview({ kind: 'table', item: t })}
+          />
         ))}
       </Section>
       {/* Heavy lists (KaTeX, long) start collapsed so opening the panel stays snappy. */}
       <Section title="Equações" count={equations.length} defaultOpen={false}>
         {equations.map((e) => (
-          <EquationRow key={`${e.path}:${e.line}`} item={e} />
+          <EquationRow
+            key={`${e.path}:${e.line}`}
+            item={e}
+            onOpen={() => setPreview({ kind: 'equation', item: e })}
+          />
         ))}
       </Section>
       <Section title="Siglas" count={acronyms.length} defaultOpen={false}>
@@ -65,6 +88,12 @@ export function NavigatorPanel({ projectId }: { projectId: string }) {
           <AcronymRow key={`${a.path}:${a.key}`} item={a} />
         ))}
       </Section>
+      <PreviewDialog
+        preview={preview}
+        projectId={projectId}
+        fileSet={fileSet}
+        onClose={() => setPreview(null)}
+      />
     </div>
   );
 }
@@ -115,20 +144,18 @@ function FigureRow({
   item,
   projectId,
   fileSet,
+  onOpen,
 }: {
   item: FigureItem;
   projectId: string;
   fileSet: Set<string>;
+  onOpen: () => void;
 }) {
   const src = resolveImage(item.image, fileSet);
   return (
-    <button
-      type="button"
-      className="nav-item nav-figure"
-      onClick={() => jump(item.path, item.line)}
-    >
+    <button type="button" className="nav-item nav-figure" onClick={onOpen}>
       {src ? (
-        <Thumb projectId={projectId} path={src} />
+        <BlobImage projectId={projectId} path={src} className="nav-thumb" />
       ) : (
         <div className="nav-thumb nav-thumb-empty" />
       )}
@@ -137,7 +164,15 @@ function FigureRow({
   );
 }
 
-function Thumb({ projectId, path }: { projectId: string; path: string }) {
+function BlobImage({
+  projectId,
+  path,
+  className,
+}: {
+  projectId: string;
+  path: string;
+  className: string;
+}) {
   const files = useService(FileServiceToken);
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
@@ -157,33 +192,25 @@ function Thumb({ projectId, path }: { projectId: string; path: string }) {
     };
   }, [files, projectId, path]);
   return url ? (
-    <img className="nav-thumb" src={url} alt="" />
+    <img className={className} src={url} alt="" />
   ) : (
-    <div className="nav-thumb nav-thumb-empty" />
+    <div className={`${className} nav-thumb-empty`} />
   );
 }
 
-function TableRow({ item }: { item: TableItem }) {
-  const parsed = useMemo(() => {
-    try {
-      return item.source ? parseLatex(item.source) : null;
-    } catch {
-      return null;
-    }
-  }, [item.source]);
+function TableRow({ item, onOpen }: { item: TableItem; onOpen: () => void }) {
   return (
-    <button
-      type="button"
-      className="nav-item nav-table-item"
-      onClick={() => jump(item.path, item.line)}
-    >
+    <button type="button" className="nav-item" onClick={onOpen}>
+      <Table2 size={15} aria-hidden="true" className="nav-ico" />
       <span className="nav-item-text">{item.caption || item.label || 'Tabela'}</span>
-      {parsed && <TablePreview table={parsed.table} />}
     </button>
   );
 }
 
-function TablePreview({ table }: { table: TableModel }) {
+/** Unescape the common LaTeX specials for display (stays plain text, never HTML). */
+const cleanCell = (text: string) => text.replace(/\\([%&_#${}])/g, '$1');
+
+function TableView({ table }: { table: TableModel }) {
   const cov = coveredBy(table);
   return (
     <div className="nav-table-preview">
@@ -208,7 +235,7 @@ function TablePreview({ table }: { table: TableModel }) {
                       ...(cell.bg ? { background: `#${cell.bg}` } : {}),
                     }}
                   >
-                    {cell.text}
+                    {cleanCell(cell.text)}
                   </td>
                 ),
               )}
@@ -220,21 +247,25 @@ function TablePreview({ table }: { table: TableModel }) {
   );
 }
 
-function EquationRow({ item }: { item: EquationItem }) {
+function EquationRow({ item, onOpen }: { item: EquationItem; onOpen: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (ref.current) void renderMath(ref.current, item.source, true);
   }, [item.source]);
   return (
-    <button
-      type="button"
-      className="nav-item nav-equation"
-      onClick={() => jump(item.path, item.line)}
-    >
+    <button type="button" className="nav-item nav-equation" onClick={onOpen}>
       <div className="nav-eq" ref={ref} />
       {item.label && <span className="nav-eq-label">{item.label}</span>}
     </button>
   );
+}
+
+function MathView({ tex }: { tex: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (ref.current) void renderMath(ref.current, tex, true);
+  }, [tex]);
+  return <div className="nav-eq-full" ref={ref} />;
 }
 
 function AcronymRow({ item }: { item: AcronymItem }) {
@@ -248,4 +279,111 @@ function AcronymRow({ item }: { item: AcronymItem }) {
       <span className="nav-acro-long">{item.long}</span>
     </button>
   );
+}
+
+const TITLES = { figure: 'Figura', table: 'Tabela', equation: 'Equação' } as const;
+const ICONS = {
+  figure: <ImageIcon size={18} />,
+  table: <Table2 size={18} />,
+  equation: <Sigma size={18} />,
+};
+
+/** A rendered preview of the clicked figure/table/equation, with a button to go to its source. */
+function PreviewDialog({
+  preview,
+  projectId,
+  fileSet,
+  onClose,
+}: {
+  preview: Preview | null;
+  projectId: string;
+  fileSet: Set<string>;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    if (preview && !d.open) d.showModal();
+    else if (!preview && d.open) d.close();
+    d.addEventListener('close', onClose);
+    return () => d.removeEventListener('close', onClose);
+  }, [preview, onClose]);
+
+  return (
+    <Dialog
+      ref={ref}
+      title={preview ? TITLES[preview.kind] : 'Pré-visualização'}
+      icon={preview ? ICONS[preview.kind] : undefined}
+      wide
+      footer={
+        preview && (
+          <>
+            <Dialog.Cancel />
+            <Button
+              variant="primary"
+              onClick={() => {
+                jump(preview.item.path, preview.item.line);
+                ref.current?.close();
+              }}
+            >
+              Ir para o código
+            </Button>
+          </>
+        )
+      }
+    >
+      {preview && <PreviewBody preview={preview} projectId={projectId} fileSet={fileSet} />}
+    </Dialog>
+  );
+}
+
+function PreviewBody({
+  preview,
+  projectId,
+  fileSet,
+}: {
+  preview: Preview;
+  projectId: string;
+  fileSet: Set<string>;
+}) {
+  if (preview.kind === 'figure') {
+    const src = resolveImage(preview.item.image, fileSet);
+    return (
+      <div className="nav-preview">
+        {src ? (
+          <BlobImage projectId={projectId} path={src} className="nav-preview-img" />
+        ) : (
+          <p className="nav-empty">Sem pré-visualização (imagem .pdf ou ausente).</p>
+        )}
+        {preview.item.caption && <p className="nav-preview-caption">{preview.item.caption}</p>}
+      </div>
+    );
+  }
+  if (preview.kind === 'equation') {
+    return (
+      <div className="nav-preview">
+        <MathView tex={preview.item.source} />
+      </div>
+    );
+  }
+  const parsed = preview.item.source ? safeParse(preview.item.source) : null;
+  return (
+    <div className="nav-preview">
+      {parsed ? (
+        <TableView table={parsed.table} />
+      ) : (
+        <p className="nav-empty">Sem pré-visualização (tabela complexa). Abra o código.</p>
+      )}
+      {preview.item.caption && <p className="nav-preview-caption">{preview.item.caption}</p>}
+    </div>
+  );
+}
+
+function safeParse(source: string) {
+  try {
+    return parseLatex(source);
+  } catch {
+    return null;
+  }
 }
