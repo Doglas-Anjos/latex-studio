@@ -8,6 +8,12 @@
   background: var(--primary);
   color: var(--primary-ink);
 }
+.table-dialog-hint {
+  margin: 0 0 0.6rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
 .table-dialog-grid {
   overflow: auto;
   max-height: 16rem;
@@ -61,6 +67,37 @@
   align-items: center;
   gap: 0.4rem;
   color: var(--ink);
+}
+.table-dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.table-dialog-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.table-dialog-chips button {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.table-dialog-chips button[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+.table-dialog-chips button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
 }
 .table-dialog-options input:not([type="checkbox"]),
 .table-dialog-options select {

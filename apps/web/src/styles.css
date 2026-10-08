@@ -1158,6 +1158,20 @@ a {
   background: color-mix(in srgb, var(--focus) 28%, transparent);
   border-bottom: 2px solid var(--focus);
 }
+/* Inline keyboard shortcut, e.g. in dialog hints. */
+kbd {
+  display: inline-block;
+  padding: 0 0.3em;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 0.85em;
+  line-height: 1.5;
+}
+
 /* A \ref/\cite key with no matching \label or bibliography entry (title says which). */
 .cm-ref-missing {
   color: var(--danger);

@@ -88,6 +88,14 @@ export function pickTarget(state: EditorState): Target {
   );
 }
 
+// value, chip label, tooltip
+const TABLE_STYLES = [
+  ['booktabs', 'Profissional', 'Regras booktabs (toprule/midrule/bottomrule)'],
+  ['grid', 'Grade', 'Todas as bordas'],
+  ['lines', 'Linhas', 'Só linhas horizontais'],
+  ['plain', 'Sem linhas', 'Nenhuma borda'],
+] as const;
+
 interface Pos {
   r: number;
   c: number;
@@ -301,6 +309,11 @@ export function TableDialog({ view, onClose }: { view: EditorView; onClose: () =
         ))}
       </div>
 
+      <p className="table-dialog-hint">
+        Cole uma tabela do Excel ou Google Sheets com <kbd>Ctrl</kbd>+<kbd>V</kbd> em qualquer
+        célula. Selecione várias com <kbd>Shift</kbd>+clique (ou <kbd>Shift</kbd>+setas) para
+        mesclar ou alinhar.
+      </p>
       <div className="table-dialog-grid">
         <table>
           <tbody>
@@ -357,18 +370,22 @@ export function TableDialog({ view, onClose }: { view: EditorView; onClose: () =
         </p>
       )}
       <div className="table-dialog-options">
-        <label>
-          Estilo
-          <select
-            value={options.style}
-            onChange={(e) => set('style', e.target.value as TableOptions['style'])}
-          >
-            <option value="booktabs">Profissional (booktabs)</option>
-            <option value="grid">Grade completa</option>
-            <option value="lines">Linhas horizontais</option>
-            <option value="plain">Sem linhas</option>
-          </select>
-        </label>
+        <div className="table-dialog-field">
+          <span>Estilo</span>
+          <div className="table-dialog-chips" role="radiogroup" aria-label="Estilo da tabela">
+            {TABLE_STYLES.map(([v, text, title]) => (
+              <button
+                key={v}
+                type="button"
+                title={title}
+                aria-pressed={options.style === v}
+                onClick={() => set('style', v)}
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+        </div>
         <label className="table-dialog-check">
           <input
             type="checkbox"

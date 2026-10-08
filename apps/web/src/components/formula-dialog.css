@@ -83,6 +83,39 @@
   width: 4rem;
 }
 
+.formula-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.formula-chips button {
+  min-width: 2.25rem;
+  height: 2.1rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.formula-chips button[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+.formula-chips button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+.formula-hint kbd {
+  vertical-align: baseline;
+}
+
 .formula-code {
   width: 100%;
   box-sizing: border-box;

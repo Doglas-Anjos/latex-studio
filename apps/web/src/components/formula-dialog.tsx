@@ -150,13 +150,14 @@ export function MathPalette({ onPick }: { onPick: (item: PaletteItem) => void })
   );
 }
 
+// value, chip glyph, tooltip
 const MATRICES = [
-  ['matrix', 'matrix'],
-  ['pmatrix', 'pmatrix ( )'],
-  ['bmatrix', 'bmatrix [ ]'],
-  ['Bmatrix', 'Bmatrix { }'],
-  ['vmatrix', 'vmatrix | |'],
-  ['Vmatrix', 'Vmatrix ‖ ‖'],
+  ['matrix', '▦', 'Sem delimitador (matrix)'],
+  ['pmatrix', '( )', 'Parênteses (pmatrix)'],
+  ['bmatrix', '[ ]', 'Colchetes (bmatrix)'],
+  ['Bmatrix', '{ }', 'Chaves (Bmatrix)'],
+  ['vmatrix', '| |', 'Determinante (vmatrix)'],
+  ['Vmatrix', '‖ ‖', 'Norma (Vmatrix)'],
 ] as const;
 
 const MODES: [MathMode, string][] = [
@@ -274,6 +275,10 @@ export function FormulaDialog({ view, onClose }: { view: EditorView; onClose: ()
       }
     >
       <div className="formula">
+        <p className="formula-hint">
+          Clique num símbolo da paleta ou digite LaTeX no campo abaixo. <kbd>Ctrl</kbd>+
+          <kbd>Enter</kbd> insere.
+        </p>
         <MathPalette onPick={pick} />
         <div className="formula-matrix">
           <label>
@@ -296,17 +301,21 @@ export function FormulaDialog({ view, onClose }: { view: EditorView; onClose: ()
               onChange={(e) => setCols(Math.min(10, Math.max(1, Number(e.target.value) || 1)))}
             />
           </label>
-          <select
-            aria-label="Tipo de matriz"
-            value={matrix}
-            onChange={(e) => setMatrix(e.target.value)}
-          >
-            {MATRICES.map(([v, l]) => (
-              <option key={v} value={v}>
-                {l}
-              </option>
+          <div className="formula-chips" role="radiogroup" aria-label="Delimitador da matriz">
+            {MATRICES.map(([v, glyph, title]) => (
+              <button
+                key={v}
+                type="button"
+                title={title}
+                aria-label={title}
+                aria-pressed={matrix === v}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => setMatrix(v)}
+              >
+                {glyph}
+              </button>
             ))}
-          </select>
+          </div>
           <Button variant="secondary" size="compact" onClick={insertMatrix}>
             Inserir matriz
           </Button>
