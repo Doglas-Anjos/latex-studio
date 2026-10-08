@@ -703,6 +703,12 @@ a {
   width: min(100% - 2rem, 64rem);
   max-height: min(92vh, 52rem);
 }
+.dialog[data-wide="full"] {
+  width: calc(100vw - 2rem);
+  max-width: none;
+  height: calc(100dvh - 2rem);
+  max-height: none;
+}
 .dialog::backdrop {
   background: rgb(20 23 31 / 0.5);
   backdrop-filter: blur(2px);

@@ -5,11 +5,16 @@ import { describe, expect, it } from 'vitest';
 import { pickTarget } from './table-dialog';
 import {
   DEFAULT_OPTIONS,
+  deleteCol,
   deleteRow,
   emptyTable,
+  formatCells,
+  insertCol,
+  insertRow,
   merge,
   parseLatex,
   parseTsv,
+  split,
   type TableModel,
   type TableOptions,
   toLatex,
@@ -112,6 +117,143 @@ describe('editing', () => {
     expect(t?.rows[0]?.[0]?.rowspan).toBe(3);
     expect(t && deleteRow(t, 1).rows[0]?.[0]?.rowspan).toBe(2);
     expect(t && deleteRow(t, 0).rows[0]?.[0]?.rowspan).toBe(2);
+  });
+});
+
+describe('cell formatting', () => {
+  const plain = o({ float: false, header: false, style: 'plain', escape: false });
+  const all = { bold: true, italic: true, underline: true, color: 'FF0000', bg: 'FFCC00' } as const;
+
+  it('wraps inside out and paints the background as a prefix', () => {
+    const t = formatCells(grid([['x', 'y']]), 0, 0, 0, 0, all);
+    expect(toLatex(t, plain).code).toContain(
+      String.raw`\cellcolor[HTML]{FFCC00}\textcolor[HTML]{FF0000}{\textbf{\textit{\underline{x}}}} & y \\`,
+    );
+  });
+
+  it('paints the rows covered by a merged origin', () => {
+    const t = grid([
+      ['x', '', 'y'],
+      ['', '', 'z'],
+    ]);
+    t.rows[0]?.splice(0, 1, { text: 'x', colspan: 2, rowspan: 2, bold: true, bg: 'FFCC00' });
+    const { code, packages } = toLatex(t, plain);
+    // The text sits in the last row: the paint of the rows below would hide it in the first.
+    expect(code).toContain(String.raw`\multicolumn{2}{l}{\cellcolor[HTML]{FFCC00}} & y \\`);
+    expect(code).toContain(
+      String.raw`\multicolumn{2}{l}{\cellcolor[HTML]{FFCC00}\multirow{-2}{*}{\textbf{x}}} & z \\`,
+    );
+    expect(packages).toEqual(['multirow', 'xcolor (opção table)']);
+  });
+
+  it('round-trips a background on a vertical merge, with and without colspan', () => {
+    for (const colspan of [1, 2]) {
+      const t = grid([
+        ['x', '', '', 'y'],
+        ['', '', '', 'z'],
+        ['', '', '', 'w'],
+      ]);
+      t.rows[0]?.splice(0, 1, {
+        text: 'x',
+        rowspan: 3,
+        bg: 'FFCC00',
+        bold: true,
+        ...(colspan > 1 && { colspan }),
+      });
+      const code = toLatex(t, plain).code;
+      const p = parseLatex(code);
+      expect(p?.table.rows[0]?.[0]).toMatchObject({
+        text: 'x',
+        rowspan: 3,
+        bg: 'FFCC00',
+        bold: true,
+      });
+      expect(p?.table.rows[1]?.[0]).toEqual({ text: '' });
+      expect(p && toLatex(p.table, { ...plain, ...p.options }).code).toBe(code);
+    }
+  });
+
+  it('refuses nested environments and oversized tables', () => {
+    const nested = String.raw`\begin{tabular}{ll} Name & \begin{tabular}[c]{@{}l@{}}line 1\\ line 2\end{tabular} \\ Alice & 10 \\ \end{tabular}`;
+    expect(parseLatex(nested)).toBeNull();
+    const tall = String.raw`\begin{tabular}{l}${'a \\\\ '.repeat(300)}\end{tabular}`;
+    expect(parseLatex(tall)).toBeNull();
+    expect(parseLatex(String.raw`\begin{tabular}{l}${'a & '.repeat(200)}\end{tabular}`)).toBeNull();
+  });
+
+  it('formats the origin of a merge selected from a covered cell', () => {
+    const t = grid([['a'], ['b']]);
+    t.rows[0]?.splice(0, 1, { text: 'a', rowspan: 2 });
+    expect(formatCells(t, 1, 0, 1, 0, { bold: true }).rows[0]?.[0]?.bold).toBe(true);
+  });
+
+  it('asks for xcolor options only when a background is used', () => {
+    const t = grid([['a']]);
+    const p = (patch: Parameters<typeof formatCells>[5]) =>
+      toLatex(formatCells(t, 0, 0, 0, 0, patch), plain).packages;
+    expect(p({ color: 'AA00BB' })).toEqual(['xcolor']);
+    expect(p({ bg: 'AA00BB' })).toEqual(['xcolor (opção table)']);
+  });
+
+  it('round-trips every format with spans', () => {
+    const t = grid([
+      ['a', '', 'c'],
+      ['d', 'e', 'f'],
+      ['g', 'h', 'i'],
+    ]);
+    t.rows[0]?.splice(0, 2, { text: 'a', colspan: 2, ...all });
+    t.rows[1]?.splice(2, 1, { text: 'f', rowspan: 2, bg: '00FF00', italic: true });
+    t.rows[1]?.splice(0, 1, { text: 'd', underline: true, color: '0000FF' });
+    const code = toLatex(t, plain).code;
+    const p = parseLatex(code);
+    expect(p?.table.rows[0]?.[0]).toMatchObject({ colspan: 2, ...all });
+    expect(p && toLatex(p.table, { ...plain, ...p.options }).code).toBe(code);
+  });
+
+  it('keeps unrecognised or partial wrappers as raw text', () => {
+    for (const raw of [
+      String.raw`\textbf{a} b`,
+      String.raw`\cellcolor{red}x`,
+      String.raw`\textcolor{red}{x}`,
+    ]) {
+      const p = parseLatex(String.raw`\begin{tabular}{l}${raw} \\ \end{tabular}`);
+      expect(p?.table.rows[0]?.[0]).toEqual({ text: raw });
+    }
+  });
+
+  it('formats only uncovered cells and clears with undefined', () => {
+    const t = grid([
+      ['a', 'b'],
+      ['c', 'd'],
+    ]);
+    t.rows[0]?.splice(0, 1, { text: 'a', rowspan: 2 });
+    const f = formatCells(t, 1, 1, 0, 0, { bold: true });
+    expect(f.rows[0]?.[0]?.bold).toBe(true);
+    expect(f.rows[1]?.[0]?.bold).toBeUndefined();
+    const clear = {
+      bold: undefined,
+      italic: undefined,
+      underline: undefined,
+      color: undefined,
+      bg: undefined,
+    };
+    const g = formatCells(formatCells(f, 0, 0, 1, 1, all), 0, 0, 1, 1, clear);
+    expect(g.rows[0]?.[0]).toEqual({ text: 'a', rowspan: 2 });
+    expect(Object.keys(g.rows[1]?.[1] ?? {})).toEqual(['text']);
+  });
+
+  it('survives merge, split, insert and delete', () => {
+    let t = formatCells(emptyTable(3, 3), 1, 1, 1, 1, all);
+    t = merge(t, 1, 1, 2, 2) ?? t;
+    expect(t.rows[1]?.[1]).toMatchObject({ rowspan: 2, colspan: 2, ...all });
+    t = insertRow(insertCol(t, 0), 0); // origin moves to (2,2)
+    expect(t.rows[2]?.[2]).toMatchObject(all);
+    expect(t.rows[0]?.[0]).toEqual({ text: '' });
+    t = deleteCol(deleteRow(t, 0), 0);
+    expect(t.rows[1]?.[1]).toMatchObject(all);
+    t = deleteRow(t, 2); // shrinks the rowspan, origin stays
+    expect(t.rows[1]?.[1]).toMatchObject({ colspan: 2, ...all });
+    expect(split(t, 1, 1).rows[1]?.[1]).toMatchObject(all);
   });
 });
 

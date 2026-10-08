@@ -4,7 +4,14 @@ export interface Cell {
   text: string;
   colspan?: number;
   rowspan?: number;
+  bold?: true;
+  italic?: true;
+  underline?: true;
+  /** 6-digit uppercase hex without '#'. */
+  color?: string;
+  bg?: string;
 }
+export type CellFormat = Pick<Cell, 'bold' | 'italic' | 'underline' | 'color' | 'bg'>;
 export interface TableModel {
   rows: Cell[][];
   align: Align[];
@@ -32,10 +39,14 @@ export const DEFAULT_OPTIONS: TableOptions = {
   escape: true,
 };
 
-const mk = (text: string, colspan = 1, rowspan = 1): Cell => ({
+const FORMATS = ['bold', 'italic', 'underline', 'color', 'bg'] as const;
+
+/** `from` donates its format fields (absent ones are never stored). */
+const mk = (text: string, colspan = 1, rowspan = 1, from?: CellFormat): Cell => ({
   text,
   ...(colspan > 1 && { colspan }),
   ...(rowspan > 1 && { rowspan }),
+  ...Object.fromEntries(FORMATS.filter((k) => from?.[k]).map((k) => [k, from?.[k]])),
 });
 
 export function emptyTable(rows: number, cols: number): TableModel {
@@ -79,6 +90,14 @@ export function toLatex(t: TableModel, o: TableOptions): { code: string; package
   const grid = o.style === 'grid';
   const cols = t.align.length;
   const text = (s: string) => (o.escape ? escapeTex(s) : s);
+  const styled = (cell: Cell) => {
+    let content = text(cell.text);
+    if (!content) return content;
+    if (cell.underline) content = `\\underline{${content}}`;
+    if (cell.italic) content = `\\textit{${content}}`;
+    if (cell.bold) content = `\\textbf{${content}}`;
+    return cell.color ? `\\textcolor[HTML]{${cell.color}}{${content}}` : content;
+  };
   const multicol = (n: number, c: number, content: string) =>
     `\\multicolumn{${n}}{${grid && c === 0 ? '|' : ''}${t.align[c]}${grid ? '|' : ''}}{${content}}`;
 
@@ -114,13 +133,21 @@ export function toLatex(t: TableModel, o: TableOptions): { code: string; package
       const origin = cov[r]?.[c];
       if (origin) {
         // Covered by a rowspan above (colspan-covered cells are skipped below).
-        const ocs = t.rows[origin[0]]?.[origin[1]]?.colspan ?? 1;
-        cells.push(ocs > 1 ? multicol(ocs, c, '') : '');
+        const oc = t.rows[origin[0]];
+        const o_ = oc?.[origin[1]];
+        const ocs = o_?.colspan ?? 1;
+        const ors = o_?.rowspan ?? 1;
+        let paint = o_?.bg ? `\\cellcolor[HTML]{${o_.bg}}` : '';
+        // The text goes in the last spanned row, or the paint of the rows below would hide it.
+        if (o_?.bg && r === origin[0] + ors - 1) paint += `\\multirow{-${ors}}{*}{${styled(o_)}}`;
+        cells.push(ocs > 1 ? multicol(ocs, c, paint) : paint);
         c += ocs - 1;
         continue;
       }
-      let content = text(cell.text);
-      if (rs > 1) content = `\\multirow{${rs}}{*}{${content}}`;
+      let content = styled(cell);
+      if (rs > 1 && cell.bg) content = '';
+      else if (rs > 1) content = `\\multirow{${rs}}{*}{${content}}`;
+      if (cell.bg) content = `\\cellcolor[HTML]{${cell.bg}}${content}`;
       if (cs > 1) content = multicol(cs, c, content);
       cells.push(content);
       c += cs - 1;
@@ -151,6 +178,11 @@ export function toLatex(t: TableModel, o: TableOptions): { code: string; package
   const packages = [
     ...(o.style === 'booktabs' ? ['booktabs'] : []),
     ...(flat.some((c) => (c.rowspan ?? 1) > 1) ? ['multirow'] : []),
+    ...(flat.some((c) => c.bg)
+      ? ['xcolor (opção table)']
+      : flat.some((c) => c.color)
+        ? ['xcolor']
+        : []),
     ...(o.float && o.position.includes('H') ? ['float'] : []),
   ].sort();
   return { code: lines.join('\n'), packages };
@@ -216,13 +248,26 @@ function splitBody(body: string): string[][] {
 const RULES =
   /\\(?:toprule|midrule|bottomrule|hline)\b|\\cline\{[^{}]*\}|\\cmidrule(?:\([^()]*\))?\{[^{}]*\}/g;
 
+// Larger documents are not edited as a table (the grid is built eagerly).
+const MAX_ROWS = 200;
+const MAX_COLS = 100;
+const range = (a: number, b: number) => Array.from({ length: Math.max(0, b - a) }, (_, i) => a + i);
+
 // Capped: spans come from document text and size the grid.
 const span = (n = '') => Math.min(100, Math.max(1, Number.parseInt(n, 10) || 1));
 
-function parseCell(raw: string): { cell: Cell; letter: Align | null } {
+const HEX = /^\\(cellcolor|textcolor)\[HTML\]\{([0-9a-f]{6})\}/i;
+const WRAPPERS = [
+  ['\\textbf{', 'bold'],
+  ['\\textit{', 'italic'],
+  ['\\underline{', 'underline'],
+] as const;
+
+function parseCell(raw: string): { cell: Cell; letter: Align | null; up: number } {
   let s = raw.replace(RULES, '').trim();
   let colspan = 1;
   let rowspan = 1;
+  let up = 0; // `\multirow{-n}`: the cell closes a span that starts n-1 rows above
   let letter: Align | null = null;
   const mc = s.startsWith('\\multicolumn') ? readArgs(s, 12, 3) : null;
   if (mc) {
@@ -230,12 +275,35 @@ function parseCell(raw: string): { cell: Cell; letter: Align | null } {
     letter = /[lcr]/.exec(mc.args[1] ?? '')?.[0] as Align | null;
     s = (mc.args[2] ?? '').trim();
   }
-  const mr = s.startsWith('\\multirow') ? readArgs(s, 9, 3) : null;
-  if (mr) {
-    rowspan = span(mr.args[0]);
-    s = (mr.args[2] ?? '').trim();
+  const fmt: CellFormat = {};
+  // Bounded: each wrapper is peeled at most once, so hostile nesting stays cheap.
+  for (let i = 0; i < 8; i++) {
+    const hex = HEX.exec(s);
+    const hexVal = hex?.[2]?.toUpperCase();
+    if (hex?.[1] === 'cellcolor' && hexVal && !fmt.bg) {
+      fmt.bg = hexVal;
+      s = s.slice(hex[0].length).trim();
+      continue;
+    }
+    if (rowspan === 1 && !up && s.startsWith('\\multirow')) {
+      const mr = readArgs(s, 9, 3);
+      if (mr) {
+        const n = mr.args[0]?.trim() ?? '';
+        if (n.startsWith('-')) up = span(n.slice(1));
+        else rowspan = span(n);
+        s = (mr.args[2] ?? '').trim();
+        continue;
+      }
+    }
+    const tc = hex?.[1] === 'textcolor' && hexVal && !fmt.color ? hex : null;
+    const key = WRAPPERS.find(([cmd, k]) => !fmt[k] && s.startsWith(cmd));
+    const g = tc ? readGroup(s, tc[0].length) : key ? readGroup(s, key[0].length - 1) : null;
+    if (!g || g[1] !== s.length) break;
+    if (tc && hexVal) fmt.color = hexVal;
+    else if (key) fmt[key[1]] = true;
+    s = g[0].trim();
   }
-  return { cell: mk(s, colspan, rowspan), letter };
+  return { cell: mk(s, colspan, rowspan, fmt), letter, up };
 }
 
 function argOf(s: string, cmd: string): string {
@@ -254,6 +322,8 @@ export function parseLatex(
   const spec = specArg.args[0] ?? '';
   // ponytail: comments inside an edited table are dropped.
   const body = src.slice(specArg.end, end).replace(/(^|[^\\])%.*$/gm, '$1');
+  // A nested environment would be mis-split and rewritten; the caller falls back to a new table.
+  if (body.includes('\\begin{')) return null;
 
   // ponytail: p/m/b/X become 'l'; @{} >{} <{} are skipped and *{n}{..} is ignored.
   const align: Align[] = [];
@@ -275,29 +345,50 @@ export function parseLatex(
   const taken = new Set<string>();
   const placed: { c: number; cell: Cell }[][] = [];
   let width = align.length;
-  raw.forEach((cells, r) => {
+  if (raw.length > MAX_ROWS) return null;
+  for (let r = 0; r < raw.length; r++) {
     const row: { c: number; cell: Cell }[] = [];
     let c = 0;
-    for (const text of cells) {
+    for (const text of raw[r] ?? []) {
       const parsed = parseCell(text);
       let cell = parsed.cell;
       if (!taken.has(`${r},${c}`)) {
         if (parsed.letter && c === align.length) align.push(parsed.letter);
-        const keys: string[] = [];
-        const rs = Math.min(cell.rowspan ?? 1, raw.length - r);
-        for (let i = 0; i < rs; i++) {
-          for (let j = 0; j < (cell.colspan ?? 1); j++) if (i || j) keys.push(`${r + i},${c + j}`);
+        const cs = cell.colspan ?? 1;
+        const ro = r - parsed.up + 1;
+        // A closing `\multirow{-n}` moves its content onto the origin n-1 rows above.
+        const find = (rr: number) => placed[rr]?.find((e) => e.c === c);
+        const chain = parsed.up > 1 && ro >= 0 ? range(ro, r).map(find) : [];
+        const origin = chain[0];
+        if (
+          origin &&
+          (origin.cell.rowspan ?? 1) === 1 &&
+          chain.every((e) => e && e.cell.colspan === cell.colspan)
+        ) {
+          origin.cell = mk(cell.text, cs, parsed.up, { ...origin.cell, ...cell });
+          for (const rr of range(ro + 1, r)) {
+            placed[rr] = (placed[rr] ?? []).filter((e) => e.c !== c);
+          }
+          for (let rr = ro + 1; rr <= r; rr++)
+            for (let j = 0; j < cs; j++) taken.add(`${rr},${c + j}`);
+        } else {
+          const rs = Math.min(cell.rowspan ?? 1, raw.length - r);
+          const keys: string[] = [];
+          for (let i = 0; i < rs; i++) {
+            for (let j = 0; j < cs; j++) if (i || j) keys.push(`${r + i},${c + j}`);
+          }
+          // Overlapping spans stay a plain cell.
+          if (keys.some((k) => taken.has(k))) cell = mk(cell.text, 1, 1, cell);
+          else for (const k of keys) taken.add(k);
+          row.push({ c, cell });
         }
-        // Overlapping spans stay a plain cell.
-        if (keys.some((k) => taken.has(k))) cell = mk(cell.text);
-        else for (const k of keys) taken.add(k);
-        row.push({ c, cell });
       }
       c += cell.colspan ?? 1;
+      if (c > MAX_COLS) return null;
     }
     width = Math.max(width, c);
     placed.push(row);
-  });
+  }
 
   while (align.length < width) align.push('c');
   const rows = placed.map((row, r) => {
@@ -308,6 +399,7 @@ export function parseLatex(
           cell.text,
           Math.min(cell.colspan ?? 1, width - c),
           Math.min(cell.rowspan ?? 1, placed.length - r),
+          cell,
         );
     }
     return out;
@@ -386,8 +478,41 @@ export function merge(
   const rows = t.rows.map((row, r) =>
     row.map((cell, c) => {
       if (r < ra || r > rb || c < ca || c > cb) return cell;
-      return r === ra && c === ca ? mk(texts.join(' '), cb - ca + 1, rb - ra + 1) : mk('');
+      return r === ra && c === ca ? mk(texts.join(' '), cb - ca + 1, rb - ra + 1, cell) : mk('');
     }),
+  );
+  return { ...t, rows };
+}
+
+/** Applies `patch` to every cell of the rectangle that is not covered by a span; an undefined value clears that format. */
+export function formatCells(
+  t: TableModel,
+  r0: number,
+  c0: number,
+  r1: number,
+  c1: number,
+  patch: { [K in keyof CellFormat]?: CellFormat[K] | undefined },
+): TableModel {
+  const cov = coveredBy(t);
+  // A covered cell formats its span's origin, even when the origin is outside the rectangle.
+  const hit = new Set<string>();
+  for (
+    let r = Math.max(0, Math.min(r0, r1));
+    r <= Math.min(Math.max(r0, r1), t.rows.length - 1);
+    r++
+  )
+    for (
+      let c = Math.max(0, Math.min(c0, c1));
+      c <= Math.min(Math.max(c0, c1), t.align.length - 1);
+      c++
+    )
+      hit.add((cov[r]?.[c] ?? [r, c]).join());
+  const rows = t.rows.map((row, r) =>
+    row.map((cell, c) =>
+      hit.has(`${r},${c}`)
+        ? mk(cell.text, cell.colspan, cell.rowspan, { ...cell, ...patch } as CellFormat)
+        : cell,
+    ),
   );
   return { ...t, rows };
 }
@@ -405,7 +530,8 @@ function mapSpans(
   const rows = t.rows.map((row, r) =>
     row.map((cell, c) => {
       if (!hit(r, c, cell)) return cell;
-      return mk(cell.text, drop === 'row' ? cell.colspan : 1, drop === 'col' ? cell.rowspan : 1);
+      const [cs, rs] = [drop === 'row' ? cell.colspan : 1, drop === 'col' ? cell.rowspan : 1];
+      return mk(cell.text, cs, rs, cell);
     }),
   );
   return { ...t, rows };
@@ -438,7 +564,7 @@ export function deleteRow(t: TableModel, at: number): TableModel {
       const rs = cell.rowspan ?? 1;
       if (r > at || r + rs <= at || rs < 2) return;
       // Shrink the span; when its origin row goes away the origin moves down.
-      const moved = mk(cell.text, cell.colspan, rs - 1);
+      const moved = mk(cell.text, cell.colspan, rs - 1, cell);
       const target = rows[r < at ? r : at + 1];
       if (target) target[c] = moved;
     });
@@ -454,7 +580,7 @@ export function deleteCol(t: TableModel, at: number): TableModel {
     row.forEach((cell, c) => {
       const cs = cell.colspan ?? 1;
       if (c > at || c + cs <= at || cs < 2) return;
-      const moved = mk(cell.text, cs - 1, cell.rowspan);
+      const moved = mk(cell.text, cs - 1, cell.rowspan, cell);
       const target = rows[r];
       if (target) target[c < at ? c : at + 1] = moved;
     });

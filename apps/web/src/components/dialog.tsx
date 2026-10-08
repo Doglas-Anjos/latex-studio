@@ -17,6 +17,7 @@ export function Dialog({
   tone,
   pending,
   wide,
+  actions,
   footer,
   children,
 }: {
@@ -32,8 +33,10 @@ export function Dialog({
   tone?: 'danger';
   /** While true, blocks the Escape key and the X from closing the dialog mid-mutation. */
   pending?: boolean | undefined;
-  /** Editors and tools (formula, table) that need room, not a short form. */
-  wide?: boolean;
+  /** Editors and tools (formula, table) that need room, not a short form; 'full' fills the window. */
+  wide?: boolean | 'full';
+  /** Header buttons left of the X (e.g. full screen). */
+  actions?: ReactNode;
   /** Actions pinned below the scrollable body; stay visible without scrolling. */
   footer?: ReactNode;
   children: ReactNode;
@@ -62,6 +65,7 @@ export function Dialog({
               <h2>{title}</h2>
             </div>
           </div>
+          {actions}
           <Button
             variant="ghost"
             size="icon"
