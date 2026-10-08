@@ -2717,33 +2717,164 @@ button.change-row-main:hover .change-name {
 }
 
 /* Appearance & presence */
-.dialog:has(.appearance-dialog) {
-  width: min(100% - 2rem, 34rem);
-}
-.appearance-dialog {
+/* Settings dialog: a category rail on the left, the chosen category's rows on the right. */
+.settings {
   display: grid;
-  gap: 0.75rem;
+  grid-template-columns: 11rem 1fr;
+  gap: 1.25rem;
+  min-height: 22rem;
+  min-width: 0;
 }
-.appearance-dialog h3 {
-  margin: 0.5rem 0 0;
-  font-size: 0.9rem;
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding-right: 0.5rem;
+  border-right: 1px solid var(--line);
 }
-.appearance-dialog .field {
-  display: grid;
-  gap: 0.25rem;
-}
-.appearance-dialog .check {
+.settings-nav-btn {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.12s;
 }
-.appearance-dialog .color-grid {
+.settings-nav-btn:hover {
+  background: var(--paper);
+}
+.settings-nav-btn[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  color: var(--primary);
+  font-weight: 600;
+}
+.settings-main {
+  min-width: 0;
+  overflow-y: auto;
+}
+.settings-section {
+  display: flex;
+  flex-direction: column;
+}
+.settings-h3 {
+  margin: 1rem 0 0.25rem;
+  font-size: 0.9rem;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem 0.25rem;
+  border-bottom: 1px solid var(--line);
+}
+.settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.settings-row-title {
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+.settings-row-desc {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.settings-row > select,
+.settings-row > input[type="range"] {
+  margin-left: auto;
+  flex: none;
+}
+.settings-row > input[type="range"] {
+  width: 10rem;
+}
+.settings-row > select {
+  min-width: 9rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+.settings-appearance-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+.color-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.5rem 1rem;
 }
-.appearance-dialog .actions {
-  flex-wrap: wrap;
+.settings-section .check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+/* Toggle switch built on a checkbox. */
+.toggle {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  cursor: pointer;
+}
+.toggle input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+.toggle-track {
+  position: relative;
+  width: 2.4rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: var(--line);
+  transition: background-color 0.15s;
+}
+.toggle-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.35rem - 4px);
+  height: calc(1.35rem - 4px);
+  border-radius: 50%;
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: transform 0.15s;
+}
+.toggle input:checked + .toggle-track {
+  background: var(--primary);
+}
+.toggle input:checked + .toggle-track::after {
+  transform: translateX(calc(2.4rem - 1.35rem));
+}
+.toggle input:focus-visible + .toggle-track {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+@media (max-width: 40rem) {
+  .settings {
+    grid-template-columns: 1fr;
+  }
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding: 0 0 0.5rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
 }
 .font-choices {
   display: grid;

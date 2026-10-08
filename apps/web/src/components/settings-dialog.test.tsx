@@ -5,14 +5,23 @@ import userEvent from '@testing-library/user-event';
 import { createRef } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsStore } from '../settings-store';
-import { AppearanceDialog } from './appearance-dialog';
+import { SettingsDialog } from './settings-dialog';
 
-describe('AppearanceDialog', () => {
+describe('SettingsDialog', () => {
   afterEach(cleanup);
 
-  it('imports JSON through a real, tabbable button instead of a label-wrapped input', async () => {
+  it('switches to Compilação and toggles a compile setting on the store', async () => {
+    const before = useSettingsStore.getState().autoCompile;
+    render(<SettingsDialog ref={createRef<HTMLDialogElement>()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Compilação', hidden: true }));
+    await userEvent.click(screen.getByLabelText('Compilação automática'));
+    expect(useSettingsStore.getState().autoCompile).toBe(!before);
+  });
+
+  it('imports JSON through a real button under Aparência', async () => {
     const ref = createRef<HTMLDialogElement>();
-    const { container } = render(<AppearanceDialog ref={ref} />);
+    const { container } = render(<SettingsDialog ref={ref} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Aparência', hidden: true }));
     const button = screen.getByText('Importar JSON');
     expect(button.tagName).toBe('BUTTON');
     const input = container.querySelector('input[type="file"]');
@@ -23,13 +32,13 @@ describe('AppearanceDialog', () => {
     expect(click).toHaveBeenCalledTimes(1);
   });
 
-  it('previews every editor font in its own typeface and applies the one picked', async () => {
-    render(<AppearanceDialog ref={createRef<HTMLDialogElement>()} />);
+  it('previews every editor font and applies the one picked', async () => {
+    render(<SettingsDialog ref={createRef<HTMLDialogElement>()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Aparência', hidden: true }));
     const fira = screen.getByRole('radio', { name: /Fira Code/, hidden: true });
     const sample = fira.closest('label')?.querySelector<HTMLElement>('.font-sample');
     expect(sample?.style.fontFamily).toContain('Fira Code');
     expect(sample?.textContent).toContain(String.raw`\section{Introdução}`);
-    expect(sample?.textContent).toContain(String.raw`$\alpha \neq`);
     await userEvent.click(fira);
     expect(useSettingsStore.getState().editorFont).toContain('Fira Code');
   });

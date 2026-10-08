@@ -12,7 +12,7 @@ import {
 import { useRef } from 'react';
 import { useHistoryStatus } from '../../hooks/use-history-status';
 import { type SidebarView, useSettingsStore } from '../../settings-store';
-import { AppearanceDialog } from '../appearance-dialog';
+import { SettingsDialog } from '../settings-dialog';
 
 export const viewLabels: Record<SidebarView, string> = {
   files: 'Arquivos',
@@ -40,7 +40,7 @@ export function ActivityBar({
   projectId: string;
   onSelect?: (view: SidebarView) => void;
 }) {
-  const appearance = useRef<HTMLDialogElement>(null);
+  const settings = useRef<HTMLDialogElement>(null);
   const view = useSettingsStore((s) => s.sidebarView);
   const set = useSettingsStore((s) => s.set);
   const changed = useHistoryStatus(projectId).data?.changes.length ?? 0;
@@ -71,13 +71,13 @@ export function ActivityBar({
       <button
         type="button"
         className="activity-btn activity-settings"
-        aria-label="Aparência"
-        title="Aparência"
-        onClick={() => appearance.current?.showModal()}
+        aria-label="Configurações"
+        title="Configurações"
+        onClick={() => settings.current?.showModal()}
       >
         <Settings size={20} aria-hidden="true" />
       </button>
-      <AppearanceDialog ref={appearance} />
+      <SettingsDialog ref={settings} />
     </nav>
   );
 }
