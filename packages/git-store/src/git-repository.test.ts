@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, expect, it } from 'vitest';
-import { AUTOSAVE_AUTHOR, AUTOSAVE_MESSAGE, GitRepository } from './git-repository';
+import { GitRepository } from './git-repository';
 
 const dirs: string[] = [];
 afterAll(() => Promise.all(dirs.map((d) => rm(d, { recursive: true, force: true }))));
@@ -53,20 +53,15 @@ it('commits, logs, diffs and reads history', async () => {
   ]);
 });
 
-it('baseline skips autosaves and workingChanges compares against the working tree', async () => {
+it('workingChanges compares a commit against the working tree', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'git-store-'));
   dirs.push(dir);
   const ana = { name: 'Ana', email: 'ana@example.com' };
   const repo = await GitRepository.init(dir);
-  expect(await repo.baseline()).toBeNull();
 
   await repo.writeFile('a.tex', 'one');
   await repo.writeFile('b.tex', 'bee');
   const v1 = (await repo.commitAll('v1', ana)) as string;
-  await repo.writeFile('a.tex', 'two');
-  await repo.commitAll(AUTOSAVE_MESSAGE, AUTOSAVE_AUTHOR);
-  expect((await repo.baseline())?.sha).toBe(v1);
-
   await repo.writeFile('a.tex', 'three');
   await repo.writeFile('c.tex', 'sea');
   await repo.deleteFile('b.tex');
@@ -124,13 +119,12 @@ it('commitPaths commits only the given paths with co-author trailers', async () 
   // Different sizes: statusMatrix misses a same-size edit within the same second (see changes()).
   await repo.writeFile('a.tex', '22');
   await repo.writeFile('b.tex', '22');
-  expect(await repo.commitPaths(['a.tex'], AUTOSAVE_MESSAGE, bruno, [ana])).toMatch(/^[0-9a-f]+$/);
-  expect(await repo.commitPaths(['a.tex'], AUTOSAVE_MESSAGE, bruno)).toBeNull();
+  expect(await repo.commitPaths(['a.tex'], 'Update a.tex', bruno, [ana])).toMatch(/^[0-9a-f]+$/);
+  expect(await repo.commitPaths(['a.tex'], 'Update a.tex', bruno)).toBeNull();
   const [head] = await repo.log(1);
   expect(head?.author).toEqual(bruno);
-  expect(head?.message).toBe(`${AUTOSAVE_MESSAGE}\n\nCo-authored-by: Ana <ana@example.com>`);
+  expect(head?.message).toBe('Update a.tex\n\nCo-authored-by: Ana <ana@example.com>');
   expect(await repo.workingChanges(head?.sha ?? null)).toEqual([{ path: 'b.tex', type: 'modify' }]);
-  expect((await repo.baseline())?.message).toBe('first');
 });
 
 it('fileLog lists only the commits that changed a given file', async () => {

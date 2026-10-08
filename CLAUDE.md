@@ -7,7 +7,7 @@ Full architecture plan: see `docs/architecture.md`.
 ## Stack
 - pnpm monorepo, TypeScript strict everywhere.
 - `apps/api`: NestJS on the Fastify adapter + Hocuspocus (Yjs) in the same process.
-- `apps/worker`: NestJS standalone app consuming BullMQ (compile, export, wordcount, autocommit).
+- `apps/worker`: NestJS standalone app consuming BullMQ (compile, export, wordcount, format).
 - `apps/web`: React + Vite, CodeMirror 6 + y-codemirror.next, PDF.js.
 - `packages/core`: NestJS modules shared by api and worker (config, database, queue, storage).
 - `packages/shared`: DTOs and zod schemas shared across api, worker and web.

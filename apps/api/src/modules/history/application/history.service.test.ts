@@ -2,7 +2,6 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppConfig } from '@latex-studio/core';
-import { AUTOSAVE_AUTHOR, AUTOSAVE_MESSAGE } from '@latex-studio/git-store';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { IdentityService } from '../../auth/application/identity.service';
@@ -32,6 +31,7 @@ describe('HistoryService', () => {
   let storage: FsProjectStorage;
   let service: HistoryService;
   let sync: FakeDocumentSync;
+  let projects: FakeProjects;
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'history-'));
@@ -40,7 +40,14 @@ describe('HistoryService', () => {
       BUILDS_DIR: join(dir, 'builds'),
     } as AppConfig);
     sync = new FakeDocumentSync();
-    service = new HistoryService(storage, new ProjectLock(), sync, { PROJECT_QUOTA_MB: 1 });
+    projects = new FakeProjects();
+    service = new HistoryService(
+      storage,
+      new ProjectLock(),
+      sync,
+      { PROJECT_QUOTA_MB: 1 },
+      projects,
+    );
     await storage.init(project.id);
   });
 
@@ -77,17 +84,16 @@ describe('HistoryService', () => {
     expect(sync.calls).toEqual(['flushProject', 'flush a.tex']);
   });
 
-  it('reports status against the last named commit and blames uncommitted lines', async () => {
+  it('reports status against the last commit and blames uncommitted lines', async () => {
     const files = storage.open(project.id);
     await files.write('a.tex', 'one\n');
     await service.commit(project, ana, 'v1');
-    const v1 = (await service.log(project))[0]?.sha;
     await files.write('a.tex', 'one\ntwo\n');
-    await files.repo.commitAll(AUTOSAVE_MESSAGE, AUTOSAVE_AUTHOR);
+    const v2 = (await service.commit(project, ana, 'v2')).sha;
     await files.write('a.tex', 'one\ntwo\nthree\n');
 
     const status = await service.status(project);
-    expect(status.baseline?.sha).toBe(v1);
+    expect(status.baseline?.sha).toBe(v2);
     expect(status.changes).toEqual([{ path: 'a.tex', type: 'modify' }]);
 
     const { lines } = await service.blame(project, 'a.tex');
@@ -124,6 +130,25 @@ describe('HistoryService', () => {
     await expect(service.commitFile(project, ana, 'a.tex')).rejects.toBeInstanceOf(
       ConflictException,
     );
+  });
+
+  it("credits the file's other editors only, leaving other files and their editors pending", async () => {
+    const files = storage.open(project.id);
+    await files.write('a.tex', 'one');
+    await files.write('b.tex', 'one');
+    await service.commit(project, ana, 'v1');
+    await files.write('a.tex', 'two-longer');
+    await files.write('b.tex', 'two-longer');
+    await projects.recordEdit(project.id, 'a.tex', ana.email);
+    await projects.recordEdit(project.id, 'a.tex', 'bruno');
+    await projects.recordEdit(project.id, 'b.tex', 'carla');
+
+    await service.commitFile(project, ana, 'a.tex');
+
+    const [head] = await service.log(project);
+    expect(head?.message).toBe('Update a.tex\n\nCo-authored-by: bruno <bruno>');
+    expect((await service.status(project)).changes).toEqual([{ path: 'b.tex', type: 'modify' }]);
+    expect(projects.edits.map((e) => e.userId)).toEqual(['carla']);
   });
 
   it('fileLog lists only the commits that touched the path', async () => {
@@ -186,8 +211,8 @@ describe('HistoryService.commitFile against the real collaborative stack', () =>
       {} as unknown as AppConfig,
     );
     hocuspocus = createHocuspocus(collab);
-    const sync = new HocuspocusDocumentSync(hocuspocus, docsRepo, storage, projects);
-    service = new HistoryService(storage, lock, sync, { PROJECT_QUOTA_MB: 1 });
+    const sync = new HocuspocusDocumentSync(hocuspocus, docsRepo, storage);
+    service = new HistoryService(storage, lock, sync, { PROJECT_QUOTA_MB: 1 }, projects);
   });
 
   afterEach(async () => {

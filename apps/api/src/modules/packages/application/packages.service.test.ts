@@ -7,6 +7,7 @@ import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
 import { FsProjectStorage } from '../../projects/infrastructure/fs-project-storage';
+import { FakeProjects } from '../../projects/testing/fake-project.repository';
 import type { User } from '../../users/domain/user';
 import { PackagesService } from './packages.service';
 
@@ -37,7 +38,7 @@ describe('PackagesService', () => {
     await files.repo.writeFile('main.tex', MAIN);
     await files.repo.commitAll('Initial commit', { name: 'Ana', email: 'ana@example.com' });
     sync = new FakeDocumentSync();
-    service = new PackagesService(storage, new ProjectLock(), sync);
+    service = new PackagesService(storage, new ProjectLock(), sync, new FakeProjects());
   });
 
   afterEach(() => rm(dir, { recursive: true, force: true }));

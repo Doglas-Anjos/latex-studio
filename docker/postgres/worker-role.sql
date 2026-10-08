@@ -1,9 +1,8 @@
 -- Least-privilege database role for the worker.
 --
--- The worker only reads builds/projects/file_edits (and a user's name+email for autosave
--- authorship), updates builds/projects, and deletes builds/file_edits. It never inserts, and never
--- touches document text (yjs_docs), comments, the sharing graph (project_members), the audit log,
--- or a user's identity columns. Pointing the worker at this role means a stolen worker credential
+-- The worker only reads builds/projects, and updates and deletes builds. It never inserts, and
+-- never touches document text (yjs_docs), comments, the sharing graph (project_members), the audit
+-- log, or users. Pointing the worker at this role means a stolen worker credential
 -- (e.g. if a compile ever escaped its sandbox and read the process environment) cannot dump
 -- document contents or user data, nor change anything beyond build bookkeeping.
 --
@@ -28,7 +27,5 @@ ALTER ROLE latex_worker WITH PASSWORD :'worker_password';
 REVOKE ALL ON ALL TABLES IN SCHEMA public FROM latex_worker;
 
 GRANT USAGE ON SCHEMA public TO latex_worker;
-GRANT SELECT ON builds, projects, file_edits TO latex_worker;
-GRANT SELECT (id, name, email) ON users TO latex_worker;
-GRANT UPDATE ON builds, projects TO latex_worker;
-GRANT DELETE ON builds, file_edits TO latex_worker;
+GRANT SELECT ON builds, projects TO latex_worker;
+GRANT UPDATE, DELETE ON builds TO latex_worker;

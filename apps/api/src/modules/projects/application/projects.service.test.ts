@@ -49,7 +49,7 @@ describe('ProjectsService', () => {
     storage = new FsProjectStorage(config);
     sync = new FakeDocumentSync();
     service = new ProjectsService(projects, storage, lock, config, undefined, sync);
-    filesService = new FilesService(storage, lock, config, new FakeDocumentSync());
+    filesService = new FilesService(storage, lock, config, new FakeDocumentSync(), projects);
   });
 
   afterEach(() => rm(dir, { recursive: true, force: true }));

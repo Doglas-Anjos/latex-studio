@@ -14,6 +14,7 @@ import {
   assertQuota,
   author,
   checkPath,
+  commitAs,
   limitBytes,
   megabytes,
   pathExists,
@@ -21,6 +22,10 @@ import {
 } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
+import {
+  PROJECT_REPOSITORY,
+  type ProjectRepository,
+} from '../../projects/domain/project.repository';
 import {
   PROJECT_STORAGE,
   type ProjectFiles,
@@ -63,6 +68,7 @@ export class FilesService {
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
+    @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
   ) {}
 
   private get quota() {
@@ -90,7 +96,7 @@ export class FilesService {
       if (await pathExists(files, path)) throw new ConflictException(`${path} already exists`);
       await assertQuota(files, this.quota, Buffer.byteLength(content));
       await files.write(path, content);
-      await files.repo.commitAll(`Create ${path}`, author(user));
+      await files.repo.commitPaths([path], `Create ${path}`, author(user));
     });
   }
 
@@ -101,7 +107,7 @@ export class FilesService {
       if (!(await files.isFile(path))) throw new NotFoundException('File not found');
       await assertQuota(files, this.quota, Buffer.byteLength(content), path);
       await files.write(path, content);
-      await files.repo.commitAll(`Update ${path}`, author(user));
+      await commitAs(this.projects, files, project.id, user, `Update ${path}`, [path]);
       await this.sync.replaceText(project.id, path, content);
     });
   }
@@ -121,7 +127,8 @@ export class FilesService {
         });
         await files.repo.deleteFile(f.path);
       }
-      await files.repo.commitAll(`Delete ${path}`, author(user));
+      const deleted = targets.map((f) => f.path);
+      await commitAs(this.projects, files, project.id, user, `Delete ${path}`, deleted, false);
       for (const f of targets) await this.sync.forget(project.id, f.path);
     });
   }
@@ -136,7 +143,8 @@ export class FilesService {
       }
       const moved = await filesUnder(files, from);
       await files.rename(from, to);
-      await files.repo.commitAll(`Rename ${from} → ${to}`, author(user));
+      const paths = moved.flatMap((f) => [f.path, to + f.path.slice(from.length)]);
+      await commitAs(this.projects, files, project.id, user, `Rename ${from} → ${to}`, paths);
       // The new path loads from disk on first open.
       for (const f of moved) await this.sync.forget(project.id, f.path);
     });
@@ -149,7 +157,11 @@ export class FilesService {
       await assertQuota(files, this.quota, 0);
       // Git keeps no empty folders. Not `.gitkeep`: SafePath refuses every `.git*` name.
       await files.write(`${path}/${FOLDER_KEEP}`, '');
-      await files.repo.commitAll(`Create folder ${path}`, author(user));
+      await files.repo.commitPaths(
+        [`${path}/${FOLDER_KEEP}`],
+        `Create folder ${path}`,
+        author(user),
+      );
     });
   }
 

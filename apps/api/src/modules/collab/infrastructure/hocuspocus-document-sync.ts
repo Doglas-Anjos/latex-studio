@@ -1,10 +1,6 @@
 import type { Hocuspocus } from '@hocuspocus/server';
 import { Inject, Injectable } from '@nestjs/common';
 import * as Y from 'yjs';
-import {
-  PROJECT_REPOSITORY,
-  type ProjectRepository,
-} from '../../projects/domain/project.repository';
 import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/project-storage';
 import type { CollabSession } from '../application/collab.service';
 import type { DocumentSync } from '../domain/document-sync';
@@ -50,7 +46,6 @@ export class HocuspocusDocumentSync implements DocumentSync {
     private readonly hocuspocus: Pick<Hocuspocus, 'documents' | 'closeConnections' | 'debouncer'>,
     @Inject(YJS_DOC_REPOSITORY) private readonly docs: YjsDocRepository,
     @Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage,
-    @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
   ) {}
 
   /** Minimal prefix/suffix diff, so positions outside the changed span (comment anchors) survive. */
@@ -90,7 +85,6 @@ export class HocuspocusDocumentSync implements DocumentSync {
     const text = doc.getText('content').toString();
     await this.docs.save(projectId, path, state);
     await this.storage.open(projectId).write(path, text);
-    await this.projects.markDirty(projectId);
   }
 
   async flushProject(projectId: string): Promise<void> {

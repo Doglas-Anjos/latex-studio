@@ -9,9 +9,13 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
-import { assertQuota, author, checkPath } from '../../projects/application/project-files';
+import { assertQuota, checkPath, commitAs } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
+import {
+  PROJECT_REPOSITORY,
+  type ProjectRepository,
+} from '../../projects/domain/project.repository';
 import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/project-storage';
 import type { User } from '../../users/domain/user';
 
@@ -28,6 +32,7 @@ export class HistoryService {
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
     @Inject(APP_CONFIG) private readonly config: Pick<AppConfig, 'PROJECT_QUOTA_MB'>,
+    @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
   ) {}
 
   log(project: Project, limit = 50) {
@@ -57,12 +62,13 @@ export class HistoryService {
     return content;
   }
 
+  /** Working-tree changes not yet committed. */
   async status(project: Project) {
     const repo = this.storage.open(project.id).repo;
-    const base = await repo.baseline();
+    const [base] = await repo.log(1);
     const changes = await repo.workingChanges(base?.sha ?? null);
     return {
-      baseline: base && { sha: base.sha, message: base.message, date: base.date },
+      baseline: base ? { sha: base.sha, message: base.message, date: base.date } : null,
       changes,
     };
   }
@@ -95,52 +101,25 @@ export class HistoryService {
     const files = this.storage.open(project.id);
     for (const path of paths ?? []) checkPath(files, path);
     return this.lock.run(project.id, async () => {
-      if (!paths) {
-        await this.sync.flushProject(project.id);
-        const sha = await files.repo.commitAll(message, author(user));
-        if (!sha) throw new ConflictException('Nothing to commit');
-        return { sha };
-      }
-      if (paths.length === 0) throw new BadRequestException('Select at least one file');
+      if (paths?.length === 0) throw new BadRequestException('Select at least one file');
       // Open docs may hold edits younger than the 2-10s store debounce.
-      for (const path of paths) await this.sync.flush(project.id, path);
-      const sha = await files.repo.commitPaths(paths, message, author(user));
+      if (!paths) await this.sync.flushProject(project.id);
+      for (const path of paths ?? []) await this.sync.flush(project.id, path);
+      const sha = await commitAs(this.projects, files, project.id, user, message, paths ?? null);
       if (!sha) throw new ConflictException('Nothing to commit');
       return { sha };
     });
   }
 
-  /**
-   * Commits only `path` ("Ctrl+S" on a single file). Flushes the open Y.Doc to the working tree
-   * first, so a just-typed edit is included despite Hocuspocus's 2-10s store debounce.
-   */
+  /** Commits only `path` ("Ctrl+S" on a single file), with a default message. */
   async commitFile(
     project: Project,
     user: User,
     path: string,
     message?: string,
   ): Promise<{ sha: string }> {
-    const files = this.storage.open(project.id);
-    checkPath(files, path);
     const trimmed = (message ?? '').trim();
-    if (trimmed.length > 200 || /\p{Cc}/u.test(trimmed)) {
-      throw new BadRequestException('Invalid commit message');
-    }
-    return this.lock.run(project.id, async () => {
-      await this.sync.flush(project.id, path);
-      const message = trimmed || `Update ${basename(path)}`;
-      const sha = await files.repo.commitPaths([path], message, author(user));
-      if (sha) return { sha };
-      // Already autosaved since the last named version: give it a named version anyway, so the
-      // "changed since the last saved version" marks clear as the person expects.
-      const [base, head] = await Promise.all([files.repo.baseline(), files.repo.head()]);
-      const sinceBase =
-        base && head && base.sha !== head
-          ? (await files.repo.changedFiles(base.sha, head)).some((c) => c.path === path)
-          : false;
-      if (!sinceBase) throw new ConflictException('Nothing to commit');
-      return { sha: await files.repo.markVersion(message, author(user)) };
-    });
+    return this.commit(project, user, trimmed || `Update ${basename(path)}`.slice(0, 200), [path]);
   }
 
   /** Writes the file as it was at `sha`, commits it and patches its open Y.Doc as a diff. */
@@ -155,9 +134,15 @@ export class HistoryService {
         path,
       );
       await files.write(path, content);
-      const created = await files.repo.commitAll(
-        `Restore ${path} from ${sha.slice(0, 7)}`,
-        author(user),
+      const message = `Restore ${path} from ${sha.slice(0, 7)}`;
+      const created = await commitAs(
+        this.projects,
+        files,
+        project.id,
+        user,
+        message,
+        [path],
+        false,
       );
       if (!created) throw new ConflictException('File already matches that version');
       // Binary files have no doc; replaceText then only drops a missing yjs_docs row.

@@ -60,7 +60,15 @@ describe('HistoryPanel', () => {
       date: new Date().toISOString(),
     });
     const service = {
-      log: vi.fn().mockResolvedValue([log[0], auto('x3'), auto('x2'), auto('x1'), log[1]]),
+      log: vi
+        .fn()
+        .mockResolvedValue([
+          log[0],
+          auto('x3'),
+          { ...auto('x2'), message: 'Autosave\n\nCo-authored-by: Ana <ana@example.com>' },
+          auto('x1'),
+          log[1],
+        ]),
       fileLog: vi.fn().mockResolvedValue([]),
       changes: vi.fn().mockResolvedValue([]),
     } as unknown as HistoryService;

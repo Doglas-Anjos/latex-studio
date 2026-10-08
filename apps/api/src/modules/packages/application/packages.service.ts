@@ -14,9 +14,13 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
-import { author } from '../../projects/application/project-files';
+import { commitAs } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
+import {
+  PROJECT_REPOSITORY,
+  type ProjectRepository,
+} from '../../projects/domain/project.repository';
 import {
   PROJECT_STORAGE,
   type ProjectFiles,
@@ -64,6 +68,7 @@ export class PackagesService {
     @Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage,
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
+    @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
   ) {}
 
   async get(project: Project): Promise<PackageManifest> {
@@ -87,7 +92,7 @@ export class PackagesService {
           paths.push(project.mainFile);
         }
       }
-      await files.repo.commitAll('Update packages', author(user));
+      await commitAs(this.projects, files, project.id, user, 'Update packages', paths);
       await this.syncDocs(project.id, files, paths);
       return next;
     });
@@ -112,8 +117,10 @@ export class PackagesService {
       await files.write(project.mainFile, insertPackagesInput(remaining));
       const next = normalize(manifest);
       await writeManifest(files, next, await this.scan(files));
-      await files.repo.commitAll(`Move ${packages.length} packages to the manifest`, author(user));
-      await this.syncDocs(project.id, files, [project.mainFile, MANIFEST, TEX]);
+      const paths = [project.mainFile, MANIFEST, TEX];
+      const message = `Move ${packages.length} packages to the manifest`;
+      await commitAs(this.projects, files, project.id, user, message, paths);
+      await this.syncDocs(project.id, files, paths);
       return { moved: packages.length, manifest: next };
     });
   }

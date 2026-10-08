@@ -2,6 +2,7 @@ import type { Readable } from 'node:stream';
 import type { Author } from '@latex-studio/git-store';
 import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import type { User } from '../../users/domain/user';
+import type { ProjectRepository } from '../domain/project.repository';
 import type { ProjectFiles } from '../domain/project-storage';
 
 /** One multipart part, as yielded by `@fastify/multipart`'s `request.parts()`. */
@@ -16,6 +17,28 @@ export type UploadPart =
     };
 
 export const author = (user: User): Author => ({ name: user.name, email: user.email });
+
+/**
+ * Commits `paths` (every change when null) as `user`, with `Co-authored-by` for everyone else who
+ * edited them collaboratively. `credit: false` (delete, restore: their text is gone) only clears
+ * those records.
+ */
+export function commitAs(
+  projects: ProjectRepository,
+  files: ProjectFiles,
+  projectId: string,
+  user: User,
+  message: string,
+  paths: string[] | null,
+  credit = true,
+): Promise<string | null> {
+  return projects.withEditors(projectId, paths, (editors) => {
+    const co = credit ? editors.filter((e) => e.email !== user.email) : [];
+    return paths
+      ? files.repo.commitPaths(paths, message, author(user), co)
+      : files.repo.commitAll(message, author(user), co);
+  });
+}
 
 export const megabytes = (mb: number) => mb * 1024 * 1024;
 

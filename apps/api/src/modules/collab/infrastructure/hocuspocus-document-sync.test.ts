@@ -1,7 +1,6 @@
 import { Document, Hocuspocus } from '@hocuspocus/server';
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
-import type { ProjectRepository } from '../../projects/domain/project.repository';
 import type { ProjectFiles, ProjectStorage } from '../../projects/domain/project-storage';
 import type { YjsDocRepository } from '../domain/yjs-doc.repository';
 import { HocuspocusDocumentSync } from './hocuspocus-document-sync';
@@ -24,17 +23,12 @@ const setup = () => {
           void written.set(`${projectId}/${path}`, content.toString()),
       }) as ProjectFiles,
   } as ProjectStorage;
-  const dirty: string[] = [];
-  const projects = {
-    markDirty: async (projectId: string) => void dirty.push(projectId),
-  } as ProjectRepository;
   return {
     hocuspocus,
     deleted,
     saved,
     written,
-    dirty,
-    sync: new HocuspocusDocumentSync(hocuspocus, docs, storage, projects),
+    sync: new HocuspocusDocumentSync(hocuspocus, docs, storage),
   };
 };
 
@@ -87,7 +81,7 @@ describe('HocuspocusDocumentSync', () => {
   });
 
   it('flush writes the open doc directly instead of running the debounced store', async () => {
-    const { hocuspocus, sync, saved, written, dirty } = setup();
+    const { hocuspocus, sync, saved, written } = setup();
     const doc = new Document('p/main.tex');
     doc.getText('content').insert(0, 'hello');
     hocuspocus.documents.set('p/main.tex', doc);
@@ -112,7 +106,6 @@ describe('HocuspocusDocumentSync', () => {
     const restored = new Y.Doc();
     Y.applyUpdate(restored, saved.get('p/main.tex') as Uint8Array);
     expect(restored.getText('content').toString()).toBe('hello');
-    expect(dirty).toEqual(['p']);
     // The original debounce timer is left pending: it still fires later through the normal path.
     expect(hocuspocus.debouncer.isDebounced('onStoreDocument-p/main.tex')).toBe(true);
   });
@@ -127,7 +120,7 @@ describe('HocuspocusDocumentSync', () => {
   it('flush still writes the current live doc when nothing is pending', async () => {
     // No pending debounce timer does not prove disk already matches the doc: an earlier store
     // could still be in flight. Ctrl+S must always ship the live doc, not skip the write.
-    const { hocuspocus, sync, written, saved, dirty } = setup();
+    const { hocuspocus, sync, written, saved } = setup();
     const doc = new Document('p/main.tex');
     doc.getText('content').insert(0, 'hello');
     hocuspocus.documents.set('p/main.tex', doc);
@@ -137,7 +130,6 @@ describe('HocuspocusDocumentSync', () => {
 
     expect(written.get('p/main.tex')).toBe('hello');
     expect(saved.has('p/main.tex')).toBe(true);
-    expect(dirty).toEqual(['p']);
   });
 
   it('flushProject flushes only the open docs of that project', async () => {

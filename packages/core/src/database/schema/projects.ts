@@ -26,8 +26,6 @@ export const projects = pgTable(
     engine: projectEngine('engine').notNull().default('pdflatex'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-    // Set when a collaborative edit was flushed to disk and not yet committed (autocommit job).
-    dirtySince: timestamp('dirty_since', { withTimezone: true }),
   },
   (t) => [check('projects_name_length', sql`char_length(${t.name}) between 1 and 100`)],
 );

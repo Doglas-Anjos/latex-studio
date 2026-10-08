@@ -10,7 +10,6 @@ import type {
 export class FakeProjects implements ProjectRepository {
   rows: Project[] = [];
   members: Array<{ projectId: string; userId: string; role: ProjectRole }> = [];
-  dirtySince = new Map<string, Date>();
   edits: Array<{ projectId: string; path: string; userId: string }> = [];
 
   async create(project: NewProject, ownerId: string) {
@@ -98,7 +97,19 @@ export class FakeProjects implements ProjectRepository {
   async recordEdit(projectId: string, path: string, userId: string) {
     this.edits.push({ projectId, path, userId });
   }
-  async markDirty(id: string) {
-    this.dirtySince.set(id, new Date());
+  /** Users are named by their id, as in `listMembers`. */
+  async withEditors<T>(
+    projectId: string,
+    paths: string[] | null,
+    commit: (editors: Array<{ name: string; email: string }>) => Promise<T>,
+  ) {
+    const read = this.edits.filter(
+      (e) => e.projectId === projectId && (!paths || paths.includes(e.path)),
+    );
+    const result = await commit(
+      [...new Set(read.map((e) => e.userId))].map((id) => ({ name: id, email: id })),
+    );
+    this.edits = this.edits.filter((e) => !read.includes(e));
+    return result;
   }
 }

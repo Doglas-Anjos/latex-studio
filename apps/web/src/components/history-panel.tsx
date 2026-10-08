@@ -7,8 +7,10 @@ import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { Dialog } from './dialog';
 
-// Message the worker gives to automatic commits (packages/git-store AUTOSAVE_MESSAGE).
+// Message of the automatic commits the worker made before auto-commit was removed; old histories
+// keep them, some with `Co-authored-by` trailers after it.
 const AUTOSAVE = 'Autosave';
+const isAutosave = (m: string) => m === AUTOSAVE || m.startsWith(`${AUTOSAVE}\n`);
 const GROUP_MIN = 3;
 const BADGE = { add: 'A', modify: 'M', remove: 'D' } as const;
 
@@ -26,7 +28,7 @@ function relativeTime(iso: string): string {
 function groupAutosaves(log: HistoryEntry[]) {
   const runs: { auto: boolean; items: { e: HistoryEntry; i: number }[] }[] = [];
   log.forEach((e, i) => {
-    const auto = e.message === AUTOSAVE;
+    const auto = isAutosave(e.message);
     const last = runs.at(-1);
     if (auto && last?.auto) last.items.push({ e, i });
     else runs.push({ auto, items: [{ e, i }] });
@@ -80,7 +82,7 @@ function EntryRow({
   onSelect?: () => void;
   actions: ReactNode;
 }) {
-  const named = e.message !== AUTOSAVE;
+  const named = !isAutosave(e.message);
   const body = (
     <>
       <span className="hist-msg">{e.message}</span>

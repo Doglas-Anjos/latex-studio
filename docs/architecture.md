@@ -74,7 +74,7 @@ latex-studio/                      # nome provisório
   apps/
     web/          React + Vite (editor, PDF, painéis)
     api/          NestJS (Fastify) + Hocuspocus + REST + enfileira jobs
-    worker/       NestJS standalone: consome fila (compile, export, wordcount, autocommit)
+    worker/       NestJS standalone: consome fila (compile, export, wordcount)
   packages/
     shared/       Tipos, DTOs e schemas zod compartilhados (API <-> web <-> worker)
     latex-tools/  Classes puras: LatexLogParser, UsepackageParser, PackageManifestWriter, catálogo
@@ -112,7 +112,7 @@ apps/api/src/modules/<dominio>/
 - Injeção por **token de interface** (`@Inject(PROJECT_REPOSITORY)`), nunca pela classe concreta, para que testes troquem o adapter por um fake em memória.
 - Módulos: `auth`, `users`, `admin`, `projects`, `files`, `git`, `collab` (Hocuspocus), `packages`, `comments`, `compile`, `export`, `import`, `audit`. Módulos transversais em `packages/core`: `config` (schema zod validado no boot), `database` (Drizzle), `queue` (BullMQ), `storage` (caminhos seguros), `rate-limit`.
 - Guards: `SessionGuard` (autenticação), `ProjectRoleGuard('editor')` (autorização por papel), `ActiveUserGuard` (conta aprovada). Filtros de exceção mapeiam erros de domínio (`ProjectNotFound`, `QuotaExceeded`) para HTTP.
-- Worker reutiliza os mesmos módulos de `packages/core` e expõe `@Processor('compile')` classes: `CompileProcessor`, `ExportProcessor`, `WordCountProcessor`, `AutocommitProcessor`, cada uma delegando para um service injetado (`LatexmkRunner`, `PandocRunner`, `SandboxedProcess`).
+- Worker reutiliza os mesmos módulos de `packages/core` e expõe `@Processor('compile')` classes: `CompileProcessor`, `ExportProcessor`, `WordCountProcessor`, cada uma delegando para um service injetado (`LatexmkRunner`, `PandocRunner`, `SandboxedProcess`).
 - Testes: unit nos services com fakes de ports; e2e por módulo com `@nestjs/testing` + Postgres de teste; o worker tem teste de sandbox com `.tex` maliciosos.
 
 ### Frontend (React)
@@ -126,7 +126,7 @@ apps/api/src/modules/<dominio>/
 ## Modelo de dados (Postgres)
 
 - `users` (issuer + subject do JWT, email, name) — criado na primeira visita; sem senha, sem sessão
-- `projects` (owner, nome, main_file, engine `pdflatex|xelatex|lualatex`, quota_bytes, dirty_since)
+- `projects` (owner, nome, main_file, engine `pdflatex|xelatex|lualatex`, quota_bytes)
 - `project_members` (role `owner|editor|reviewer|viewer`) e `project_invites`
 - `yjs_docs` (project_id, path, state bytea, updated_at) — estado CRDT por arquivo
 - `comments` (project, path, anchor_start/anchor_end = Yjs RelativePosition serializadas, fallback `commit_sha + linha + trecho citado`, resolved, author) e `comment_replies`
@@ -144,8 +144,8 @@ O **conteúdo dos arquivos não fica no banco**: a árvore de trabalho do Git no
 - Um `Y.Doc` por arquivo de texto, nome `<projectId>/<path>`; Hocuspocus multiplexa vários docs em um WebSocket.
 - `onAuthenticate`: valida o token do FasorX (enviado pelo provider), a Origin e o papel no projeto (viewer = somente leitura).
 - `onLoadDocument`: carrega estado de `yjs_docs`; se não existir, cria a partir do arquivo no disco.
-- `onStoreDocument` (debounce 2 s, máx 10 s): grava estado em `yjs_docs`, escreve o arquivo no working tree, marca projeto `dirty`.
-- **Autocommit**: job repetido a cada 5 min commita projetos `dirty` como "Autosave" com co-autores = quem editou. Usuário também faz **commit nomeado** ("Salvar versão" com mensagem).
+- `onStoreDocument` (debounce 2 s, máx 10 s): grava estado em `yjs_docs`, escreve o arquivo no working tree (autosave). Autosave nunca commita.
+- **Commit só quando o usuário pede**: Ctrl+S commita o arquivo aberto; "Salvar versão" commita os arquivos escolhidos (ou todos) com mensagem. Co-autores = quem mais editou aqueles arquivos desde o último commit deles (`file_edits`). Não existe auto-commit: commits automáticos misturavam o histórico das versões com o salvamento e engoliam as mudanças de outros arquivos.
 - **Histórico**: `git log` → lista; diff entre commits (lib `diff`); **restaurar arquivo/versão** = ler blob do commit e aplicar no `Y.Doc` como diff (diff-match-patch → operações Yjs) para não quebrar âncoras de comentários nem desconectar quem está editando.
 - Binários (imagens, PDFs anexos) não passam pelo Yjs: upload direto → disco → commit.
 - Fase 3: remoto GitHub por deploy key (push/pull), `git bundle` para "baixar com histórico".
@@ -172,7 +172,7 @@ O **conteúdo dos arquivos não fica no banco**: a árvore de trabalho do Git no
 - Container do worker: rede `internal` sem saída para a internet (precisa de Postgres e Redis), `read_only: true`, `tmpfs /tmp`, `init: true` (reap de zumbis), usuário sem privilégio, `cap_drop: ALL`, `security_opt: no-new-privileges`, `pids_limit: 256`, `mem_limit`; recebe só as variáveis que usa (sem segredos da API); Redis com senha; `latexmk -norc`, `HOME`/`TEXMF*` fora do snapshot (sem `lualatex --safer`: o luaotfload recusa rodar com ele; `shell_escape=f` e `openin_any`/`openout_any=p` seguem valendo para o Lua). Limitação conhecida: o TeX roda com o mesmo uid do worker; execução de código no TeX alcançaria Redis/Postgres. Opcional: runtime gVisor (`runsc`) na VPS.
 - Saída: PDF + log + synctex em `/data/builds/...`; log parseado em erros/avisos (`latex-tools`); status (`queued → running → done|failed|timeout`, posição na fila) enviado ao cliente por WebSocket.
 - PDF servido por rota autenticada com streaming; PDF.js com SyncTeX ida/volta.
-- Mesma fila atende `export` (pandoc), `wordcount` (texcount) e `autocommit`, com prioridades (compile > export > autocommit).
+- Fila `tools` atende `export` (pandoc), `wordcount` (texcount) e `format` (latexindent), separada da `compile`.
 
 ### 5. Importação
 - Zip: extração com proteção **zip-slip** (rejeita `..`, absolutos, symlinks), limite de entradas (5 000) e de tamanho descomprimido (500 MB) contra zip bomb, **descarta qualquer `.git/`** do zip (evita hooks injetados) e `latex-packages.*` suspeitos são validados.
@@ -224,8 +224,8 @@ Imagens `docker/api` e `docker/web` construídas e a da API testada em modo prod
 ### Interface (4 de outubro de 2026)
 
 - Dashboard estilo Overleaf (filtros, busca, tabela, hero), workspace estilo VS Code (barra de atividades, sidebar e PDF redimensionáveis, abas, painel de compilação, barra de status), tema claro/escuro/sistema e cores de sintaxe editáveis (`settings-store` persistido no navegador; `HighlightStyle` referencia variáveis CSS `--syn-*`).
-- "Mudanças": linha de base = último commit não-`Autosave` (`GET history/status`), marcas na margem via `@codemirror/merge`, diff lado a lado (`MergeView`), descartar por arquivo (`restore`); histórico compara commits.
-- Blame no servidor (`git-store` `blame`, jsdiff, cap 100 commits, 1 MB e 1 s de diff; commits e textos memorizados por HEAD) com gutter no editor; autosaves são commitados em nome de quem editou (tabela `file_edits` alimentada pelo hook `onChange` do Hocuspocus; vários editores no mesmo arquivo viram `Co-authored-by`).
+- "Mudanças": linha de base = último commit (`GET history/status`), marcas na margem via `@codemirror/merge`, diff lado a lado (`MergeView`), descartar por arquivo (`restore`); histórico compara commits.
+- Blame no servidor (`git-store` `blame`, jsdiff, cap 100 commits, 1 MB e 1 s de diff; commits e textos memorizados por HEAD) com gutter no editor; o commit leva o nome de quem o fez e `Co-authored-by` de quem mais editou o arquivo (tabela `file_edits` alimentada pelo hook `onChange` do Hocuspocus, limpa no commit).
 - Auto-indent: job `format` (`latexindent` sobre o texto vivo enviado pelo cliente, num diretório temporário, sem `-l`, 15 s) aplicado no editor como mudanças mínimas só se o documento não mudou nesse meio-tempo; fallback para o indentador do CodeMirror; "Formatar projeto" grava os demais `.tex` via `PUT files/*`.
 - Bibliotecas: bypass real para pacote desligado que o código ainda carrega (`\ver@`/`\opt@` em `latex-packages.tex`); pacote ligado que o código já carrega não é reemitido (evita "Option clash"); pacotes detectados no código aparecem no painel.
 
@@ -238,7 +238,7 @@ Imagens `docker/api` e `docker/web` construídas e a da API testada em modo prod
 1. Monorepo pnpm, `packages/core` (config, db, queue, storage), lint/typecheck/CI, docker-compose dev (postgres, redis, api, worker, web, caddy).
 2. Auth + aprovação por admin + painel admin mínimo (aprovar/bloquear usuário).
 3. Projetos como repositórios (`git-store`): criar, listar, árvore de arquivos, criar/renomear/excluir arquivo e pasta, upload, importar zip/vários arquivos.
-4. Editor CodeMirror + Yjs/Hocuspocus com persistência no working tree + autocommit.
+4. Editor CodeMirror + Yjs/Hocuspocus com persistência no working tree (autosave) e commit sob demanda.
 5. Fila BullMQ + worker sandboxado + parser de log + PDF.js com status em tempo real.
 6. Export: source zip e PDF.
 
@@ -308,7 +308,7 @@ Não fazer: <escopo vizinho que outro agente está tocando>
 1. `docker compose up` sobe os 6 serviços; `docker stats` mostra uso total < 3 GB em repouso.
 2. Cadastro → admin aprova → login → criar projeto → árvore vazia com `main.tex`.
 3. Importar zip de uma tese de exemplo → commit "Import" aparece no histórico; migração de pacotes proposta.
-4. Dois navegadores editando o mesmo arquivo veem as alterações um do outro; após 5 min existe commit "Autosave".
+4. Dois navegadores editando o mesmo arquivo veem as alterações um do outro; nenhum commit aparece até alguém dar Ctrl+S ou "Salvar versão".
 5. Compilar: status `queued → running → done`, PDF renderiza, clique no PDF leva à linha (SyncTeX).
 6. Desligar `hyperref` no painel → recompilar → links somem; `latex-packages.tex` muda no diff.
 7. Comentar um trecho, outro usuário editar acima → âncora continua no lugar.

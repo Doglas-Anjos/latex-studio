@@ -54,11 +54,16 @@ export interface ProjectRepository {
   /** Projects owned by the user. */
   countForUser(userId: string): Promise<number>;
   delete(id: string): Promise<void>;
-  /**
-   * Flags uncommitted collaborative edits for autocommit. Always moves the timestamp forward, so
-   * an edit stored while autocommit runs (dirtySince > its start) keeps the project dirty.
-   */
-  markDirty(id: string): Promise<void>;
-  /** Remembers who edited a file collaboratively, so the autosave is committed in their name. */
+  /** Remembers who edited a file collaboratively, so the next commit of it names them. */
   recordEdit(projectId: string, path: string, userId: string): Promise<void>;
+  /**
+   * Runs `commit` with who edited `paths` (every file when null), then clears those records, so
+   * each edit is credited once. A `commit` that throws clears nothing; edits recorded while it
+   * runs stay for the next commit.
+   */
+  withEditors<T>(
+    projectId: string,
+    paths: string[] | null,
+    commit: (editors: Array<{ name: string; email: string }>) => Promise<T>,
+  ): Promise<T>;
 }

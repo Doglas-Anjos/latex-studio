@@ -21,7 +21,6 @@ import type { User } from '../../users/domain/user';
 import { YJS_DOC_REPOSITORY, type YjsDocRepository } from '../domain/yjs-doc.repository';
 
 export const TEXT_EXTENSIONS = new Set(['.tex', '.bib', '.sty', '.cls', '.txt', '.md', '.json']);
-const EDIT_THROTTLE_MS = 10_000;
 
 export interface CollabSession {
   user: User;
@@ -36,8 +35,6 @@ export interface CollabSession {
  */
 @Injectable()
 export class CollabService {
-  private readonly lastEdit = new Map<string, number>();
-
   constructor(
     @Inject(IdentityService) private readonly identity: IdentityService,
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
@@ -91,26 +88,20 @@ export class CollabService {
     return Buffer.from(await files.repo.readFile(path)).toString('utf8');
   }
 
-  /**
-   * Persists the Yjs state, flushes the text to the working tree and flags the project for
-   * autocommit.
-   * ponytail: no quota check on flush (it would list the whole tree every 2 s); the project
-   * quota is enforced on uploads only.
-   */
-  /** Called on every update; one row write per (file, user) every 10 s is plenty for autosave. */
-  async recordEdit(projectId: string, path: string, userId: string): Promise<void> {
-    const key = `${projectId}/${path}:${userId}`;
-    const now = Date.now();
-    if ((this.lastEdit.get(key) ?? 0) > now - EDIT_THROTTLE_MS) return;
-    this.lastEdit.set(key, now);
-    if (this.lastEdit.size > 10_000) this.lastEdit.clear();
-    await this.projects.recordEdit(projectId, path, userId);
+  /** Called on every update; the repository throttles the writes. */
+  recordEdit(projectId: string, path: string, userId: string): Promise<void> {
+    return this.projects.recordEdit(projectId, path, userId);
   }
 
   saveState(projectId: string, path: string, doc: Y.Doc): Promise<void> {
     return this.docs.save(projectId, path, Y.encodeStateAsUpdate(doc));
   }
 
+  /**
+   * Autosave: persists the Yjs state and flushes the text to the working tree. Never commits.
+   * ponytail: no quota check on flush (it would list the whole tree every 2 s); the project
+   * quota is enforced on uploads only.
+   */
   async store(projectId: string, path: string, doc: Y.Doc): Promise<void> {
     await this.lock.run(projectId, async () => {
       // Snapshot both the instant this turn starts, before any await: a store queued behind a
@@ -123,7 +114,6 @@ export class CollabService {
       await this.docs.save(projectId, path, state);
       await this.storage.open(projectId).write(path, text);
     });
-    await this.projects.markDirty(projectId);
   }
 
   private sameOrigin(origin: string): boolean {

@@ -9,6 +9,7 @@ import type { UploadPart } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
 import { FsProjectStorage } from '../../projects/infrastructure/fs-project-storage';
+import { FakeProjects } from '../../projects/testing/fake-project.repository';
 import type { User } from '../../users/domain/user';
 import { FilesService } from './files.service';
 
@@ -40,7 +41,7 @@ describe('FilesService', () => {
     storage = new FsProjectStorage(config);
     await storage.init(project.id);
     sync = new FakeDocumentSync();
-    service = new FilesService(storage, new ProjectLock(), config, sync);
+    service = new FilesService(storage, new ProjectLock(), config, sync, new FakeProjects());
   });
 
   afterEach(() => rm(dir, { recursive: true, force: true }));
@@ -93,5 +94,22 @@ describe('FilesService', () => {
     await service.rename(project, ana, 'a.tex', 'c.tex');
     await service.remove(project, ana, 'dir');
     expect(sync.calls).toEqual(['forget a.tex', 'forget dir/b.tex']);
+  });
+
+  it('commits only the paths a file operation touches, leaving other edits pending', async () => {
+    await service.create(project, ana, 'a.tex', 'a');
+    await service.create(project, ana, 'dir/b.tex', 'b');
+    await service.create(project, ana, 'other.tex', 'o');
+    await storage.open(project.id).write('other.tex', 'edited, not committed');
+
+    await service.rename(project, ana, 'dir', 'moved');
+    await service.remove(project, ana, 'a.tex');
+
+    const repo = storage.open(project.id).repo;
+    const head = (await repo.head()) as string;
+    expect(await repo.workingChanges(head)).toEqual([{ path: 'other.tex', type: 'modify' }]);
+    expect(await repo.readFileAt(head, 'moved/b.tex')).not.toBeNull();
+    expect(await repo.readFileAt(head, 'dir/b.tex')).toBeNull();
+    expect(await repo.readFileAt(head, 'a.tex')).toBeNull();
   });
 });

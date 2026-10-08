@@ -3,8 +3,8 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 
 /**
  * Serializes mutations per project (git index, quota checks, exists-then-write). The in-process
- * chain orders this process's callers; each turn then takes the Redis lock shared with the worker's
- * autocommit (and other api replicas). Without a Redis client (unit tests) only the chain runs.
+ * chain orders this process's callers; each turn then takes the Redis lock shared with other api
+ * replicas. Without a Redis client (unit tests) only the chain runs.
  */
 @Injectable()
 export class ProjectLock {

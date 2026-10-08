@@ -2,7 +2,6 @@ import {
   COMPILE_QUEUE,
   ConfigModule,
   DatabaseModule,
-  MAINTENANCE_QUEUE,
   QUEUE_CONNECTION,
   QueueModule,
   queueOptions,
@@ -13,7 +12,6 @@ import { Module } from '@nestjs/common';
 import { CompileProcessor } from './compile/compile.processor';
 import { LatexmkRunner } from './compile/latexmk-runner';
 import { Sandbox } from './compile/sandbox';
-import { AutocommitProcessor } from './maintenance/autocommit.processor';
 import { ToolsProcessor } from './tools/tools.processor';
 
 @Module({
@@ -26,12 +24,8 @@ import { ToolsProcessor } from './tools/tools.processor';
       inject: [QUEUE_CONNECTION],
       useFactory: queueOptions,
     }),
-    BullModule.registerQueue(
-      { name: COMPILE_QUEUE },
-      { name: MAINTENANCE_QUEUE },
-      { name: TOOLS_QUEUE },
-    ),
+    BullModule.registerQueue({ name: COMPILE_QUEUE }, { name: TOOLS_QUEUE }),
   ],
-  providers: [Sandbox, LatexmkRunner, CompileProcessor, AutocommitProcessor, ToolsProcessor],
+  providers: [Sandbox, LatexmkRunner, CompileProcessor, ToolsProcessor],
 })
 export class AppModule {}

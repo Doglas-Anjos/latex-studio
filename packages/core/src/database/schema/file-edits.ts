@@ -2,7 +2,7 @@ import { pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 import { projects } from './projects';
 import { users } from './users';
 
-/** Who edited which file collaboratively since the last autocommit; the worker attributes autosaves. */
+/** Who edited which file collaboratively since it was last committed; the commit names them. */
 export const fileEdits = pgTable(
   'file_edits',
   {

@@ -11,17 +11,11 @@ export type Blame = {
   lines: BlameRun[];
 };
 
-export const AUTOSAVE_MESSAGE = 'Autosave';
-export const AUTOSAVE_AUTHOR: Author = {
-  name: 'LaTeX Studio',
-  email: 'autosave@latex-studio.local',
-};
 const MAX_BLAME_CHARS = 1024 * 1024;
 /** One deadline for all the diffs of a blame request; the API is single-threaded. */
 const BLAME_DIFF_BUDGET_MS = 1000;
 /** Commits + texts per `${head}:${path}`, the costly part that does not depend on the working tree. */
 const blameCache = new Map<string, Promise<{ oids: string[]; texts: string[] }>>();
-const baselineCache = new Map<string, Promise<unknown>>();
 const storedBytesCache = new Map<string, { bytes: number; at: number }>();
 const remember = <T>(cache: Map<string, Promise<T>>, key: string, make: () => Promise<T>) => {
   const hit = cache.get(key);
@@ -38,6 +32,10 @@ const SYMLINK_MODE = 0o120000;
 
 const dec = new TextDecoder();
 const countLines = (s: string) => s.split('\n').length - (s === '' || s.endsWith('\n') ? 1 : 0);
+const withCoAuthors = (message: string, coAuthors: Author[]) =>
+  coAuthors.length
+    ? `${message}\n\n${coAuthors.map((a) => `Co-authored-by: ${a.name} <${a.email}>`).join('\n')}`
+    : message;
 
 export class GitRepository {
   private constructor(private readonly dir: string) {}
@@ -114,22 +112,32 @@ export class GitRepository {
     return out;
   }
 
-  // ponytail: statusMatrix trusts mtime (seconds) + size, so a same-size edit within the same
-  // second as the previous add is missed until the next change. Fine for autosave cadence.
+  // ponytail: statusMatrix trusts mtime (seconds) + size, plus the inode except on Windows. On
+  // Linux every ProjectFiles.write is a temp-file rename (new inode), so nothing is missed; on a
+  // Windows dev box a same-size edit within the same second as the previous add is missed until
+  // the next change. Hash every file, as commitPaths does, if Windows ever runs in production.
   /** statusMatrix rows that differ from HEAD. */
   private async changes() {
     const rows = await git.statusMatrix({ fs, dir: this.dir });
     return rows.filter(([, head, workdir, stage]) => !(head === 1 && workdir === 1 && stage === 1));
   }
 
-  async commitAll(message: string, author: Author): Promise<string | null> {
+  async commitAll(
+    message: string,
+    author: Author,
+    coAuthors: Author[] = [],
+  ): Promise<string | null> {
     const changed = await this.changes();
     if (changed.length === 0) return null;
+    const toAdd: string[] = [];
     for (const [filepath, , workdir] of changed) {
       if (workdir === 0) await git.remove({ fs, dir: this.dir, filepath });
-      else await git.add({ fs, dir: this.dir, filepath });
+      else toAdd.push(filepath);
     }
-    return git.commit({ fs, dir: this.dir, message, author, committer: author });
+    // One add for all: each call rewrites the whole index.
+    if (toAdd.length) await git.add({ fs, dir: this.dir, filepath: toAdd });
+    const full = withCoAuthors(message, coAuthors);
+    return git.commit({ fs, dir: this.dir, message: full, author, committer: author });
   }
 
   async log(
@@ -202,27 +210,6 @@ export class GitRepository {
     return commits.filter((_, i) => oids[i] !== (oids[i + 1] ?? null));
   }
 
-  /** Newest non-autosave commit; the oldest fetched one if all are autosaves. */
-  async baseline(limit = 200) {
-    const head = await this.head();
-    if (!head) return null;
-    return remember(baselineCache, `${this.dir}:${head}`, async () => {
-      const commits = await this.log(limit);
-      // ponytail: only `limit` commits are scanned; more consecutive autosaves than that yields the oldest of them.
-      const isAutosave = (m: string) =>
-        m === AUTOSAVE_MESSAGE || m.startsWith(`${AUTOSAVE_MESSAGE}\n`);
-      return commits.find((c) => !isAutosave(c.message)) ?? commits.at(-1) ?? null;
-    }) as Promise<Awaited<ReturnType<GitRepository['log']>>[number] | null>;
-  }
-
-  /**
-   * A named save point with no new content: the working tree is already in HEAD (an autosave
-   * took it), but the person wants a version they chose, so the baseline moves here.
-   */
-  markVersion(message: string, author: Author): Promise<string> {
-    return git.commit({ fs, dir: this.dir, message, author, committer: author });
-  }
-
   /** HEAD's sha, or null for an empty repo. */
   head(): Promise<string | null> {
     return git.resolveRef({ fs, dir: this.dir, ref: 'HEAD' }).catch(() => null);
@@ -241,7 +228,8 @@ export class GitRepository {
     // Content hashes, not statusMatrix: its mtime+size shortcut misses a same-size edit made in
     // the same second, which is exactly what Ctrl+S right after typing produces.
     const head = await this.head();
-    let changed = 0;
+    const toAdd: string[] = [];
+    let removed = 0;
     for (const filepath of paths) {
       const content = await fs.promises.readFile(join(this.dir, filepath)).catch(() => null);
       const inHead = head
@@ -252,13 +240,16 @@ export class GitRepository {
         : null;
       const now = content ? (await git.hashBlob({ object: content })).oid : null;
       if (now === inHead) continue;
-      changed++;
-      if (content === null) await git.remove({ fs, dir: this.dir, filepath });
-      else await git.add({ fs, dir: this.dir, filepath });
+      if (content !== null) toAdd.push(filepath);
+      else {
+        await git.remove({ fs, dir: this.dir, filepath });
+        removed++;
+      }
     }
-    if (changed === 0) return null;
-    const trailers = coAuthors.map((a) => `Co-authored-by: ${a.name} <${a.email}>`);
-    const full = trailers.length ? `${message}\n\n${trailers.join('\n')}` : message;
+    if (toAdd.length + removed === 0) return null;
+    // One add for all: each call rewrites the whole index.
+    if (toAdd.length) await git.add({ fs, dir: this.dir, filepath: toAdd });
+    const full = withCoAuthors(message, coAuthors);
     return git.commit({ fs, dir: this.dir, message: full, author, committer: author });
   }
 

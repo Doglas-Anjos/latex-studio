@@ -6,7 +6,7 @@ import { Dialog } from '../dialog';
 const sections: [string, string][] = [
   [
     'Projetos são repositórios git',
-    'Cada projeto tem histórico completo. "Salvar versão" cria um commit com mensagem; a cada 5 minutos o que mudou é salvo automaticamente em seu nome (autosave).',
+    'Cada projeto tem histórico completo. O texto é salvo no servidor enquanto você digita (autosave), mas só vira commit quando você pede: Ctrl+S commita o arquivo aberto e "Salvar versão" commita os arquivos escolhidos, com mensagem.',
   ],
   [
     'Arquivos alterados',

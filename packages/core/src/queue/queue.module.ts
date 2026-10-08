@@ -3,7 +3,6 @@ import type { WorkerConfig } from '../config/config.schema';
 import { APP_CONFIG } from '../config/config.schema';
 
 export const COMPILE_QUEUE = 'compile';
-export const MAINTENANCE_QUEUE = 'maintenance';
 export const TOOLS_QUEUE = 'tools';
 
 export type CompileJobData = { buildId: string; projectId: string };

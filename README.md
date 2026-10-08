@@ -57,7 +57,7 @@ Verificações: `pnpm lint`, `pnpm typecheck`, `pnpm test`. Os pacotes em `packa
 
 ```
 apps/api        API NestJS: identidade (JWT do FasorX), projects, files, collab (Yjs), compile, packages, export
-apps/worker     Fila: compilação latexmk em sandbox, autocommit
+apps/worker     Fila: compilação latexmk em sandbox, ferramentas (export, wordcount, format)
 apps/web        React: dashboard, workspace (editor colaborativo, diff, blame, PDF, bibliotecas, builds)
 packages/core   Config validada, banco (Drizzle + migrações), fila, SafePath
 packages/git-store, packages/latex-tools   Classes puras (git, parsers LaTeX)

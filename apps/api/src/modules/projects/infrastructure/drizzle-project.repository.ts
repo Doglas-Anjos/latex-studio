@@ -1,7 +1,7 @@
 import { DATABASE, type Database } from '@latex-studio/core';
 import { fileEdits, projectMembers, projects, users } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, getTableColumns, ne, sql } from 'drizzle-orm';
+import { and, count, desc, eq, getTableColumns, inArray, lte, ne, sql } from 'drizzle-orm';
 import type { Project, ProjectRole } from '../domain/project';
 import type {
   Member,
@@ -15,9 +15,15 @@ import type {
 // ponytail: folds Portuguese accents only; enable the unaccent extension if other scripts matter.
 const ACCENTED = 'áàâãäéèêëíìîïóòôõöúùûüç';
 const PLAIN = 'aaaaaeeeeiiiiooooouuuuc';
+const EDIT_THROTTLE_MS = 10_000;
+const editKey = (projectId: string, path: string, userId: string) =>
+  JSON.stringify([projectId, path, userId]);
 
 @Injectable()
 export class DrizzleProjectRepository implements ProjectRepository {
+  /** When each (project, path, user) row was last written by `recordEdit`. */
+  private readonly lastEdit = new Map<string, number>();
+
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   create(project: NewProject, ownerId: string): Promise<Project> {
@@ -143,11 +149,13 @@ export class DrizzleProjectRepository implements ProjectRepository {
     await this.db.delete(projects).where(eq(projects.id, id));
   }
 
-  async markDirty(id: string): Promise<void> {
-    await this.db.update(projects).set({ dirtySince: sql`now()` }).where(eq(projects.id, id));
-  }
-
+  /** Called on every Yjs update; one row write per (file, user) every 10 s is plenty. */
   async recordEdit(projectId: string, path: string, userId: string): Promise<void> {
+    const key = editKey(projectId, path, userId);
+    const now = Date.now();
+    if ((this.lastEdit.get(key) ?? 0) > now - EDIT_THROTTLE_MS) return;
+    this.lastEdit.set(key, now);
+    if (this.lastEdit.size > 10_000) this.lastEdit.clear();
     await this.db
       .insert(fileEdits)
       .values({ projectId, path, userId })
@@ -155,5 +163,37 @@ export class DrizzleProjectRepository implements ProjectRepository {
         target: [fileEdits.projectId, fileEdits.path, fileEdits.userId],
         set: { updatedAt: sql`now()` },
       });
+  }
+
+  async withEditors<T>(
+    projectId: string,
+    paths: string[] | null,
+    commit: (editors: Array<{ name: string; email: string }>) => Promise<T>,
+  ): Promise<T> {
+    const where = and(
+      eq(fileEdits.projectId, projectId),
+      paths ? inArray(fileEdits.path, paths) : undefined,
+    );
+    const rows = await this.db
+      .select({
+        path: fileEdits.path,
+        userId: fileEdits.userId,
+        name: users.name,
+        email: users.email,
+        // As text: a JS Date drops the microseconds, and `<=` would then miss the newest row.
+        upTo: sql<string>`(max(${fileEdits.updatedAt}) over ())::text`,
+      })
+      .from(fileEdits)
+      .innerJoin(users, eq(users.id, fileEdits.userId))
+      .where(where);
+    const editors = new Map(rows.map(({ name, email }) => [email, { name, email }]));
+    const result = await commit([...editors.values()]);
+    if (rows.length === 0) return result;
+    // A row written since the read has a later updated_at and stays for the next commit.
+    const upTo = sql`${rows[0]?.upTo}::timestamptz`;
+    await this.db.delete(fileEdits).where(and(where, lte(fileEdits.updatedAt, upTo)));
+    // Or the throttle would skip the first edit after this commit, leaving no row for it.
+    for (const r of rows) this.lastEdit.delete(editKey(projectId, r.path, r.userId));
+    return result;
   }
 }

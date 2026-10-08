@@ -104,13 +104,13 @@ describe('CollabService', () => {
     await expect(collab.load(projectId, 'missing.tex')).rejects.toThrow();
   });
 
-  it('stores the state, writes the file and marks the project dirty', async () => {
+  it('stores the state and writes the file without committing it', async () => {
     const doc = new Y.Doc();
     doc.getText('content').insert(0, 'hello');
     await collab.store(projectId, 'main.tex', doc);
 
     expect(await readFile(join(dir, projectId, 'main.tex'), 'utf8')).toBe('hello');
-    expect(projects.dirtySince.has(projectId)).toBe(true);
+    expect(await storage.open(projectId).repo.head()).toBeNull();
     const loaded = new Y.Doc();
     Y.applyUpdate(loaded, (await collab.load(projectId, 'main.tex')) as Uint8Array);
     expect(loaded.getText('content').toString()).toBe('hello');
