@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import type { WorkerConfig } from '@latex-studio/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { LatexmkRunner } from './latexmk-runner';
+import { Sandbox } from './sandbox';
 
 const latexmkAvailable = (() => {
   try {
@@ -28,7 +29,10 @@ const doc = (body: string) =>
 describe('LatexmkRunner', () => {
   let dir: string;
   const runner = (timeout = 120_000) =>
-    new LatexmkRunner({ COMPILE_TIMEOUT_MS: timeout } as WorkerConfig);
+    new LatexmkRunner(
+      { COMPILE_TIMEOUT_MS: timeout } as WorkerConfig,
+      new Sandbox({ COMPILE_SANDBOX: 'off' } as never),
+    );
 
   beforeEach(async () => {
     dir = await mkdtemp(join(tmpdir(), 'latexmk-test-'));

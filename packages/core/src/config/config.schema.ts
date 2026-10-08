@@ -17,6 +17,10 @@ const baseSchema = z.object({
   // LuaTeX's io.input/io.output and os.getenv bypass kpathsea's paranoid mode, so a document can
   // read and write any file the worker can (other projects, /proc/<worker>/environ). Only for a
   // server whose every user is trusted, until compiles run in an OS sandbox.
+  // OS sandbox (bubblewrap) around latexmk/pandoc/texcount so a document cannot read other
+  // projects or the worker's environment: 'auto' uses it when available, 'require' refuses to
+  // start without it, 'off' disables it (and on non-Linux dev it is always off).
+  COMPILE_SANDBOX: z.enum(['auto', 'off', 'require']).default('auto'),
   COMPILE_ALLOW_LUALATEX: z
     .enum(['true', 'false'])
     .default('false')

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { Job } from 'bullmq';
 import { afterAll, beforeAll, describe, expect, it, type Mock, vi } from 'vitest';
+import { Sandbox } from '../compile/sandbox';
 import {
   assertNoUnsafeIncludes,
   findUnsafeInclude,
@@ -121,7 +122,11 @@ describe('format', () => {
   let proc: ToolsProcessor;
   beforeAll(async () => {
     builds = await mkdtemp(join(tmpdir(), 'ls-builds-'));
-    proc = new ToolsProcessor({} as never, { REPOS_DIR: 'x', BUILDS_DIR: builds } as never);
+    proc = new ToolsProcessor(
+      {} as never,
+      { REPOS_DIR: 'x', BUILDS_DIR: builds } as never,
+      new Sandbox({ COMPILE_SANDBOX: 'off' } as never),
+    );
   });
   afterAll(() => rm(builds, { recursive: true, force: true }));
   const format = (path: string, text = '\\item x\n') =>

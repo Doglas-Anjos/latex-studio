@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 import { APP_CONFIG, type WorkerConfig } from '@latex-studio/core';
 import { Inject, Injectable } from '@nestjs/common';
+import { Sandbox } from './sandbox';
 
 export type Engine = 'pdflatex' | 'xelatex' | 'lualatex';
 
@@ -39,7 +40,10 @@ const DRAFT_WRAPPER = 'latex-studio-draft.tex';
  */
 @Injectable()
 export class LatexmkRunner {
-  constructor(@Inject(APP_CONFIG) private readonly config: WorkerConfig) {}
+  constructor(
+    @Inject(APP_CONFIG) private readonly config: WorkerConfig,
+    @Inject(Sandbox) private readonly sandbox: Sandbox,
+  ) {}
 
   async run(job: {
     workDir: string;
@@ -81,8 +85,10 @@ export class LatexmkRunner {
       target,
     ];
     // HOME and the per-user texmf trees live outside the snapshot, so project files can never be
-    // picked up as a format, Lua bytecode cache or fontconfig.
-    const home = await mkdtemp(join(tmpdir(), 'ls-home-'));
+    // picked up as a format, Lua bytecode cache or fontconfig. In the sandbox HOME is the private
+    // tmpfs, so there is no host directory to make or clean up.
+    const sandboxed = this.sandbox.enabled;
+    const home = sandboxed ? '/tmp' : await mkdtemp(join(tmpdir(), 'ls-home-'));
     const env = {
       PATH: process.env.PATH,
       HOME: home,
@@ -97,11 +103,12 @@ export class LatexmkRunner {
       max_print_line: '10000',
     };
 
+    const spec = this.sandbox.spawn('latexmk', args, workDir, env);
     try {
       return await new Promise((resolve, reject) => {
-        const child = spawn('latexmk', args, {
+        const child = spawn(spec.file, spec.args, {
           cwd: workDir,
-          env,
+          env: spec.env,
           windowsHide: true,
           detached: !WINDOWS,
           stdio: 'ignore',
@@ -130,7 +137,7 @@ export class LatexmkRunner {
         });
       });
     } finally {
-      await rm(home, { recursive: true, force: true });
+      if (!sandboxed) await rm(home, { recursive: true, force: true });
     }
   }
 }

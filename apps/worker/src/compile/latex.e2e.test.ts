@@ -15,6 +15,7 @@ import {
 import { afterEach, describe, expect, it } from 'vitest';
 import { type Engine, LatexmkRunner } from './latexmk-runner';
 import { toBuildStatus } from './log-to-build';
+import { Sandbox } from './sandbox';
 
 // Real compiles of the fixtures in apps/worker/test/fixtures, one per production incident.
 // Run with `pnpm test:latex`; skipped where latexmk is not installed.
@@ -29,7 +30,10 @@ const latexmkAvailable = (() => {
 })();
 
 const FIXTURES = join(__dirname, '../../test/fixtures');
-const runner = new LatexmkRunner({ COMPILE_TIMEOUT_MS: 240_000 } as WorkerConfig);
+const runner = new LatexmkRunner(
+  { COMPILE_TIMEOUT_MS: 240_000 } as WorkerConfig,
+  new Sandbox({ COMPILE_SANDBOX: 'off' } as never),
+);
 const dirs: string[] = [];
 
 /** Copies a fixture to a temp dir; `edit` may rewrite files there before compiling. */

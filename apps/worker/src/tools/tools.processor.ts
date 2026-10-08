@@ -1,8 +1,16 @@
-import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import {
   APP_CONFIG,
   DATABASE,
@@ -17,9 +25,9 @@ import { projects } from '@latex-studio/core/schema';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject } from '@nestjs/common';
 import type { Job } from 'bullmq';
+import { Sandbox } from '../compile/sandbox';
 import { snapshotProject } from '../snapshot';
 
-const run = promisify(execFile);
 const MAX_STDERR = 2048;
 const EXPORT_TTL_MS = 60 * 60 * 1000;
 const FORMAT_TTL_MS = 10 * 60 * 1000;
@@ -157,7 +165,7 @@ const MAX_FORMAT_BYTES = 1024 * 1024;
  * editor by seconds) in a throwaway dir: `in.<ext>` is the only file latexindent sees.
  * Memory is bounded by the container limit, like compile.
  */
-async function formatText(path: string, text: string): Promise<string> {
+async function formatText(path: string, text: string, sandbox: Sandbox): Promise<string> {
   const ext = FORMATTABLE.exec(path)?.[1]?.toLowerCase();
   if (!ext) throw new Error(`Invalid path: ${path}`);
   if (Buffer.byteLength(text) > MAX_FORMAT_BYTES) {
@@ -168,16 +176,17 @@ async function formatText(path: string, text: string): Promise<string> {
     const name = `in.${ext}`;
     await writeFile(join(dir, name), text);
     const args = ["-y=defaultIndent: '  '", '-g=indent.log', name];
-    const { stdout } = await run('latexindent', args, {
-      cwd: dir,
-      windowsHide: true,
-      maxBuffer: 2 * MAX_FORMAT_BYTES,
-      env: { PATH: process.env.PATH, HOME: dir },
-      timeout: 15_000,
-    }).catch((e: { stderr?: string; message: string }) => {
-      const lines = (e.stderr || e.message).split('\n').slice(0, 5).join('\n');
-      throw new Error(lines.replace(/[^\t\n\x20-\x7e]/g, '').slice(0, 500));
-    });
+    const { stdout } = await sandbox
+      .run('latexindent', args, {
+        cwd: dir,
+        maxBuffer: 2 * MAX_FORMAT_BYTES,
+        env: { PATH: process.env.PATH, HOME: dir },
+        timeout: 15_000,
+      })
+      .catch((e: { stderr?: string; message: string }) => {
+        const lines = (e.stderr || e.message).split('\n').slice(0, 5).join('\n');
+        throw new Error(lines.replace(/[^\t\n\x20-\x7e]/g, '').slice(0, 500));
+      });
     return stdout;
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -196,6 +205,7 @@ export class ToolsProcessor extends WorkerHost {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(APP_CONFIG) private readonly config: WorkerConfig,
+    @Inject(Sandbox) private readonly sandbox: Sandbox,
   ) {
     super();
     this.builds = new SafePath(config.BUILDS_DIR);
@@ -205,7 +215,7 @@ export class ToolsProcessor extends WorkerHost {
     if (job.data.kind === 'format') {
       // Up to 1 MB: a return value would be copied into Redis (job hash and events stream), so
       // it goes to disk and the API reads it back when the client polls the job.
-      const text = await formatText(job.data.path, job.data.text);
+      const text = await formatText(job.data.path, job.data.text, this.sandbox);
       const dir = this.builds.resolve(`${job.data.projectId}/format`);
       await mkdir(dir, { recursive: true });
       await pruneOld(dir, FORMAT_TTL_MS);
@@ -229,9 +239,12 @@ export class ToolsProcessor extends WorkerHost {
       if (project.mainFile.startsWith('-')) throw new Error('Invalid main file');
       const files = await listTree(tmp);
       await assertNoUnsafeIncludes(tmp, files);
+      const runOpts = { cwd: tmp, env: options.env, maxBuffer: options.maxBuffer };
       if (job.data.kind === 'wordcount') {
         const args = ['-total', '-brief', '-nosub', '-inc', '-merge', project.mainFile];
-        const { stdout } = await run('texcount', args, { ...options, timeout: 60_000 }).catch(fail);
+        const { stdout } = await this.sandbox
+          .run('texcount', args, { ...runOpts, timeout: 60_000 })
+          .catch(fail);
         return parseTexcount(stdout);
       }
       const { format } = job.data;
@@ -240,17 +253,19 @@ export class ToolsProcessor extends WorkerHost {
       await pruneOld(dir, EXPORT_TTL_MS);
       const file = `${job.id}.${format}`;
       const bib = files.find((f) => f.endsWith('.bib'));
+      // Output into the snapshot (the only writable path in the sandbox), then copy it out.
       const args = [
         '-s',
         project.mainFile,
         '-o',
-        join(dir, file),
+        file,
         '--citeproc',
         ...(bib ? ['--bibliography', bib] : []),
         '--resource-path',
         tmp,
       ];
-      await run('pandoc', args, { ...options, timeout: 120_000 }).catch(fail);
+      await this.sandbox.run('pandoc', args, { ...runOpts, timeout: 120_000 }).catch(fail);
+      await copyFile(join(tmp, file), join(dir, file));
       return { file };
     } finally {
       await rm(tmp, { recursive: true, force: true });

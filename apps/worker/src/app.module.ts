@@ -12,6 +12,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { CompileProcessor } from './compile/compile.processor';
 import { LatexmkRunner } from './compile/latexmk-runner';
+import { Sandbox } from './compile/sandbox';
 import { AutocommitProcessor } from './maintenance/autocommit.processor';
 import { ToolsProcessor } from './tools/tools.processor';
 
@@ -31,6 +32,6 @@ import { ToolsProcessor } from './tools/tools.processor';
       { name: TOOLS_QUEUE },
     ),
   ],
-  providers: [LatexmkRunner, CompileProcessor, AutocommitProcessor, ToolsProcessor],
+  providers: [Sandbox, LatexmkRunner, CompileProcessor, AutocommitProcessor, ToolsProcessor],
 })
 export class AppModule {}

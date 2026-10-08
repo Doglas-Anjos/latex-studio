@@ -18,7 +18,7 @@ RUN pnpm --filter @latex-studio/worker deploy --prod --legacy /out
 # Full TeX Live (latexmk, texcount, latexindent included); pandoc and latexindent's Perl modules
 # from Debian; node copied from the official image
 FROM texlive/texlive:latest
-RUN apt-get update && apt-get install -y --no-install-recommends pandoc \
+RUN apt-get update && apt-get install -y --no-install-recommends pandoc bubblewrap \
     libyaml-tiny-perl libfile-homedir-perl liblog-log4perl-perl libunicode-linebreak-perl \
     && rm -rf /var/lib/apt/lists/*
 RUN latexindent --version
