@@ -17,6 +17,7 @@ import { HttpMemberService, MemberServiceToken } from './services/member.service
 import { HttpPackageService, PackageServiceToken } from './services/package.service';
 import { HttpProjectService, ProjectServiceToken } from './services/project.service';
 import { HttpReferenceService, ReferenceServiceToken } from './services/reference.service';
+import { HttpSpellcheckService, SpellcheckServiceToken } from './services/spellcheck.service';
 import { HttpToolsService, ToolsServiceToken } from './services/tools.service';
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-700.css';
@@ -43,6 +44,7 @@ const container = new Container()
   .register(IdentityToken, identity)
   .register(ProjectServiceToken, new HttpProjectService(api))
   .register(ReferenceServiceToken, new HttpReferenceService(api))
+  .register(SpellcheckServiceToken, new HttpSpellcheckService(api))
   .register(FileServiceToken, new HttpFileService(api))
   .register(CompileServiceToken, new HttpCompileService(api))
   .register(PackageServiceToken, new HttpPackageService(api))

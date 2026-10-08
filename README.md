@@ -71,3 +71,7 @@ Resumo em [SECURITY.md](SECURITY.md) e na seção "Segurança" de [docs/architec
 ## Licença
 
 AGPL-3.0. Veja [LICENSE](LICENSE).
+
+O corretor ortográfico usa dicionários Hunspell de terceiros, cada um sob a própria licença:
+- Português (pacote `dictionary-pt`): dicionário VERO de Raimundo Moura, sob LGPL-3.0 ou MPL-2.0.
+- Inglês (pacote `dictionary-en`): derivado do SCOWL, sob MIT e BSD.

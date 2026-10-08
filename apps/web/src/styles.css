@@ -1187,6 +1187,52 @@ kbd {
   cursor: help;
 }
 
+/* Spell check: misspelled prose words get a red wavy underline; right-click opens suggestions. */
+.cm-spell-error {
+  text-decoration: underline wavy var(--danger);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+}
+.spell-popup {
+  position: fixed;
+  z-index: 60;
+  min-width: 10rem;
+  max-width: 16rem;
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.18);
+  font-size: 0.85rem;
+}
+.spell-item {
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 0.3rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+.spell-item:hover {
+  background: var(--primary);
+  color: #fff;
+}
+.spell-ignore {
+  color: var(--muted);
+}
+.spell-sep {
+  height: 1px;
+  margin: 0.25rem 0.3rem;
+  background: var(--line);
+}
+.spell-none {
+  padding: 0.3rem 0.5rem;
+  color: var(--muted);
+}
+
 /* Find/replace panel (Ctrl+F): match the app's inputs, buttons and tokens instead of CM defaults. */
 .cm-panel.cm-search {
   position: relative;

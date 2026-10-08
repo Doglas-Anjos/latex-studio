@@ -63,13 +63,7 @@ function parseAppearance(raw: unknown): Partial<Settings> {
 
 const SPELL_LANGS: [string, string][] = [
   ['pt-BR', 'Português (Brasil)'],
-  ['pt-PT', 'Português (Portugal)'],
   ['en-US', 'English (US)'],
-  ['en-GB', 'English (UK)'],
-  ['es', 'Español'],
-  ['fr', 'Français'],
-  ['de', 'Deutsch'],
-  ['it', 'Italiano'],
 ];
 
 type Category = 'editor' | 'spelling' | 'compile' | 'appearance';
@@ -234,7 +228,7 @@ function SpellingPanel() {
       />
       <Row
         title="Idioma"
-        description="Usa o dicionário do seu navegador/sistema para este idioma."
+        description="Dicionário usado para checar a ortografia; carregado sob demanda."
         control={
           <select
             value={s.spellcheckLang}

@@ -75,9 +75,9 @@ export interface Settings {
   draftMode: boolean;
   /** false = keep compiling past errors and still get a PDF. */
   stopOnFirstError: boolean;
-  /** Browser-native spellcheck on prose (commands, math and keys are excluded). */
+  /** Dictionary spell check on prose (commands, math and keys are excluded). */
   spellcheck: boolean;
-  /** BCP-47 tag set as the editor content's `lang`, so the browser picks that dictionary. */
+  /** BCP-47 tag choosing the dictionary (pt-* and en-* are bundled). */
   spellcheckLang: string;
 }
 

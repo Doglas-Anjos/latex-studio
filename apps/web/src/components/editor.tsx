@@ -27,6 +27,7 @@ import { HistoryServiceToken } from '../services/history.service';
 import { IdentityToken } from '../services/identity';
 import type { Role } from '../services/project.service';
 import { type ReferenceIndex, ReferenceServiceToken } from '../services/reference.service';
+import { SpellcheckServiceToken } from '../services/spellcheck.service';
 import { useSettingsStore } from '../settings-store';
 import { type CommentDraft, type Peer, useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
@@ -246,6 +247,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const commentsRef = useRef<Comment[]>([]);
   commentsRef.current = data ?? [];
   const references = useService(ReferenceServiceToken);
+  const spellchecker = useService(SpellcheckServiceToken);
   const refIndexRef = useRef<ReferenceIndex | null>(null);
   const { data: refIndex } = useQuery({
     queryKey: ['references', projectId],
@@ -463,7 +465,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             ? latexSupport({ autocomplete: referenceCompletions(refIndexRef) })
             : [],
           path.endsWith('.tex') ? referenceExtensions({ indexRef: refIndexRef, path }) : [],
-          path.endsWith('.tex') ? spellcheck() : [],
+          path.endsWith('.tex') ? spellcheck({ projectId, service: spellchecker }) : [],
           yCollab(ytext, provider.awareness, { undoManager: undo }),
           // Undo must be Yjs's: basicSetup's history also records the text that arrives from
           // the server (y-codemirror does not mark it addToHistory: false), so Ctrl+Z right
@@ -645,7 +647,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       // theirs; closing the tab ends it once the last edit has synced.
       if (!isOpenSession(session)) closeWhenSynced(provider, doc);
     };
-  }, [projectId, path, readOnly, canComment, identity.token, files, queryClient]);
+  }, [projectId, path, readOnly, canComment, identity.token, files, queryClient, spellchecker]);
 
   useEffect(() => {
     const text = baseText ?? null;

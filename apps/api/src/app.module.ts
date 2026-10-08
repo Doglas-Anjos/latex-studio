@@ -14,6 +14,7 @@ import { MembersModule } from './modules/members/members.module';
 import { PackagesModule } from './modules/packages/packages.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { ReferencesModule } from './modules/references/references.module';
+import { SpellcheckModule } from './modules/spellcheck/spellcheck.module';
 
 @Controller('health')
 class HealthController {
@@ -41,6 +42,7 @@ class HealthController {
     MembersModule,
     PackagesModule,
     ReferencesModule,
+    SpellcheckModule,
   ],
   controllers: [HealthController],
 })
