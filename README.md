@@ -51,6 +51,11 @@ pnpm --filter @latex-studio/worker dev
 pnpm --filter @latex-studio/web dev               # http://localhost:5173, com proxy para a API
 ```
 
+No Windows com MiKTeX, rode o worker pelo PowerShell ou cmd (não pelo Git Bash/MSYS): o worker
+repassa o `PATH` para o `latexmk`, e num ambiente MSYS o MiKTeX gera caminhos estilo `/tmp/...` que
+o `bibtex` não resolve — o efeito é a bibliografia (`.bib`/`.bst`) não ser encontrada e as citações
+saírem indefinidas. Em produção (contêiner Linux) isso não acontece.
+
 Verificações: `pnpm lint`, `pnpm typecheck`, `pnpm test`. Os pacotes em `packages/` precisam estar compilados (`pnpm build`) antes do typecheck dos apps.
 
 ## Layout
