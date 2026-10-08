@@ -166,7 +166,16 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   setConnection: (connection) => set({ connection }),
   setWordCount: (wordCount) => set({ wordCount }),
   setEditorCommands: (editorCommands) => set({ editorCommands }),
-  setPeers: (peers) => set({ peers }),
+  setPeers: (peers) =>
+    set((s) =>
+      s.peers.length === peers.length &&
+      s.peers.every((p, i) => {
+        const q = peers[i];
+        return q && p.id === q.id && p.name === q.name && p.color === q.color;
+      })
+        ? s
+        : { peers },
+    ),
   toggleBlame: () => set((s) => ({ blameOn: !s.blameOn })),
   setHistoryScope: (historyScope) => set({ historyScope }),
   setCommentDraft: (commentDraft) => set({ commentDraft }),

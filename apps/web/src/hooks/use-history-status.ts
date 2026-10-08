@@ -9,5 +9,7 @@ export function useHistoryStatus(projectId: string) {
     queryKey: ['history', projectId, 'status'],
     queryFn: () => history.status(projectId),
     refetchInterval: 30_000,
+    // Uploads, saves and restores invalidate it; opening a tab should not walk the repo again.
+    staleTime: 15_000,
   });
 }

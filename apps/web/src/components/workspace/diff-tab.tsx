@@ -22,7 +22,7 @@ import {
   WholeWord,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 import * as Y from 'yjs';
 import { useService } from '../../di/service-provider';
@@ -30,7 +30,7 @@ import { FileServiceToken } from '../../services/file.service';
 import { HistoryServiceToken } from '../../services/history.service';
 import { IdentityToken } from '../../services/identity';
 import { useSettingsStore } from '../../settings-store';
-import { closeWhenSynced } from '../editor';
+import { closeWhenSynced } from '../collab-sessions';
 import { DIFF_LIMITS } from '../editor-changes';
 import { editorTheme, latexHighlight } from '../editor-theme';
 import { latexSupport } from '../latex-language';
@@ -138,7 +138,6 @@ function revertButton(label?: string): HTMLButtonElement {
 function useLiveText(projectId: string, path: string, enabled: boolean) {
   const identity = useService(IdentityToken);
   const [live, setLive] = useState<{ ytext: Y.Text; undo: Y.UndoManager } | null>(null);
-  const [text, setText] = useState('');
   useEffect(() => {
     if (!enabled) return;
     const doc = new Y.Doc();
@@ -150,29 +149,38 @@ function useLiveText(projectId: string, path: string, enabled: boolean) {
     });
     const ytext = doc.getText('content');
     let undo: Y.UndoManager | null = null;
+    provider.on('synced', () => {
+      if (undo) return; // a reconnect syncs again
+      undo = new Y.UndoManager(ytext);
+      setLive({ ytext, undo });
+    });
+    return () => {
+      undo?.destroy();
+      setLive(null);
+      closeWhenSynced(provider, doc);
+    };
+  }, [projectId, path, enabled, identity]);
+  return { ytext: live?.ytext ?? null, undo: live?.undo ?? null };
+}
+
+/** The live text, re-read 250 ms after edits stop; only for views that render it themselves. */
+function useYText(ytext: Y.Text | null, enabled: boolean) {
+  const [text, setText] = useState('');
+  useEffect(() => {
+    if (!ytext || !enabled) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const update = () => {
       clearTimeout(timer);
       timer = setTimeout(() => setText(ytext.toString()), 250);
     };
-    provider.on('synced', () => {
-      if (undo) return; // a reconnect syncs again
-      undo = new Y.UndoManager(ytext);
-      setText(ytext.toString());
-      setLive({ ytext, undo });
-      ytext.observe(update);
-    });
+    setText(ytext.toString());
+    ytext.observe(update);
     return () => {
       clearTimeout(timer);
-      if (undo) {
-        ytext.unobserve(update);
-        undo.destroy();
-      }
-      setLive(null);
-      closeWhenSynced(provider, doc);
+      ytext.unobserve(update);
     };
-  }, [projectId, path, enabled, identity]);
-  return { ytext: live?.ytext ?? null, undo: live?.undo ?? null, text };
+  }, [ytext, enabled]);
+  return text;
 }
 
 export function DiffTab(props: {
@@ -187,14 +195,15 @@ export function DiffTab(props: {
   const files = useService(FileServiceToken);
   const wrapRef = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(Number.POSITIVE_INFINITY);
-  const splitTooNarrow = width < SPLIT_MIN_WIDTH;
+  // null until measured: building a split and then refolding it into unified diffs the file twice.
+  const [width, setWidth] = useState<number | null>(null);
+  const splitTooNarrow = width !== null && width < SPLIT_MIN_WIDTH;
   // The user's explicit pick wins, except a split with no room for two columns.
   const [modeOverride, setModeOverride] = useState<ViewMode | null>(null);
   const mode: ViewMode =
     modeOverride === 'split' && splitTooNarrow
       ? 'unified'
-      : (modeOverride ?? (width >= SPLIT_DEFAULT_WIDTH ? 'split' : 'unified'));
+      : (modeOverride ?? ((width ?? 0) >= SPLIT_DEFAULT_WIDTH ? 'split' : 'unified'));
   const liveWanted = to === 'work' && COLLAB_EXT.test(path);
   const live = useLiveText(projectId, path, liveWanted);
   const { ytext, undo } = live;
@@ -214,9 +223,11 @@ export function DiffTab(props: {
     }
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = wrapRef.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
+    if (!el) return;
+    setWidth(el.getBoundingClientRect().width);
+    if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
       if (w !== undefined) setWidth(w);
@@ -245,9 +256,11 @@ export function DiffTab(props: {
       return { a, b };
     },
     // A commit never changes; the working copy does, so reopening it refetches.
-    staleTime: to === 'work' ? 0 : Number.POSITIVE_INFINITY,
+    // A commit never changes; only a snapshot of the working copy (no live doc) goes stale.
+    staleTime: to === 'work' && !liveWanted ? 0 : Number.POSITIVE_INFINITY,
   });
-  const ready = !!data && (!liveWanted || !!ytext);
+  const ready = !!data && width !== null && (!liveWanted || !!ytext);
+  const liveText = useYText(ytext, mode === 'words');
 
   useEffect(() => {
     if (!ready || !data || mode === 'words' || !host.current) return;
@@ -461,7 +474,7 @@ export function DiffTab(props: {
         data && (
           <WordDiffView
             a={data.a}
-            b={ytext ? live.text : data.b}
+            b={ytext ? liveText : data.b}
             onRevert={editable ? revertWords : undefined}
           />
         )

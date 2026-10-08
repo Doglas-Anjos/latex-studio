@@ -1,5 +1,6 @@
 import type { Role } from '../../services/project.service';
 import { useSettingsStore } from '../../settings-store';
+import { useWorkspaceStore } from '../../workspace-store';
 import { CommentsPanel } from '../comments-panel';
 import { FileTree } from '../file-tree';
 import { HistoryPanel } from '../history-panel';
@@ -10,15 +11,15 @@ import { ChangesView } from './changes-view';
 
 export function Sidebar({
   project,
-  path,
   showHeading = true,
 }: {
   project: { id: string; name: string; mainFile: string; role: Role };
-  path: string;
   /** Off when a drawer around this component already shows the view's name. */
   showHeading?: boolean;
 }) {
   const view = useSettingsStore((s) => s.sidebarView);
+  // Read here, not passed down: a tab switch then re-renders the sidebar, not the whole page.
+  const path = useWorkspaceStore((s) => s.activePath) ?? project.mainFile;
   const canEdit = project.role === 'owner' || project.role === 'editor';
   return (
     <aside className="sidebar" aria-label={viewLabels[view]}>

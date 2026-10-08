@@ -29,4 +29,13 @@ describe('workspace store', () => {
     expect(s().activePath).toBeNull();
     expect(s().docVersion).toBe(0);
   });
+
+  it('keeps the same peers array when an awareness change leaves the peer list as it was', () => {
+    s().setPeers([{ id: 1, name: 'Ana', color: '#123456' }]);
+    const before = s().peers;
+    s().setPeers([{ id: 1, name: 'Ana', color: '#123456' }]);
+    expect(s().peers).toBe(before);
+    s().setPeers([{ id: 1, name: 'Ana', color: '#654321' }]);
+    expect(s().peers).not.toBe(before);
+  });
 });

@@ -1,15 +1,21 @@
 import { indentSelection } from '@codemirror/commands';
 import { syntaxHighlighting } from '@codemirror/language';
 import { diff } from '@codemirror/merge';
-import { Compartment, EditorState, type Extension, Prec, type Transaction } from '@codemirror/state';
+import {
+  Compartment,
+  EditorSelection,
+  EditorState,
+  type Extension,
+  Prec,
+  type Transaction,
+} from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
-import { HocuspocusProvider } from '@hocuspocus/provider';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { basicSetup } from 'codemirror';
 import { Heading, MessageSquarePlus, Rows, Type, X } from 'lucide-react';
-import { type CSSProperties, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
-import * as Y from 'yjs';
+import type * as Y from 'yjs';
 import { useMe } from '../auth-hooks';
 import type { CommentScope } from '../comment-scope';
 import { lineRangeAt, SCOPE_LABELS, scopeEmptyReason, scopeRange } from '../comment-scope';
@@ -21,13 +27,15 @@ import { HistoryServiceToken } from '../services/history.service';
 import { IdentityToken } from '../services/identity';
 import type { Role } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
-import {
-  type CommentDraft,
-  type Connection,
-  type Peer,
-  useWorkspaceStore,
-} from '../workspace-store';
+import { type CommentDraft, type Peer, useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
+import {
+  type CollabSession,
+  closeWhenSynced,
+  dropSession,
+  isOpenSession,
+  openSession,
+} from './collab-sessions';
 import { commentGutter } from './comment-gutter';
 import { CommentMenu } from './comment-menu';
 import { blameGutter, blameVisible, setBlame } from './editor-blame';
@@ -96,34 +104,7 @@ export function peersFrom(
   return peers;
 }
 
-const unsynced = new Set<object>();
-const confirmLeave = (e: BeforeUnloadEvent) => e.preventDefault();
-/** One beforeunload prompt, registered only while some editor holds edits the server lacks. */
-export function markUnsynced(provider: object, dirty: boolean) {
-  const before = unsynced.size;
-  if (dirty) unsynced.add(provider);
-  else unsynced.delete(provider);
-  if (!before && unsynced.size) window.addEventListener('beforeunload', confirmLeave);
-  if (before && !unsynced.size) window.removeEventListener('beforeunload', confirmLeave);
-}
-
-type Closable = Pick<HocuspocusProvider, 'hasUnsyncedChanges' | 'on' | 'destroy'>;
-/** Destroys provider and doc once the last local edit reached the server, or after 5 s. */
-export function closeWhenSynced(provider: Closable, doc: Pick<Y.Doc, 'destroy'>) {
-  let done = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const finish = () => {
-    if (done) return;
-    done = true;
-    clearTimeout(timer);
-    markUnsynced(provider, false);
-    provider.destroy();
-    doc.destroy();
-  };
-  if (!provider.hasUnsyncedChanges) return finish();
-  provider.on('unsyncedChanges', ({ number }: { number: number }) => number === 0 && finish());
-  timer = setTimeout(finish, 5000);
-}
+export { closeWhenSynced, markUnsynced } from './collab-sessions';
 
 export function Editor({ projectId, path, role }: { projectId: string; path: string; role: Role }) {
   const files = useService(FileServiceToken);
@@ -203,7 +184,15 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const me = useMe().data;
   const [gone, setGone] = useState(false);
   const viewRef = useRef<EditorView | null>(null);
-  const providerRef = useRef<HocuspocusProvider | null>(null);
+  // Read before React detaches the view (a layout cleanup runs first); a detached scroller says 0.
+  const leftAt = useRef(0);
+  useLayoutEffect(
+    () => () => {
+      leftAt.current = viewRef.current?.scrollDOM.scrollTop ?? 0;
+    },
+    [],
+  );
+  const providerRef = useRef<CollabSession['provider'] | null>(null);
   // Baseline text for the change gutter: the file at the last saved version ('' if new).
   const changeBase = useRef<string | null>(null);
   const { data: status } = useHistoryStatus(projectId);
@@ -311,15 +300,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   useEffect(() => {
     const parent = host.current;
     if (!parent) return;
-    const doc = new Y.Doc();
-    const provider = new HocuspocusProvider({
-      url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/collab`,
-      name: `${projectId}/${path}`,
-      document: doc,
-      token: async () => (await identity.token()) ?? '',
-      onStatus: ({ status }) => useWorkspaceStore.getState().setConnection(status as Connection),
-    });
-    const ytext = doc.getText('content');
+    // The doc, websocket and undo history live as long as the tab (collab-sessions.ts); only the
+    // view is rebuilt here, so coming back to a tab needs no reconnect or full re-sync.
+    const session = openSession(projectId, path, async () => (await identity.token()) ?? '');
+    const { doc, provider, ytext, undo } = session;
+    // A parked session cleared its presence; restore it before the cursor label is set again.
+    if (provider.awareness?.getLocalState() === null) provider.awareness.setLocalState({});
+    // Cursor and scroll from the last visit, unless the text changed length meanwhile.
+    const restore = session.parked?.length === ytext.length ? session.parked : null;
     ytextRef.current = ytext;
     const wrap = new Compartment();
     const ro = new Compartment();
@@ -410,6 +398,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       parent,
       state: EditorState.create({
         doc: ytext.toString(),
+        ...(restore && { selection: EditorSelection.fromJSON(restore.selection) }),
         extensions: [
           basicSetup,
           syntaxHighlighting(latexHighlight),
@@ -417,7 +406,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           wrap.of(wrapping(useSettingsStore.getState().lineWrapping)),
           ro.of(EditorState.readOnly.of(readOnly)),
           path.endsWith('.tex') ? latexSupport() : [],
-          yCollab(ytext, provider.awareness),
+          yCollab(ytext, provider.awareness, { undoManager: undo }),
           // Undo must be Yjs's: basicSetup's history also records the text that arrives from
           // the server (y-codemirror does not mark it addToHistory: false), so Ctrl+Z right
           // after opening a file emptied it for every collaborator.
@@ -443,8 +432,16 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       }),
     });
     viewRef.current = view;
+    // After the first layout, or the scroll position has no height to land in. Until it has
+    // happened, leaving keeps the old position (StrictMode remounts right away in development).
+    let restored = !restore;
+    const restoreFrame = restore
+      ? requestAnimationFrame(() => {
+          view.scrollDOM.scrollTo({ top: restore.scrollTop });
+          restored = true;
+        })
+      : 0;
     const store = useWorkspaceStore.getState();
-    store.setConnection('connecting');
     store.setWordCount(approxWords(view.state.doc.toString()));
     store.setEditorCommands({
       indentAll() {
@@ -485,7 +482,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       }
     };
     // A "go to line" request may arrive before or after the first sync.
-    provider.on('synced', () => revealLine(view));
+    const onSynced = () => revealLine(view);
+    provider.on('synced', onSynced);
     const unsubWrap = useSettingsStore.subscribe((s, prev) => {
       if (s.lineWrapping !== prev.lineWrapping)
         view.dispatch({ effects: wrap.reconfigure(wrapping(s.lineWrapping)) });
@@ -501,29 +499,26 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           );
     };
     awareness?.on('change', onAwareness);
-    provider.on('unsyncedChanges', ({ number }: { number: number }) =>
-      markUnsynced(provider, number > 0),
-    );
     // The server refuses or drops a document whose file was deleted or renamed (here or by a
     // collaborator): stop reconnecting and keep the text visible but frozen.
     let closed = false;
     const markGone = () => {
       if (closed) return;
       closed = true;
-      provider.disconnect();
-      markUnsynced(provider, false);
+      dropSession(session.key);
       view.dispatch({ effects: ro.reconfigure(EditorState.readOnly.of(true)) });
       setGone(true);
     };
     provider.on('authenticationFailed', markGone);
     // A per-document close (code 1000) also happens on server shutdown; only a vanished file counts.
-    provider.on('close', ({ event }: { event: { code: number } }) => {
+    const onClose = ({ event }: { event: { code: number } }) => {
       if (event.code !== 1000) return;
       files
         .list(projectId)
         .then((list) => !list.some((f) => f.path === path) && markGone())
         .catch(() => {});
-    });
+    };
+    provider.on('close', onClose);
     const unsubscribe = useWorkspaceStore.subscribe((s, prev) => {
       if (s.pendingLine !== null && s.pendingLine !== prev.pendingLine) revealLine(view);
       if (s.commentJump && s.commentJump !== prev.commentJump) revealComment(s.commentJump.id);
@@ -546,9 +541,21 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       setIcon(null);
       setPopup(null);
       setPopupBody('');
+      provider.off('synced', onSynced);
+      provider.off('authenticationFailed', markGone);
+      provider.off('close', onClose);
+      cancelAnimationFrame(restoreFrame);
+      session.parked = {
+        selection: view.state.selection.toJSON(),
+        scrollTop: restored ? leftAt.current : (restore?.scrollTop ?? 0),
+        length: view.state.doc.length,
+      };
+      // Collaborators should not see a cursor in a file this tab is no longer showing.
+      provider.awareness?.setLocalState(null);
       view.destroy();
-      // Edits typed just before closing the tab would die with the provider.
-      closeWhenSynced(provider, doc);
+      // A vanished file's session was dropped: its connection ends with the view. Open tabs keep
+      // theirs; closing the tab ends it once the last edit has synced.
+      if (!isOpenSession(session)) closeWhenSynced(provider, doc);
     };
   }, [projectId, path, readOnly, canComment, identity.token, files]);
 

@@ -17,7 +17,7 @@ import { TabBar } from '../components/workspace/tab-bar';
 import { useMatchMedia } from '../components/workspace/use-match-media';
 import { useSidebarVisibility } from '../components/workspace/use-sidebar-visibility';
 import { useService } from '../di/service-provider';
-import { ProjectServiceToken } from '../services/project.service';
+import { ProjectServiceToken, type Role } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
 import { useWorkspaceStore } from '../workspace-store';
 import '../workspace-header.css';
@@ -30,8 +30,6 @@ export function ProjectPage() {
   const { projectId = '' } = useParams();
   const projects = useService(ProjectServiceToken);
   const root = useRef<HTMLDivElement>(null);
-  const activePath = useWorkspaceStore((s) => s.activePath);
-  const activeTab = useWorkspaceStore((s) => s.tabs.find((t) => t.id === s.activeTabId));
   const openTab = useWorkspaceStore((s) => s.openTab);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const pdfWidth = useSettingsStore((s) => s.pdfWidth);
@@ -109,7 +107,6 @@ export function ProjectPage() {
     );
 
   const canEdit = project.role === 'owner' || project.role === 'editor';
-  const path = activePath ?? project.mainFile;
   const SidebarIcon = sidebarViewIcons[sidebarView];
   const style = {
     '--sidebar-w': `${sidebarWidth}px`,
@@ -176,7 +173,7 @@ export function ProjectPage() {
         <ActivityBar projectId={project.id} onSelect={openSidebarOnMobile} />
         {wideEnoughForOpenSidebar ? (
           <>
-            <Sidebar project={project} path={path} />
+            <Sidebar project={project} />
             <Splitter root={root} resizes="sidebarWidth" label="Redimensionar barra lateral" />
           </>
         ) : (
@@ -202,39 +199,14 @@ export function ProjectPage() {
                 <X size={16} aria-hidden="true" />
               </Button>
             </div>
-            <Sidebar project={project} path={path} showHeading={false} />
+            <Sidebar project={project} showHeading={false} />
           </dialog>
         )}
         <div className="main-column">
           <div className="surface-row">
             <div className="editor-pane">
               <TabBar />
-              <section
-                className="pane-editor"
-                aria-label={activeTab ? `Editor: ${path}` : 'Nenhum arquivo aberto'}
-              >
-                {!activeTab ? (
-                  <p className="status-note pane-empty">
-                    Nenhum arquivo aberto. Escolha um arquivo na barra lateral para editar.
-                  </p>
-                ) : activeTab.kind === 'diff' ? (
-                  <DiffTab
-                    key={activeTab.id}
-                    projectId={project.id}
-                    path={activeTab.path}
-                    from={activeTab.from}
-                    to={activeTab.to}
-                    canEdit={canEdit}
-                  />
-                ) : (
-                  <Editor
-                    key={`${project.id}/${activeTab.path}`}
-                    projectId={project.id}
-                    path={activeTab.path}
-                    role={project.role}
-                  />
-                )}
-              </section>
+              <ActivePane project={project} canEdit={canEdit} />
             </div>
             {(!compact || surface === 'pdf') &&
               (pdfWidth === 0 && !compact ? (
@@ -275,11 +247,60 @@ export function ProjectPage() {
           </div>
         </div>
       </div>
-      <StatusBar
-        projectId={project.id}
-        role={project.role}
-        path={activeTab?.kind === 'file' ? activeTab.path : null}
-      />
+      <ActiveStatusBar projectId={project.id} role={project.role} />
     </div>
   );
+}
+
+const activeTabOf = (s: ReturnType<typeof useWorkspaceStore.getState>) =>
+  s.tabs.find((t) => t.id === s.activeTabId);
+
+/**
+ * The editor or diff of the active tab. Its own subscription: switching tabs re-renders this, the
+ * tab bar, sidebar and status bar, not the whole workspace (file tree dialogs, PDF, build logs).
+ */
+function ActivePane({
+  project,
+  canEdit,
+}: {
+  project: { id: string; role: Role };
+  canEdit: boolean;
+}) {
+  const activeTab = useWorkspaceStore(activeTabOf);
+  return (
+    <section
+      className="pane-editor"
+      aria-label={activeTab ? `Editor: ${activeTab.path}` : 'Nenhum arquivo aberto'}
+    >
+      {!activeTab ? (
+        <p className="status-note pane-empty">
+          Nenhum arquivo aberto. Escolha um arquivo na barra lateral para editar.
+        </p>
+      ) : activeTab.kind === 'diff' ? (
+        <DiffTab
+          key={activeTab.id}
+          projectId={project.id}
+          path={activeTab.path}
+          from={activeTab.from}
+          to={activeTab.to}
+          canEdit={canEdit}
+        />
+      ) : (
+        <Editor
+          key={`${project.id}/${activeTab.path}`}
+          projectId={project.id}
+          path={activeTab.path}
+          role={project.role}
+        />
+      )}
+    </section>
+  );
+}
+
+function ActiveStatusBar({ projectId, role }: { projectId: string; role: Role }) {
+  const path = useWorkspaceStore((s) => {
+    const tab = activeTabOf(s);
+    return tab?.kind === 'file' ? tab.path : null;
+  });
+  return <StatusBar projectId={projectId} role={role} path={path} />;
 }
