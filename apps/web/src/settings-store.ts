@@ -75,6 +75,10 @@ export interface Settings {
   draftMode: boolean;
   /** false = keep compiling past errors and still get a PDF. */
   stopOnFirstError: boolean;
+  /** Browser-native spellcheck on prose (commands, math and keys are excluded). */
+  spellcheck: boolean;
+  /** BCP-47 tag set as the editor content's `lang`, so the browser picks that dictionary. */
+  spellcheckLang: string;
 }
 
 interface SettingsState extends Settings {
@@ -98,6 +102,8 @@ const defaults: Settings = {
   autoCompile: false,
   draftMode: false,
   stopOnFirstError: true,
+  spellcheck: false,
+  spellcheckLang: 'pt-BR',
 };
 
 export const resolveTheme = (theme: ThemeSetting, prefersDark: boolean): 'light' | 'dark' =>

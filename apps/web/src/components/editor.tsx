@@ -54,6 +54,7 @@ import {
 } from './editor-comments';
 import { editorHelpers } from './editor-helpers';
 import { referenceCompletions, referenceExtensions, setReferenceIndex } from './editor-references';
+import { spellcheck } from './editor-spellcheck';
 import { editorTheme, latexHighlight } from './editor-theme';
 import { EditorToolbar } from './editor-toolbar';
 import { visualMode } from './editor-visual';
@@ -462,6 +463,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             ? latexSupport({ autocomplete: referenceCompletions(refIndexRef) })
             : [],
           path.endsWith('.tex') ? referenceExtensions({ indexRef: refIndexRef, path }) : [],
+          path.endsWith('.tex') ? spellcheck() : [],
           yCollab(ytext, provider.awareness, { undoManager: undo }),
           // Undo must be Yjs's: basicSetup's history also records the text that arrives from
           // the server (y-codemirror does not mark it addToHistory: false), so Ctrl+Z right

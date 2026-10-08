@@ -1,4 +1,4 @@
-import { Code2, FileText, Palette, Settings as SettingsIcon } from 'lucide-react';
+import { Code2, FileText, Palette, Settings as SettingsIcon, SpellCheck } from 'lucide-react';
 import { type ReactNode, type RefObject, useRef, useState } from 'react';
 import {
   type DiffView,
@@ -61,9 +61,21 @@ function parseAppearance(raw: unknown): Partial<Settings> {
   return out;
 }
 
-type Category = 'editor' | 'compile' | 'appearance';
+const SPELL_LANGS: [string, string][] = [
+  ['pt-BR', 'Português (Brasil)'],
+  ['pt-PT', 'Português (Portugal)'],
+  ['en-US', 'English (US)'],
+  ['en-GB', 'English (UK)'],
+  ['es', 'Español'],
+  ['fr', 'Français'],
+  ['de', 'Deutsch'],
+  ['it', 'Italiano'],
+];
+
+type Category = 'editor' | 'spelling' | 'compile' | 'appearance';
 const CATEGORIES: { id: Category; label: string; icon: ReactNode }[] = [
   { id: 'editor', label: 'Editor', icon: <Code2 size={16} aria-hidden="true" /> },
+  { id: 'spelling', label: 'Ortografia', icon: <SpellCheck size={16} aria-hidden="true" /> },
   { id: 'compile', label: 'Compilação', icon: <FileText size={16} aria-hidden="true" /> },
   { id: 'appearance', label: 'Aparência', icon: <Palette size={16} aria-hidden="true" /> },
 ];
@@ -101,6 +113,7 @@ export function SettingsDialog({ ref }: { ref: RefObject<HTMLDialogElement | nul
         </nav>
         <div className="settings-main">
           {cat === 'editor' && <EditorPanel />}
+          {cat === 'spelling' && <SpellingPanel />}
           {cat === 'compile' && <CompilePanel />}
           {cat === 'appearance' && <AppearancePanel />}
         </div>
@@ -192,6 +205,42 @@ function EditorPanel() {
             onChange={(e) => set({ diffView: e.target.value as DiffView })}
           >
             {DIFF_VIEWS.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
+          </select>
+        }
+      />
+    </div>
+  );
+}
+
+function SpellingPanel() {
+  const s = useSettingsStore();
+  const { set } = s;
+  return (
+    <div className="settings-section">
+      <Row
+        title="Corretor ortográfico"
+        description="Sublinha erros na prosa; comandos, matemática e chaves ficam de fora. Sugestões e “adicionar ao dicionário” no clique direito."
+        control={
+          <Toggle
+            checked={s.spellcheck}
+            onChange={(v) => set({ spellcheck: v })}
+            label="Corretor ortográfico"
+          />
+        }
+      />
+      <Row
+        title="Idioma"
+        description="Usa o dicionário do seu navegador/sistema para este idioma."
+        control={
+          <select
+            value={s.spellcheckLang}
+            onChange={(e) => set({ spellcheckLang: e.target.value })}
+          >
+            {SPELL_LANGS.map(([v, l]) => (
               <option key={v} value={v}>
                 {l}
               </option>
