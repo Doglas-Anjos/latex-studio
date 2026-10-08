@@ -26,10 +26,14 @@ const FORMAT_TTL_MS = 10 * 60 * 1000;
 const MAX_SCAN_BYTES = 1024 * 1024;
 // pandoc and texcount follow \input-like commands without kpathsea's paranoid mode, so a project
 // could pull /proc/self/environ or another project's files into the exported document.
-// ponytail: lexical scan, an alias (\let\x\input, \csname) still gets past it; the real fix is
-// running pandoc/texcount with no read access outside the snapshot (sandbox, or `pandoc --sandbox`).
+// An include command with no literal path after it (`\let\x\input`, `\def\x{\input}`,
+// `\expandafter\input\csname`) is refused: it is how an alias would smuggle a path past the scan.
+// ponytail: still lexical (a path built by macros can get through); the real fix is running
+// pandoc/texcount with no read access outside the snapshot (an OS sandbox).
 const INCLUDE_CMD =
-  /\\(input|include|includegraphics|lstinputlisting|verbatiminput|inputminted|InputIfFileExists|bibliography|addbibresource|import|subimport|subfile|includeonly|includepdf)(?![A-Za-z])/g;
+  /\\(@{0,2}input|include|includegraphics|lstinputlisting|verbatiminput|inputminted|InputIfFileExists|bibliography|addbibresource|import|subimport|subfile|includeonly|includepdf)(?![A-Za-z])/g;
+const CSNAME_INCLUDE =
+  /\\csname\s{0,64}@{0,2}(input|include|import|subimport|subfile|InputIfFileExists)\s{0,64}\\endcsname/;
 const TWO_PATH_ARGS = new Set(['import', 'subimport', 'inputminted']); // {dir}{file}, {lang}{file}
 const OPT_ARG = /[\s*]{0,64}\[[^\][]{0,1024}\]/y;
 const OPEN_ARG = /[\s*]{0,64}\{/y;
@@ -53,7 +57,30 @@ function closeBrace(text: string, from: number): number {
 }
 
 /** The first include-like command whose path argument could leave the project, if any. */
-export function findUnsafeInclude(text: string): string | undefined {
+const VERB = /\\verb\*?([^\sA-Za-z*])[^\n]{0,200}?\1/g;
+const COMMENT = /(?<!\\)%[^\n]*/g;
+const VERBATIM_BEGIN = /\\begin\{(verbatim|lstlisting|minted)(\*?)\}/g;
+
+/**
+ * Drops what pandoc and texcount read as literal text (comments, `\verb|...|`, verbatim blocks),
+ * so a document that writes about `\input` is not mistaken for one that uses it. Linear: each
+ * block end is searched once, and an unclosed block stops the search.
+ */
+function dropLiterals(text: string): string {
+  let out = text.replace(VERB, ' ').replace(COMMENT, '');
+  VERBATIM_BEGIN.lastIndex = 0;
+  for (let m = VERBATIM_BEGIN.exec(out); m; m = VERBATIM_BEGIN.exec(out)) {
+    const close = `\\end{${m[1]}${m[2]}}`;
+    const end = out.indexOf(close, VERBATIM_BEGIN.lastIndex);
+    if (end < 0) break;
+    out = `${out.slice(0, m.index)} ${out.slice(end + close.length)}`;
+    VERBATIM_BEGIN.lastIndex = m.index + 1;
+  }
+  return out;
+}
+
+export function findUnsafeInclude(source: string): string | undefined {
+  const text = dropLiterals(source);
   for (const m of text.matchAll(INCLUDE_CMD)) {
     let pos = m.index + m[0].length;
     let args = 0;
@@ -73,9 +100,9 @@ export function findUnsafeInclude(text: string): string | undefined {
     if (args > 0) continue;
     BARE_ARG.lastIndex = pos; // TeX's `\input file`
     const bare = BARE_ARG.exec(text)?.[1];
-    if (bare && unsafePath(bare)) return m[0];
+    if (!bare || unsafePath(bare)) return m[0];
   }
-  return undefined;
+  return CSNAME_INCLUDE.exec(text)?.[0];
 }
 
 /** All files under `dir`, as `/`-separated paths relative to it. */

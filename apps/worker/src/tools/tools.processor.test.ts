@@ -83,6 +83,13 @@ describe('findUnsafeInclude', () => {
     String.raw`\input{sub\..\x}`,
     String.raw`\input /etc/passwd`,
     String.raw`\input{never closed`,
+    String.raw`\let\x\input \x /etc/passwd`,
+    String.raw`\def\x{\input}\x /etc/passwd`,
+    String.raw`\expandafter\input\csname etc\endcsname`,
+    String.raw`\csname input\endcsname /etc/passwd`,
+    String.raw`\makeatletter\@@input /etc/passwd`,
+    String.raw`\verb|x| \input /etc/passwd`,
+    String.raw`\begin{verbatim} never closed \input /etc/passwd`,
   ])('rejects %s', (tex) => {
     expect(findUnsafeInclude(tex)).toBeDefined();
   });
@@ -92,6 +99,10 @@ describe('findUnsafeInclude', () => {
     String.raw`\includegraphics[width=0.5\textwidth]{fig/a..b.png}`,
     String.raw`\InputIfFileExists{local.cfg}{}{\typeout{none}}`,
     String.raw`\subimport{chapters/}{intro} \inputx{/etc}`,
+    String.raw`O comando \verb|\input| carrega um arquivo.`,
+    String.raw`% \input alone in a comment`,
+    String.raw`\begin{verbatim}\input /etc/passwd\end{verbatim}`,
+    String.raw`50\% \input{chapters/a}`,
   ])('accepts %s', (tex) => {
     expect(findUnsafeInclude(tex)).toBeUndefined();
   });
