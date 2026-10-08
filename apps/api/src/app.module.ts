@@ -13,6 +13,7 @@ import { HistoryModule } from './modules/history/history.module';
 import { MembersModule } from './modules/members/members.module';
 import { PackagesModule } from './modules/packages/packages.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { ReferencesModule } from './modules/references/references.module';
 
 @Controller('health')
 class HealthController {
@@ -39,6 +40,7 @@ class HealthController {
     CommentsModule,
     MembersModule,
     PackagesModule,
+    ReferencesModule,
   ],
   controllers: [HealthController],
 })
