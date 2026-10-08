@@ -1190,6 +1190,14 @@ a {
   background: color-mix(in srgb, var(--focus) 28%, transparent);
   border-bottom: 2px solid var(--focus);
 }
+/* A \ref/\cite key with no matching \label or bibliography entry (title says which). */
+.cm-ref-missing {
+  color: var(--danger);
+  text-decoration: underline wavy var(--danger);
+  text-decoration-skip-ink: none;
+  text-underline-offset: 2px;
+  cursor: help;
+}
 
 /* Contextual popup opened by selecting text or clicking a word/line in the
    editor; positioned via --cp-left/--cp-top (set from CodeMirror coordinates)

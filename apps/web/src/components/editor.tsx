@@ -26,6 +26,7 @@ import { FileServiceToken } from '../services/file.service';
 import { HistoryServiceToken } from '../services/history.service';
 import { IdentityToken } from '../services/identity';
 import type { Role } from '../services/project.service';
+import { type ReferenceIndex, ReferenceServiceToken } from '../services/reference.service';
 import { useSettingsStore } from '../settings-store';
 import { type CommentDraft, type Peer, useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
@@ -51,6 +52,7 @@ import {
   selectionAffordance,
   setComposerTarget,
 } from './editor-comments';
+import { referenceCompletions, referenceExtensions, setReferenceIndex } from './editor-references';
 import { editorTheme, latexHighlight } from './editor-theme';
 import { latexSupport } from './latex-language';
 import { peerColor } from './presence';
@@ -176,6 +178,9 @@ function setPresence(
 function revealLine(view: EditorView) {
   const { pendingLine, clearPendingLine } = useWorkspaceStore.getState();
   if (pendingLine === null) return;
+  // A just-opened file (cross-file jump) reveals before Yjs fills it; wait for the target line
+  // to exist, then the 'synced' handler calls this again. Otherwise it clamps to line 1.
+  if (pendingLine > view.state.doc.lines && view.state.doc.length === 0) return;
   const line = view.state.doc.line(Math.min(Math.max(pendingLine, 1), view.state.doc.lines));
   view.dispatch({
     selection: { anchor: line.from },
@@ -232,6 +237,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   });
   const commentsRef = useRef<Comment[]>([]);
   commentsRef.current = data ?? [];
+  const references = useService(ReferenceServiceToken);
+  const refIndexRef = useRef<ReferenceIndex | null>(null);
+  const { data: refIndex } = useQuery({
+    queryKey: ['references', projectId],
+    queryFn: () => references.index(projectId),
+    enabled: path.endsWith('.tex'),
+    staleTime: 15_000,
+  });
   const queryClient = useQueryClient();
   const ytextRef = useRef<Y.Text | null>(null);
   const editorBoxRef = useRef<HTMLDivElement | null>(null);
@@ -423,7 +436,10 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           editorTheme,
           wrap.of(wrapping(useSettingsStore.getState().lineWrapping)),
           ro.of(EditorState.readOnly.of(readOnly)),
-          path.endsWith('.tex') ? latexSupport() : [],
+          path.endsWith('.tex')
+            ? latexSupport({ autocomplete: referenceCompletions(refIndexRef) })
+            : [],
+          path.endsWith('.tex') ? referenceExtensions({ indexRef: refIndexRef, path }) : [],
           yCollab(ytext, provider.awareness, { undoManager: undo }),
           // Undo must be Yjs's: basicSetup's history also records the text that arrives from
           // the server (y-codemirror does not mark it addToHistory: false), so Ctrl+Z right
@@ -595,6 +611,12 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   useEffect(() => {
     viewRef.current?.dispatch({ effects: setBlame.of(activeBlame) });
   }, [activeBlame]);
+
+  // Feed the project's reference index into the live editor (it arrives after the view is built).
+  useEffect(() => {
+    refIndexRef.current = refIndex ?? null;
+    viewRef.current?.dispatch({ effects: setReferenceIndex.of(null) });
+  }, [refIndex]);
 
   // Own cursor label; separate so a late /me answer does not rebuild the editor.
   useEffect(() => {

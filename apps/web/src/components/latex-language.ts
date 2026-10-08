@@ -1,3 +1,4 @@
+import type { CompletionSource } from '@codemirror/autocomplete';
 import { LanguageSupport } from '@codemirror/language';
 import { styleTags, Tag, tags as t } from '@lezer/highlight';
 import { latex, latexLanguage } from 'codemirror-lang-latex';
@@ -31,11 +32,18 @@ const argumentStyles = styleTags({
 
 const language = latexLanguage.configure({ props: [argumentStyles] });
 
-/** `latex()` with argument-aware highlighting; completion and auto-close stay the stock ones. */
-export function latexSupport(): LanguageSupport {
+/**
+ * `latex()` with argument-aware highlighting. The stock missing-ref/cite linters stay off (they
+ * false-alarm per file); `autocomplete`, when given, adds a \ref/\cite key completion source.
+ */
+export function latexSupport(opts?: { autocomplete?: CompletionSource }): LanguageSupport {
   // Multi-file projects: a chapter has no \begin{document}, and its \ref/\cite targets live in
   // other files, so those checks only produce false alarms; the compiler reports the real ones.
   const support = latex({
+    // Its autocompletion sets `override`, which drops every language-data source (ours included).
+    // Off: lang-latex still registers its own source as language data, and basicSetup's
+    // autocompletion (no override) then queries both the stock commands and our \ref/\cite keys.
+    enableAutocomplete: false,
     linter: {
       checkMissingDocumentEnv: false,
       checkMissingReferences: false,
@@ -43,5 +51,6 @@ export function latexSupport(): LanguageSupport {
       checkMissingPackages: false,
     },
   }).support;
-  return new LanguageSupport(language, support);
+  const extra = opts?.autocomplete ? [language.data.of({ autocomplete: opts.autocomplete })] : [];
+  return new LanguageSupport(language, [support, ...extra]);
 }
