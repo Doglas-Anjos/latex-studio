@@ -1,13 +1,14 @@
-/* Projects dashboard: a compact workspace, with the projects as the main content. */
+/* Projects dashboard (pages/projects-page.tsx). The only stylesheet for these classes. */
 .app-main:has(.dashboard) {
   max-width: 70rem;
   padding: 2rem clamp(1rem, 4vw, 2.5rem) 2.5rem;
 }
 
 .dashboard {
-  gap: 1.25rem;
   --dashboard-hover: color-mix(in srgb, var(--primary) 7%, var(--surface));
   --dashboard-hover-line: color-mix(in srgb, var(--primary) 38%, var(--line));
+  display: grid;
+  gap: 1.25rem;
 }
 
 .dashboard-library {
@@ -15,18 +16,20 @@
   gap: 1rem;
 }
 
+/* Toolbar: title and count, then search and "Novo projeto" */
 .dashboard-toolbar {
+  display: flex;
+  flex-wrap: wrap;
   align-items: end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
 }
 
 .dashboard-heading {
   display: flex;
-}
-
-.dashboard-title-row {
-  display: flex;
   align-items: baseline;
   gap: 0.8rem;
+  min-width: 0;
 }
 
 .dashboard-heading h1 {
@@ -36,13 +39,48 @@
 }
 
 .dashboard-count {
-  padding: 0;
-  border: 0;
-  background: none;
   color: var(--muted);
   font-size: 0.82rem;
+  white-space: nowrap;
 }
 
+.dashboard-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+}
+
+.search-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+}
+
+.search-field svg {
+  position: absolute;
+  left: 0.65rem;
+  pointer-events: none;
+}
+
+.search-field input[type="search"] {
+  width: 16rem;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.75rem 0.45rem 2.1rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.new-menu summary {
+  text-align: center;
+}
+
+/* "Último projeto" card */
 .dashboard-recent {
   display: flex;
   align-items: center;
@@ -129,51 +167,87 @@
   transform: translateX(3px);
 }
 
-.dashboard-controls {
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.search-field input[type="search"] {
-  width: 16rem;
-  min-height: 2.5rem;
-  border-radius: 6px;
-}
-
+/* Filter tabs */
 .filter-tabs {
+  display: flex;
+  gap: 0.3rem;
   margin-top: 0.15rem;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filter-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-tabs button {
+  flex: none;
+  padding: 0.5rem 0.85rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.filter-tabs button:hover {
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .filter-tabs button[aria-pressed="true"] {
   border-bottom-color: var(--primary);
   background: transparent;
   color: var(--ink);
+  font-weight: 600;
 }
 
+/* Project table */
 .project-table {
+  width: 100%;
+  border: 1px solid var(--line);
   border-collapse: separate;
   border-spacing: 0;
   border-radius: 8px;
-  box-shadow: none;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.project-table th,
+.project-table td {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
 }
 
 .project-table th {
-  padding-top: 0.8rem;
-  padding-bottom: 0.8rem;
   background: color-mix(in srgb, var(--paper) 50%, var(--surface));
+  color: var(--muted);
   font-size: 0.72rem;
+  font-weight: 700;
   letter-spacing: 0.02em;
-  text-transform: none;
 }
 
 .project-table td {
-  padding-top: 0.8rem;
-  padding-bottom: 0.8rem;
   font-size: 0.88rem;
 }
 
 .project-table tbody tr {
   transition: background-color 160ms ease;
+}
+
+.project-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.project-table tbody td:first-child {
+  border-left: 3px solid transparent;
 }
 
 .project-table tbody tr:hover,
@@ -187,25 +261,30 @@
 }
 
 .project-link {
+  display: inline-flex;
+  align-items: center;
   gap: 0.65rem;
   max-width: 100%;
-  text-align: left;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary);
+  font: inherit;
   font-size: 0.95rem;
-  text-decoration: none;
-}
-
-.project-link:hover {
-  text-decoration: none;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
 }
 
 .project-link-icon {
   display: grid;
+  flex: none;
   place-items: center;
   width: 1.8rem;
   height: 1.8rem;
-  border: 0;
   border-radius: 5px;
   background: color-mix(in srgb, var(--primary) 7%, var(--surface));
+  color: var(--file-tex);
   transition: background-color 160ms ease;
 }
 
@@ -242,18 +321,28 @@
   display: none;
 }
 
-.dashboard .row-action-btn {
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.1rem;
+  white-space: nowrap;
+}
+
+/* Loaded after styles.css, so these win over .icon-btn at equal specificity. */
+.row-action-btn {
   border-radius: 5px;
   transition:
     background-color 160ms ease,
     color 160ms ease;
 }
 
-.dashboard .row-action-btn:hover {
+.row-action-btn:hover {
   background: color-mix(in srgb, var(--primary) 13%, var(--surface));
   color: var(--primary);
 }
 
+/* Pagination, empty states, footer */
 .dashboard-pagination {
   display: flex;
   align-items: center;
@@ -318,12 +407,17 @@
   border-top: 1px solid var(--line);
 }
 
+/* Tablet and below: each table row becomes a card (name on top, date and actions below). */
 @media (max-width: 48rem) {
   .project-table {
+    display: block;
     border: 0;
     border-radius: 0;
     background: transparent;
     overflow: visible;
+  }
+  .project-table thead {
+    display: none;
   }
   .project-table tbody {
     display: grid;
@@ -346,8 +440,9 @@
   .project-table td {
     min-width: 0;
     padding: 0;
+    border-bottom: 0;
   }
-  .project-table td:first-child {
+  .project-table tbody td:first-child {
     grid-column: 1 / -1;
     border-left: 0;
   }
@@ -359,9 +454,6 @@
     color: var(--muted);
     font-size: 0.75rem;
   }
-  .project-table td[data-label]::before {
-    display: none;
-  }
   .project-date-icon {
     display: block;
     flex: none;
@@ -369,9 +461,42 @@
   .project-table .row-actions-cell {
     grid-column: 2;
   }
-  .project-table .row-actions {
-    justify-content: flex-end;
-    padding-top: 0;
+}
+
+/* Phone: toolbar stacks, search and menu take the full width, tabs become pills. */
+@media (max-width: 36rem) {
+  .app-main:has(.dashboard) {
+    padding: 1.25rem 1rem 2rem;
+  }
+  .dashboard-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dashboard-controls {
+    align-items: stretch;
+  }
+  .search-field {
+    flex: 1 1 100%;
+  }
+  .search-field input[type="search"],
+  .new-menu,
+  .new-menu summary.btn {
+    width: 100%;
+  }
+  .filter-tabs {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    border-bottom: 0;
+    overflow-x: visible;
+  }
+  .filter-tabs button {
+    padding: 0.4rem 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 0.82rem;
+  }
+  .filter-tabs button[aria-pressed="true"] {
+    border-color: var(--primary);
   }
 }
 
@@ -381,7 +506,7 @@
   .dashboard-recent-arrow,
   .project-table tbody tr,
   .project-link-icon,
-  .dashboard .row-action-btn {
+  .row-action-btn {
     transition: none;
   }
   .dashboard-recent:hover,
@@ -389,30 +514,5 @@
   .dashboard-recent:hover .dashboard-recent-arrow,
   .dashboard-recent:focus-visible .dashboard-recent-arrow {
     transform: none;
-  }
-}
-
-@media (max-width: 36rem) {
-  .app-main:has(.dashboard) {
-    padding: 1.25rem 1rem 2rem;
-  }
-  .dashboard-toolbar {
-    align-items: stretch;
-  }
-  .dashboard-heading {
-    justify-content: space-between;
-  }
-  .dashboard-controls {
-    flex-direction: row;
-    justify-content: stretch;
-  }
-  .search-field {
-    flex: 1 1 100%;
-  }
-  .search-field input[type="search"] {
-    width: 100%;
-  }
-  .new-menu {
-    width: 100%;
   }
 }

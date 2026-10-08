@@ -106,10 +106,8 @@ export function ProjectsPage() {
       <section className="dashboard-library" aria-labelledby="dashboard-library-title">
         <div className="dashboard-toolbar">
           <div className="dashboard-heading">
-            <div className="dashboard-title-row">
-              <h1 id="dashboard-library-title">Projetos</h1>
-              {data && <span className="dashboard-count">{projectCount(data.total)}</span>}
-            </div>
+            <h1 id="dashboard-library-title">Projetos</h1>
+            {data && <span className="dashboard-count">{projectCount(data.total)}</span>}
           </div>
           <div className="dashboard-controls">
             <label className="search-field">
