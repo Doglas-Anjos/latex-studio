@@ -60,6 +60,10 @@ export class MembersService {
 
   async remove(project: Project, actorId: string, userId: string): Promise<void> {
     if (userId === project.ownerId) throw new BadRequestException('The owner cannot be removed');
+    // Same as setRole: someone else's member id answers 404, not a "removed" that did nothing
+    // and an audit entry for it.
+    if (!(await this.projects.roleOf(project.id, userId)))
+      throw new NotFoundException('Not a member');
     await this.projects.removeMember(project.id, userId);
     this.sync.revoke(project.id, userId);
     await this.audit?.record(actorId, 'member.remove', project.id, { userId });

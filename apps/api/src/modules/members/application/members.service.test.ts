@@ -56,4 +56,9 @@ describe('MembersService', () => {
       BadRequestException,
     );
   });
+
+  it('refuses to remove someone who is not a member of this project', async () => {
+    await expect(service.remove(project, 'owner-1', anaId)).rejects.toThrow(NotFoundException);
+    expect(sync.calls).toEqual([]);
+  });
 });
