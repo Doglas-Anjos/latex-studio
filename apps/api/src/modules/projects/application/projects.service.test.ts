@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import type { AppConfig } from '@latex-studio/core';
-import { ConflictException, ForbiddenException, PayloadTooLargeException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  PayloadTooLargeException,
+} from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
 import { FilesService } from '../../files/application/files.service';
@@ -87,6 +92,50 @@ describe('ProjectsService', () => {
     await service.create(ana, 'One');
     await service.create(ana, 'Two');
     await expect(service.create(ana, 'Three')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('pages by timestamp and ID, filters on the server, and rejects mismatched cursors', async () => {
+    const updatedAt = new Date('2026-01-01T10:00:00.123Z');
+    for (const [index, name] of ['Tese', 'Artigo', 'Relatório'].entries()) {
+      const id = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`;
+      const ownerId = index === 2 ? bob.id : ana.id;
+      projects.rows.push({
+        id,
+        ownerId,
+        name,
+        mainFile: 'main.tex',
+        engine: 'pdflatex',
+        createdAt: updatedAt,
+        updatedAt,
+      });
+      projects.members.push({
+        projectId: id,
+        userId: ana.id,
+        role: index === 2 ? 'editor' : 'owner',
+      });
+    }
+
+    const first = await service.listForUser(ana, { limit: 1 });
+    const second = await service.listForUser(ana, { limit: 1, cursor: first.nextCursor ?? '' });
+    const third = await service.listForUser(ana, { limit: 1, cursor: second.nextCursor ?? '' });
+    expect([first, second, third].flatMap((page) => page.items.map((p) => p.name))).toEqual([
+      'Relatório',
+      'Artigo',
+      'Tese',
+    ]);
+    expect(first.total).toBe(3);
+    expect(third.nextCursor).toBeNull();
+
+    const own = await service.listForUser(ana, { filter: 'mine' });
+    expect(own.items.map((p) => p.name)).toEqual(['Artigo', 'Tese']);
+    const searched = await service.listForUser(ana, { search: 'relatorio' });
+    expect(searched.items.map((p) => p.name)).toEqual(['Relatório']);
+    await expect(
+      service.listForUser(ana, { filter: 'mine', cursor: first.nextCursor ?? '' }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.listForUser(ana, { cursor: 'invalid!' })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('answers 413 when a created file would exceed the quota, writing nothing', async () => {

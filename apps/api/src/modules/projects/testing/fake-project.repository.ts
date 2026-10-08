@@ -1,5 +1,11 @@
-import type { Project, ProjectRole, ProjectWithRole } from '../domain/project';
-import type { NewProject, ProjectPatch, ProjectRepository } from '../domain/project.repository';
+import type { Project, ProjectRole } from '../domain/project';
+import type {
+  NewProject,
+  ProjectListOptions,
+  ProjectListPage,
+  ProjectPatch,
+  ProjectRepository,
+} from '../domain/project.repository';
 
 export class FakeProjects implements ProjectRepository {
   rows: Project[] = [];
@@ -37,14 +43,42 @@ export class FakeProjects implements ProjectRepository {
   async findById(id: string) {
     return this.rows.find((p) => p.id === id) ?? null;
   }
-  async listForUser(userId: string): Promise<ProjectWithRole[]> {
-    return this.members
+  async listPageForUser(userId: string, options: ProjectListOptions): Promise<ProjectListPage> {
+    const matches = this.members
       .filter((m) => m.userId === userId)
       .flatMap((m) => {
         const p = this.rows.find((r) => r.id === m.projectId);
         return p ? [{ ...p, role: m.role }] : [];
       })
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      .filter((p) =>
+        options.filter === 'all' ? true : (p.role === 'owner') === (options.filter === 'mine'),
+      )
+      .filter((p) =>
+        p.name
+          .normalize('NFD')
+          .replace(/\p{Diacritic}/gu, '')
+          .toLowerCase()
+          .includes(options.search),
+      )
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime() || (a.id < b.id ? 1 : -1));
+    const after = options.cursor;
+    const remaining = after
+      ? matches.filter(
+          (p) =>
+            p.updatedAt.toISOString() < after.updatedAt ||
+            (p.updatedAt.toISOString() === after.updatedAt && p.id < after.id),
+        )
+      : matches;
+    const items = remaining.slice(0, options.limit);
+    const last = items.at(-1);
+    return {
+      items,
+      total: matches.length,
+      next:
+        remaining.length > options.limit && last
+          ? { updatedAt: last.updatedAt.toISOString(), id: last.id }
+          : null,
+    };
   }
   async roleOf(projectId: string, userId: string) {
     return this.members.find((m) => m.projectId === projectId && m.userId === userId)?.role ?? null;

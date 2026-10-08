@@ -1,14 +1,25 @@
-import { Body, Controller, Delete, Get, HttpCode, Inject, Patch, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Patch,
+  Post,
+  Query,
+  Req,
+} from '@nestjs/common';
 import { RouteConfig } from '@nestjs/platform-fastify';
 import type { FastifyRequest } from 'fastify';
 import { CurrentUser } from '../../auth/presentation/decorators';
 import type { User } from '../../users/domain/user';
-import { ProjectsService } from '../application/projects.service';
+import { type ListProjectsResult, ProjectsService } from '../application/projects.service';
 import type { Project, ProjectWithRole } from '../domain/project';
 import { CurrentProject, RequireProjectRole } from './guards/project-role.guard';
 import { IMPORT_RATE_LIMIT, withParts } from './multipart';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
-import { CreateProjectDto, UpdateProjectDto } from './projects.dto';
+import { CreateProjectDto, ListProjectsDto, UpdateProjectDto } from './projects.dto';
 
 @Controller('projects')
 export class ProjectsController {
@@ -26,8 +37,8 @@ export class ProjectsController {
   }
 
   @Get()
-  list(@CurrentUser() user: User): Promise<ProjectWithRole[]> {
-    return this.projects.listForUser(user);
+  list(@CurrentUser() user: User, @Query() query: ListProjectsDto): Promise<ListProjectsResult> {
+    return this.projects.listForUser(user, query);
   }
 
   @Get(':projectId')

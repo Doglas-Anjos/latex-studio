@@ -27,6 +27,7 @@ import {
 } from '../domain/project';
 import {
   PROJECT_REPOSITORY,
+  type ProjectListFilter,
   type ProjectPatch,
   type ProjectRepository,
 } from '../domain/project.repository';
@@ -46,6 +47,20 @@ const MANIFEST = 'latex-packages.json';
 const MAX_MANIFEST_BYTES = 256 * 1024;
 /** \documentclass sits in the preamble; no need to read whole files to find it. */
 const MAIN_FILE_SCAN_BYTES = 64 * 1024;
+const PROJECT_PAGE_SIZE = 10;
+
+export interface ListProjectsOptions {
+  limit?: number;
+  filter?: ProjectListFilter;
+  search?: string;
+  cursor?: string;
+}
+
+export interface ListProjectsResult {
+  items: ProjectWithRole[];
+  total: number;
+  nextCursor: string | null;
+}
 
 const MAIN_TEMPLATE = `\\documentclass{article}
 \\input{latex-packages}
@@ -166,8 +181,19 @@ export class ProjectsService {
     return updated;
   }
 
-  listForUser(user: User): Promise<ProjectWithRole[]> {
-    return this.projects.listForUser(user.id);
+  async listForUser(user: User, options: ListProjectsOptions = {}): Promise<ListProjectsResult> {
+    const limit = options.limit ?? PROJECT_PAGE_SIZE;
+    const filter = options.filter ?? 'all';
+    const search = foldSearch(options.search ?? '');
+    const cursor = options.cursor ? decodeProjectCursor(options.cursor, filter, search) : null;
+    const page = await this.projects.listPageForUser(user.id, { limit, filter, search, cursor });
+    return {
+      items: page.items,
+      total: page.total,
+      nextCursor: page.next
+        ? Buffer.from(JSON.stringify({ v: 1, ...page.next, filter, search })).toString('base64url')
+        : null,
+    };
   }
 
   async remove(project: Project, user: User): Promise<void> {
@@ -184,6 +210,37 @@ export class ProjectsService {
     if ((await this.projects.countForUser(owner.id)) >= this.config.MAX_PROJECTS_PER_USER) {
       throw new ConflictException('Project limit reached');
     }
+  }
+}
+
+function foldSearch(value: string): string {
+  return value
+    .trim()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+}
+
+function decodeProjectCursor(raw: string, filter: ProjectListFilter, search: string) {
+  try {
+    if (raw.length > 512 || !/^[A-Za-z0-9_-]+$/.test(raw)) throw new Error('Invalid encoding');
+    // null or a non-object fails on `.v`, an invalid date throws in toISOString: both land in catch.
+    const json = Buffer.from(raw, 'base64url').toString('utf8');
+    const data = JSON.parse(json) as Record<string, unknown>;
+    if (
+      data.v !== 1 ||
+      data.filter !== filter ||
+      data.search !== search ||
+      typeof data.updatedAt !== 'string' ||
+      new Date(data.updatedAt).toISOString() !== data.updatedAt ||
+      typeof data.id !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.id)
+    ) {
+      throw new Error('Invalid cursor');
+    }
+    return { updatedAt: data.updatedAt, id: data.id };
+  } catch {
+    throw new BadRequestException('Invalid or expired project cursor');
   }
 }
 

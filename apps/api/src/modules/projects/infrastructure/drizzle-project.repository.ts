@@ -1,14 +1,20 @@
 import { DATABASE, type Database } from '@latex-studio/core';
 import { fileEdits, projectMembers, projects, users } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, getTableColumns, sql } from 'drizzle-orm';
-import type { Project, ProjectRole, ProjectWithRole } from '../domain/project';
+import { and, count, desc, eq, getTableColumns, ne, sql } from 'drizzle-orm';
+import type { Project, ProjectRole } from '../domain/project';
 import type {
   Member,
   NewProject,
+  ProjectListOptions,
+  ProjectListPage,
   ProjectPatch,
   ProjectRepository,
 } from '../domain/project.repository';
+
+// ponytail: folds Portuguese accents only; enable the unaccent extension if other scripts matter.
+const ACCENTED = 'áàâãäéèêëíìîïóòôõöúùûüç';
+const PLAIN = 'aaaaaeeeeiiiiooooouuuuc';
 
 @Injectable()
 export class DrizzleProjectRepository implements ProjectRepository {
@@ -56,15 +62,55 @@ export class DrizzleProjectRepository implements ProjectRepository {
     return row ?? null;
   }
 
-  listForUser(userId: string): Promise<ProjectWithRole[]> {
-    return this.db
+  async listPageForUser(userId: string, options: ProjectListOptions): Promise<ProjectListPage> {
+    const membership = and(
+      eq(projectMembers.projectId, projects.id),
+      eq(projectMembers.userId, userId),
+    );
+    const matches = and(
+      options.filter === 'mine'
+        ? eq(projectMembers.role, 'owner')
+        : options.filter === 'shared'
+          ? ne(projectMembers.role, 'owner')
+          : undefined,
+      options.search
+        ? sql<boolean>`position(${options.search} in translate(lower(${projects.name}), ${ACCENTED}, ${PLAIN})) > 0`
+        : undefined,
+    );
+    const [countRow] = await this.db
+      .select({ n: count() })
+      .from(projects)
+      .innerJoin(projectMembers, membership)
+      .where(matches);
+
+    // Drizzle returns JS Dates at millisecond precision. Sort at the same precision as the cursor,
+    // then use the UUID as a tie breaker so rows with identical timestamps are never skipped.
+    const sortedAt = sql`date_trunc('milliseconds', ${projects.updatedAt})`;
+    const after = options.cursor;
+    const rows = await this.db
       .select({ ...getTableColumns(projects), role: projectMembers.role })
       .from(projects)
-      .innerJoin(
-        projectMembers,
-        and(eq(projectMembers.projectId, projects.id), eq(projectMembers.userId, userId)),
+      .innerJoin(projectMembers, membership)
+      .where(
+        and(
+          matches,
+          after
+            ? sql<boolean>`(${sortedAt}, ${projects.id}) < (${after.updatedAt}::timestamptz, ${after.id}::uuid)`
+            : undefined,
+        ),
       )
-      .orderBy(desc(projects.createdAt));
+      .orderBy(desc(sortedAt), desc(projects.id))
+      .limit(options.limit + 1);
+    const items = rows.slice(0, options.limit);
+    const last = items.at(-1);
+    return {
+      items,
+      total: countRow?.n ?? 0,
+      next:
+        rows.length > options.limit && last
+          ? { updatedAt: last.updatedAt.toISOString(), id: last.id }
+          : null,
+    };
   }
 
   async roleOf(projectId: string, userId: string): Promise<ProjectRole | null> {

@@ -12,6 +12,26 @@ export interface NewProject {
 
 export type ProjectPatch = Partial<Pick<Project, 'engine' | 'mainFile'>>;
 
+export type ProjectListFilter = 'all' | 'mine' | 'shared';
+
+export interface ProjectListCursor {
+  updatedAt: string;
+  id: string;
+}
+
+export interface ProjectListOptions {
+  limit: number;
+  filter: ProjectListFilter;
+  search: string;
+  cursor: ProjectListCursor | null;
+}
+
+export interface ProjectListPage {
+  items: ProjectWithRole[];
+  total: number;
+  next: ProjectListCursor | null;
+}
+
 export interface Member {
   userId: string;
   name: string;
@@ -28,8 +48,8 @@ export interface ProjectRepository {
   create(project: NewProject, ownerId: string): Promise<Project>;
   findById(id: string): Promise<Project | null>;
   update(id: string, patch: ProjectPatch): Promise<Project>;
-  /** Newest first. */
-  listForUser(userId: string): Promise<ProjectWithRole[]>;
+  /** Stable keyset order: last modification descending, then ID descending. */
+  listPageForUser(userId: string, options: ProjectListOptions): Promise<ProjectListPage>;
   roleOf(projectId: string, userId: string): Promise<ProjectRole | null>;
   /** Projects owned by the user. */
   countForUser(userId: string): Promise<number>;
