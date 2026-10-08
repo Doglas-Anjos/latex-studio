@@ -101,7 +101,9 @@ const defaults: Settings = {
   panelOpen: false,
   autoCompile: false,
   draftMode: false,
-  stopOnFirstError: true,
+  // Off by default, like Overleaf: compile through errors and still show the PDF (the compiler
+  // passes -f). Turning it on makes the compiler halt at the first error instead.
+  stopOnFirstError: false,
   spellcheck: false,
   spellcheckLang: 'pt-BR',
 };

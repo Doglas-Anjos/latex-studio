@@ -72,8 +72,11 @@ export class LatexmkRunner {
       // A project-supplied .latexmkrc would run as Perl inside the worker.
       '-norc',
       '-interaction=nonstopmode',
-      // "Try to compile despite errors": nonstopmode without halting still yields a PDF.
-      ...(options.haltOnError === false ? [] : ['-halt-on-error']),
+      // "Try to compile despite errors" (Overleaf's default): -f makes latexmk run every pass even
+      // when one exits non-zero, so a document whose first pass errors still yields a PDF — e.g.
+      // glossaries/acronym forward references, which only resolve on the second pass via .glsdefs.
+      // Without -f, latexmk aborts on the first failing pass and never reaches that second pass.
+      ...(options.haltOnError === false ? ['-f'] : ['-halt-on-error']),
       ...(options.draft ? [`-jobname=${basename(mainFile, extname(mainFile))}`] : []),
       '-no-shell-escape',
       // MiKTeX ignores the max_print_line env var below; without this its log wraps at 79

@@ -88,4 +88,34 @@ describe('LatexmkRunner', () => {
       runner().run({ workDir: dir, engine: 'pdflatex', mainFile: '-norc' }),
     ).rejects.toThrow();
   });
+
+  // Overleaf parity: "compile despite errors" must force latexmk through all passes (-f), so a
+  // document that errors on its first pass (e.g. glossaries forward references) still yields a PDF.
+  it('passes -f when not halting on error, -halt-on-error otherwise', async () => {
+    const captures: string[][] = [];
+    const fakeSandbox = {
+      enabled: false,
+      spawn(_file: string, args: string[], _cwd: string, env: NodeJS.ProcessEnv) {
+        captures.push(args);
+        return { file: process.execPath, args: ['-e', ''], env }; // no-op in place of latexmk
+      },
+    } as unknown as Sandbox;
+    const r = new LatexmkRunner({ COMPILE_TIMEOUT_MS: 30_000 } as WorkerConfig, fakeSandbox);
+    await r.run({
+      workDir: dir,
+      engine: 'pdflatex',
+      mainFile: 'main.tex',
+      options: { haltOnError: false },
+    });
+    await r.run({
+      workDir: dir,
+      engine: 'pdflatex',
+      mainFile: 'main.tex',
+      options: { haltOnError: true },
+    });
+    expect(captures[0]).toContain('-f');
+    expect(captures[0]).not.toContain('-halt-on-error');
+    expect(captures[1]).toContain('-halt-on-error');
+    expect(captures[1]).not.toContain('-f');
+  });
 });
