@@ -28,7 +28,16 @@ export interface FileService {
 
 export const FileServiceToken = createToken<FileService>('FileService');
 
-const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
+// fetch resolves `.`/`..` segments, so a path from document text (an \input chip) could reach
+// another API route with the bearer token; the server checks paths too, this keeps the URL honest.
+const encodePath = (path: string) =>
+  path
+    .split('/')
+    .map((s) => {
+      if (s === '.' || s === '..') throw new Error(`Caminho inválido: ${path}`);
+      return encodeURIComponent(s);
+    })
+    .join('/');
 
 export class HttpFileService implements FileService {
   constructor(private readonly api: ApiClient) {}
