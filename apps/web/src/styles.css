@@ -3767,7 +3767,7 @@ button.log-row:hover {
 .admin-user:hover {
   border-color: color-mix(in srgb, var(--primary) 35%, var(--line));
 }
-.admin-user[data-active='true'] {
+.admin-user[data-active="true"] {
   border-color: var(--primary);
   box-shadow: inset 0 0 0 1px var(--primary);
 }
