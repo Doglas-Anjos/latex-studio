@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
-import { useQuery } from '@tanstack/react-query';
 import { act, cleanup, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
-import { useService } from '../di/service-provider';
 import {
   type Build,
   type CompileService,
@@ -13,7 +11,7 @@ import {
 } from '../services/compile.service';
 import { type FileService, FileServiceToken } from '../services/file.service';
 import { type PackageService, PackageServiceToken } from '../services/package.service';
-import type { Project, UpdatedProject } from '../services/project.service';
+import type { Project } from '../services/project.service';
 import { type ProjectService, ProjectServiceToken } from '../services/project.service';
 import { type ToolsService, ToolsServiceToken } from '../services/tools.service';
 import { useSettingsStore } from '../settings-store';
@@ -88,7 +86,7 @@ describe('BuildPanel compact bar and logs toggle', () => {
   });
   afterEach(cleanup);
 
-  it('keeps compile, engine, status and download visible while logs stay closed, and the toggle reveals them', async () => {
+  it('keeps compile, status and download visible while logs stay closed, and the toggle reveals them', async () => {
     const build = {
       id: 'b1',
       projectId: 'p1',
@@ -126,7 +124,6 @@ describe('BuildPanel compact bar and logs toggle', () => {
 
     expect(await screen.findByText('Falhou')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Compilar' })).toBeTruthy();
-    expect(screen.getByLabelText('Motor LaTeX')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Baixar' })).toBeTruthy();
     expect(screen.queryByText('Undefined control sequence')).toBeNull();
 
@@ -427,119 +424,6 @@ describe('BuildPanel active and stuck builds', () => {
     })) as HTMLButtonElement;
     expect(button.disabled).toBe(false);
     expect(button.title).toMatch(/Sem resposta/);
-
-    await userEvent.click(button);
-    expect(compile.compile).toHaveBeenCalledWith('p1', expect.any(Object));
-  });
-});
-
-describe('BuildPanel engine change in flight', () => {
-  beforeEach(() => {
-    useSettingsStore.getState().reset();
-  });
-  afterEach(cleanup);
-
-  it('disables Compilar while the chosen engine is still being saved, so it cannot fire with the stale one', async () => {
-    const project = fakeProject;
-    let resolveUpdate: (p: Project) => void = () => {};
-    const projects = {
-      downloadSource: vi.fn(),
-      get: vi.fn().mockResolvedValue(project),
-      update: vi.fn(
-        () =>
-          new Promise<Project>((resolve) => {
-            resolveUpdate = resolve;
-          }),
-      ),
-    } as unknown as ProjectService;
-    const compile = {
-      builds: vi.fn().mockResolvedValue([]),
-      compile: vi.fn().mockResolvedValue({}),
-    } as unknown as CompileService;
-    const packages = {
-      get: vi.fn().mockResolvedValue([]),
-      usage: vi.fn().mockResolvedValue([]),
-    } as unknown as PackageService;
-    renderWithApp(
-      <BuildPanel projectId="p1" canCompile={true} />,
-      new Container()
-        .register(CompileServiceToken, compile)
-        .register(ProjectServiceToken, projects)
-        .register(ToolsServiceToken, {} as unknown as ToolsService)
-        .register(FileServiceToken, {} as unknown as FileService)
-        .register(PackageServiceToken, packages),
-    );
-
-    const select = (await screen.findByLabelText('Motor LaTeX')) as HTMLSelectElement;
-    const button = screen.getByRole('button', { name: 'Compilar' }) as HTMLButtonElement;
-    await waitFor(() => expect(button.disabled).toBe(false));
-
-    await userEvent.selectOptions(select, 'xelatex');
-    expect(button.disabled).toBe(true);
-    expect(button.title).toMatch(/motor/i);
-
-    resolveUpdate({ ...project, engine: 'xelatex' });
-    await waitFor(() => expect(button.disabled).toBe(false));
-    expect(compile.compile).not.toHaveBeenCalled();
-  });
-});
-
-describe('BuildPanel engine change and permissions', () => {
-  beforeEach(() => {
-    useSettingsStore.getState().reset();
-  });
-  afterEach(cleanup);
-
-  /** Mirrors ProjectPage: canCompile comes from the role on the cached project. */
-  function PanelWithRoleFromCache() {
-    const projects = useService(ProjectServiceToken);
-    const { data: project } = useQuery({
-      queryKey: ['project', 'p1'],
-      queryFn: () => projects.get('p1'),
-    });
-    const canEdit = project?.role === 'owner' || project?.role === 'editor';
-    return <BuildPanel projectId="p1" canCompile={canEdit} />;
-  }
-
-  it('keeps the role in the cache when the engine is saved, so Compilar stays usable', async () => {
-    // The real PATCH echoes the project; the role is the caller's own, so treat it as absent here.
-    const { role: _role, ...savedWithoutRole } = { ...fakeProject, engine: 'lualatex' as const };
-    const projects = {
-      downloadSource: vi.fn(),
-      get: vi.fn().mockResolvedValue(fakeProject),
-      update: vi.fn<(id: string, patch: unknown) => Promise<UpdatedProject>>(() =>
-        Promise.resolve(savedWithoutRole),
-      ),
-    } as unknown as ProjectService;
-    const compile = {
-      builds: vi.fn().mockResolvedValue([]),
-      compile: vi.fn().mockResolvedValue({ id: 'b1', errors: [], warnings: [] }),
-    } as unknown as CompileService;
-    const packages = {
-      get: vi.fn().mockResolvedValue([]),
-      usage: vi.fn().mockResolvedValue([]),
-    } as unknown as PackageService;
-    renderWithApp(
-      <PanelWithRoleFromCache />,
-      new Container()
-        .register(CompileServiceToken, compile)
-        .register(ProjectServiceToken, projects)
-        .register(ToolsServiceToken, {} as unknown as ToolsService)
-        .register(FileServiceToken, {} as unknown as FileService)
-        .register(PackageServiceToken, packages),
-    );
-
-    const select = (await screen.findByLabelText('Motor LaTeX')) as HTMLSelectElement;
-    const button = screen.getByRole('button', { name: 'Compilar' }) as HTMLButtonElement;
-    await waitFor(() => expect(button.disabled).toBe(false));
-
-    await userEvent.selectOptions(select, 'lualatex');
-
-    await waitFor(() => expect(button.disabled).toBe(false));
-    expect(projects.update).toHaveBeenCalledWith('p1', { engine: 'lualatex' });
-    expect(select.value).toBe('lualatex');
-    expect(button.title ?? '').not.toMatch(/permiss/i);
-    expect(select.disabled).toBe(false);
 
     await userEvent.click(button);
     expect(compile.compile).toHaveBeenCalledWith('p1', expect.any(Object));

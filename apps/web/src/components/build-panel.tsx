@@ -30,7 +30,7 @@ import {
 } from '../services/compile.service';
 import { FileServiceToken } from '../services/file.service';
 import { PackageServiceToken } from '../services/package.service';
-import { type Project, ProjectServiceToken } from '../services/project.service';
+import { ProjectServiceToken } from '../services/project.service';
 import { type ExportFormat, ToolsServiceToken, type WordCount } from '../services/tools.service';
 import { useSettingsStore } from '../settings-store';
 import { useWorkspaceStore } from '../workspace-store';
@@ -173,30 +173,17 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
     queryKey: ['project', projectId],
     queryFn: () => projects.get(projectId),
   });
-  const setEngine = useMutation({
-    mutationFn: (engine: Project['engine']) => projects.update(projectId, { engine }),
-    // ProjectPage reads permissions off this cache entry, so the saved project is merged onto it:
-    // overwriting it with a response that carries no role would revoke editing until a refetch.
-    onSuccess: (p) =>
-      queryClient.setQueryData<Project>(['project', projectId], (prev) =>
-        prev ? { ...prev, ...p, role: p.role ?? prev.role } : undefined,
-      ),
-    onError: showPanel,
-  });
   // The API re-validates and fails a stale build for real before accepting this retry; this only
   // decides when to stop blocking the button on a build that looks orphaned.
   const stuck = isStale(build);
-  const engineUnconfirmed = !project || setEngine.isPending;
   const running = isActive(build) && !stuck;
-  const compileDisabled = !canCompile || start.isPending || engineUnconfirmed;
+  const compileDisabled = !canCompile || start.isPending;
   const mainDisabled = running ? stop.isPending : compileDisabled;
   const compileTitle = !canCompile
     ? 'Você não tem permissão para compilar este projeto'
-    : engineUnconfirmed
-      ? 'Aguarde: salvando o motor LaTeX escolhido'
-      : stuck && build
-        ? `Sem resposta há ${elapsedSeconds(build)}s; clique para tentar novamente`
-        : undefined;
+    : stuck && build
+      ? `Sem resposta há ${elapsedSeconds(build)}s; clique para tentar novamente`
+      : undefined;
 
   const waitFor = <T,>(jobId: string) => waitForJob<T>(tools, projectId, jobId);
   const [formatProgress, setFormatProgress] = useState('');
@@ -360,18 +347,7 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             </div>
           </CompileMenu>
         )}
-        <select
-          className="engine-select"
-          aria-label="Motor LaTeX"
-          title="Motor LaTeX (fontspec e polyglossia exigem XeLaTeX ou LuaLaTeX)"
-          value={project?.engine ?? 'pdflatex'}
-          disabled={!canCompile || !project || setEngine.isPending}
-          onChange={(e) => setEngine.mutate(e.target.value as Project['engine'])}
-        >
-          <option value="pdflatex">pdfLaTeX</option>
-          <option value="xelatex">XeLaTeX</option>
-          <option value="lualatex">LuaLaTeX</option>
-        </select>
+        {/* The LaTeX engine is chosen in Settings → Compilação now, not here. */}
         {build && (
           <span className="build-status" data-status={build.status} data-stuck={stuck}>
             {StatusIcon && (
@@ -522,7 +498,6 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
           {exportAs.error && <p className="form-error">{exportAs.error.message}</p>}
           {count.error && <p className="form-error">{count.error.message}</p>}
           {busy && <p className="status-note">Processando…</p>}
-          {setEngine.error && <p className="form-error">{setEngine.error.message}</p>}
           {count.data && <p className="status-note">{count.data}</p>}
           {formatAll.error && <p className="form-error">{formatAll.error.message}</p>}
           {formatProgress && <p className="status-note">{formatProgress}</p>}
