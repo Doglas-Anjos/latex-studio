@@ -1,7 +1,6 @@
-import { createReadStream, createWriteStream } from 'node:fs';
-import { access, copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { access, copyFile, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
-import { pipeline } from 'node:stream/promises';
 import {
   APP_CONFIG,
   and,
@@ -17,7 +16,7 @@ import {
 } from '@latex-studio/core';
 import { builds } from '@latex-studio/core/schema';
 import { GitRepository } from '@latex-studio/git-store';
-import { parseLatexLog } from '@latex-studio/latex-tools';
+import { parseLatexLog, scrubLogPaths } from '@latex-studio/latex-tools';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import type { Job } from 'bullmq';
@@ -130,10 +129,15 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
       }
       const logFrom = join(tmp, 'out', `${stem}.log`);
       const logPath = join(outDir, 'output.log');
+      let log = '';
       if (await exists(logFrom)) {
-        await pipeline(createReadStream(logFrom, { end: MAX_LOG - 1 }), createWriteStream(logPath));
+        // Capped, and with server paths out before it is stored or parsed: the API serves this
+        // file as-is and the parsed errors carry their file paths to the browser.
+        const chunks: Buffer[] = [];
+        for await (const c of createReadStream(logFrom, { end: MAX_LOG - 1 })) chunks.push(c);
+        log = scrubLogPaths(Buffer.concat(chunks).toString('utf8'), tmp);
+        await writeFile(logPath, log);
       }
-      const log = (await exists(logPath)) ? await readFile(logPath, 'utf8') : '';
       const { errors, warnings, info } = parseLatexLog(log);
       const status = toBuildStatus({
         exitCode: run.exitCode,
