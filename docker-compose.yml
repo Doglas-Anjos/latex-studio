@@ -60,10 +60,12 @@ services:
     build:
       context: .
       dockerfile: docker/texlive/Dockerfile
-    # Only what the worker needs: no auth secret (TeX runs as the same uid).
+    # Only what the worker needs: no auth secret. WORKER_DATABASE_URL points at the
+    # least-privilege latex_worker role (docker/postgres/worker-role.sql); it falls back to the
+    # full DATABASE_URL when unset, so nothing breaks before the role is created.
     environment:
       NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${WORKER_DATABASE_URL:-${DATABASE_URL}}
       REDIS_URL: ${REDIS_URL}
       REPOS_DIR: /data/repos
       BUILDS_DIR: /data/builds
