@@ -45,6 +45,17 @@ class FakeBuilds implements BuildRepository {
     );
     return active.at(-1) ?? null;
   }
+  async listActive() {
+    return this.rows
+      .filter((b) => b.status === 'queued' || b.status === 'running')
+      .sort((a, b) => +a.createdAt - +b.createdAt);
+  }
+  async recentFinished(projectId: string, limit: number) {
+    return this.rows
+      .filter((b) => b.projectId === projectId && b.status === 'succeeded')
+      .reverse()
+      .slice(0, limit);
+  }
   async countQueuedForUser(userId: string) {
     return this.rows.filter((b) => b.requestedBy === userId && b.status === 'queued').length;
   }
@@ -81,6 +92,25 @@ const ana: User = {
   name: 'Ana',
   createdAt: new Date(),
 };
+
+const row = (over: Partial<Build>): Build => ({
+  id: randomUUID(),
+  projectId: randomUUID(),
+  requestedBy: ana.id,
+  engine: 'xelatex',
+  mainFile: 'main.tex',
+  options: {},
+  status: 'queued',
+  commitSha: null,
+  exitCode: null,
+  errors: [],
+  warnings: [],
+  info: [],
+  createdAt: new Date(),
+  startedAt: null,
+  finishedAt: null,
+  ...over,
+});
 
 describe('CompileService.request', () => {
   let builds: FakeBuilds;
@@ -200,6 +230,34 @@ describe('CompileService.request', () => {
     expect(error).toBeInstanceOf(HttpException);
     expect((error as HttpException).getStatus()).toBe(429);
     expect(builds.rows).toHaveLength(3);
+  });
+
+  it('estimates the queue wait from builds ahead (running remaining + queued)', async () => {
+    const now = Date.now();
+    const pa = project();
+    const pb = project();
+    // Project A compiles in ~20s (one past success), and one is running, started 5s ago.
+    builds.rows.push(
+      row({
+        projectId: pa.id,
+        status: 'succeeded',
+        createdAt: new Date(now - 100_000),
+        startedAt: new Date(now - 100_000),
+        finishedAt: new Date(now - 80_000),
+      }),
+      row({
+        projectId: pa.id,
+        status: 'running',
+        createdAt: new Date(now - 6_000),
+        startedAt: new Date(now - 5_000),
+      }),
+    );
+    // Project B queues after A's running build; its wait ≈ A's remaining (20s - 5s = 15s).
+    builds.rows.push(row({ projectId: pb.id, status: 'queued', createdAt: new Date(now) }));
+
+    const [head] = await service.list(pb, 5);
+    expect(head?.etaMs).toBeGreaterThan(13_000);
+    expect(head?.etaMs).toBeLessThan(16_000);
   });
 
   it('keeps build output paths under BUILDS_DIR', () => {

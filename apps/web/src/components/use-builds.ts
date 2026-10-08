@@ -9,5 +9,8 @@ export function useBuilds(projectId: string) {
     queryKey: ['builds', projectId],
     queryFn: () => compile.builds(projectId, 5),
     refetchInterval: (query) => (isActive(query.state.data?.[0]) ? 1500 : false),
+    // Keep polling a queued/running build even when the tab is backgrounded, so the wait estimate
+    // and status stay current if the user steps away during a long compile.
+    refetchIntervalInBackground: true,
   });
 }

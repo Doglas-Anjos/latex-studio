@@ -29,13 +29,18 @@ export const MAX_QUEUED_PER_USER = 3;
  * row). latexmk itself is killed by COMPILE_TIMEOUT_MS; this only covers what that can't.
  */
 export const STALE_BUILD_BUFFER_MS = 2 * 60_000;
+/** Assumed compile time for a project with no finished build yet, used in the queue estimate. */
+export const DEFAULT_COMPILE_MS = 30_000;
 
 export type CompileQueue = Pick<Queue<CompileJobData>, 'add' | 'remove'>;
+/** A build plus, for a queued/running one, the estimated wait before it starts (ms). */
+export type BuildWithEta = Build & { etaMs?: number };
 
 @Injectable()
 export class CompileService {
   private readonly buildsDir: SafePath;
   private readonly staleAfterMs: number;
+  private readonly concurrency: number;
 
   constructor(
     @Inject(BUILD_REPOSITORY) private readonly builds: BuildRepository,
@@ -46,6 +51,7 @@ export class CompileService {
   ) {
     this.buildsDir = new SafePath(config.BUILDS_DIR);
     this.staleAfterMs = config.COMPILE_TIMEOUT_MS + STALE_BUILD_BUFFER_MS;
+    this.concurrency = Math.max(1, config.COMPILE_CONCURRENCY ?? 1);
   }
 
   private isStale(build: Build): boolean {
@@ -107,8 +113,52 @@ export class CompileService {
     return build;
   }
 
-  list(project: Project, limit: number): Promise<Build[]> {
-    return this.builds.listForProject(project.id, limit);
+  async list(project: Project, limit: number): Promise<BuildWithEta[]> {
+    const rows: BuildWithEta[] = await this.builds.listForProject(project.id, limit);
+    const head = rows[0];
+    if (head && (head.status === 'queued' || head.status === 'running')) {
+      rows[0] = { ...head, etaMs: await this.estimateEta(head) };
+    }
+    return rows;
+  }
+
+  /**
+   * Rough wait before `build` starts (or, if running, finishes): the summed expected duration of
+   * every build ahead of it in the global queue, counting a running build's remaining time, divided
+   * by the worker concurrency. Each project's expected duration is the mean of its recent succeeded
+   * builds; projects with no history use DEFAULT_COMPILE_MS.
+   * ponytail: mean of a tiny history and a flat concurrency divide; good while compile times are
+   * stable and the queue short. Refine (percentiles, bin-packing) only if estimates feel off.
+   */
+  private async estimateEta(build: Build): Promise<number> {
+    const active = await this.builds.listActive();
+    const durations = new Map<string, number>();
+    const durationFor = async (projectId: string): Promise<number> => {
+      const cached = durations.get(projectId);
+      if (cached !== undefined) return cached;
+      const recent = await this.builds.recentFinished(projectId, 3);
+      const samples = recent
+        .map((b) => (b.finishedAt && b.startedAt ? +b.finishedAt - +b.startedAt : 0))
+        .filter((ms) => ms > 0);
+      const dur = samples.length
+        ? samples.reduce((a, b) => a + b, 0) / samples.length
+        : DEFAULT_COMPILE_MS;
+      durations.set(projectId, dur);
+      return dur;
+    };
+
+    const now = Date.now();
+    let totalMs = 0;
+    for (const b of active) {
+      if (+b.createdAt > +build.createdAt) break; // active is oldest-first; the rest are behind us
+      const dur = await durationFor(b.projectId);
+      if (b.status === 'running') {
+        totalMs += b.startedAt ? Math.max(0, dur - (now - +b.startedAt)) : dur;
+      } else if (b.id !== build.id) {
+        totalMs += dur; // a build queued ahead of this one
+      }
+    }
+    return Math.round(totalMs / this.concurrency);
   }
 
   pdfPath(build: Build): string {

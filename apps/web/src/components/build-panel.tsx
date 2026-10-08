@@ -82,6 +82,12 @@ const elapsedSeconds = (build: Build) =>
     Math.round((Date.now() - new Date(build.startedAt ?? build.createdAt).getTime()) / 1000),
   );
 
+/** A short, approximate wait like "~15s" or "~2 min" from the server's ETA in ms. */
+const formatWait = (ms: number) => {
+  const s = Math.ceil(ms / 1000);
+  return s < 60 ? `~${s}s` : `~${Math.ceil(s / 60)} min`;
+};
+
 /**
  * Re-renders once a second while `on`. The polled build object does not change while a job is
  * queued or running, so every clock-derived label (elapsed seconds, and the switch to a retry
@@ -140,7 +146,13 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   const start = useMutation({
     mutationFn: () =>
       compile.compile(projectId, { draft: draftMode, haltOnError: stopOnFirstError }),
-    onSuccess: (b) => queryClient.setQueryData(['builds', projectId], [b, ...(builds ?? [])]),
+    onSuccess: (b) => {
+      queryClient.setQueryData(['builds', projectId], [b, ...(builds ?? [])]);
+      // Restart polling: coming from a settled build, useBuilds' refetchInterval was off, and
+      // setQueryData alone does not revive it — so a refetch is needed to pick up the queue wait,
+      // then the running and final status, live.
+      queryClient.invalidateQueries({ queryKey: ['builds', projectId] });
+    },
     onError: showPanel,
   });
   const stop = useMutation({
@@ -359,9 +371,11 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             )}
             {stuck
               ? `Sem resposta há ${elapsedSeconds(build)}s`
-              : isActive(build)
-                ? `${statusText[build.status]} (${elapsedSeconds(build)}s)`
-                : statusText[build.status]}
+              : build.status === 'queued' && build.etaMs
+                ? `Na fila · espera ${formatWait(build.etaMs)}`
+                : isActive(build)
+                  ? `${statusText[build.status]} (${elapsedSeconds(build)}s)`
+                  : statusText[build.status]}
           </span>
         )}
         {build && !isActive(build) && (

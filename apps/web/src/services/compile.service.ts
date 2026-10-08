@@ -25,6 +25,8 @@ export interface Build {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+  /** For a queued/running build, the server's estimated wait before it starts, in ms. */
+  etaMs?: number;
 }
 
 export const isActive = (b?: Build) => b?.status === 'queued' || b?.status === 'running';

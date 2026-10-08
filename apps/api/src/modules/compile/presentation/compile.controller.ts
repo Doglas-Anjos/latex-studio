@@ -23,7 +23,7 @@ import {
   RequireProjectRole,
 } from '../../projects/presentation/guards/project-role.guard';
 import type { User } from '../../users/domain/user';
-import { CompileService } from '../application/compile.service';
+import { type BuildWithEta, CompileService } from '../application/compile.service';
 import type { Build } from '../domain/build.repository';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO class in design:paramtypes
 import { CompileDto } from './compile.dto';
@@ -76,7 +76,7 @@ export class CompileController {
   list(
     @CurrentProject() project: Project,
     @Query('limit', new DefaultValuePipe(5), ParseIntPipe) limit: number,
-  ): Promise<Build[]> {
+  ): Promise<BuildWithEta[]> {
     return this.compile.list(project, Math.min(Math.max(limit, 1), 20));
   }
 

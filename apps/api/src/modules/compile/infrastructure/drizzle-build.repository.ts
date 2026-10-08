@@ -1,7 +1,7 @@
 import { DATABASE, type Database } from '@latex-studio/core';
 import { builds } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray } from 'drizzle-orm';
 import type { Build, BuildRepository, NewBuild } from '../domain/build.repository';
 
 @Injectable()
@@ -41,6 +41,23 @@ export class DrizzleBuildRepository implements BuildRepository {
       .orderBy(desc(builds.createdAt))
       .limit(1);
     return row ?? null;
+  }
+
+  listActive(): Promise<Build[]> {
+    return this.db
+      .select()
+      .from(builds)
+      .where(inArray(builds.status, ['queued', 'running']))
+      .orderBy(asc(builds.createdAt));
+  }
+
+  recentFinished(projectId: string, limit: number): Promise<Build[]> {
+    return this.db
+      .select()
+      .from(builds)
+      .where(and(eq(builds.projectId, projectId), eq(builds.status, 'succeeded')))
+      .orderBy(desc(builds.createdAt))
+      .limit(limit);
   }
 
   async countQueuedForUser(userId: string): Promise<number> {

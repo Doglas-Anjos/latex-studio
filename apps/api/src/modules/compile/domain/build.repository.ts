@@ -21,6 +21,10 @@ export interface BuildRepository {
   listForProject(projectId: string, limit: number): Promise<Build[]>;
   /** Most recent queued or running build of the project. */
   findActive(projectId: string): Promise<Build | null>;
+  /** Every queued or running build across all projects, oldest first (the global queue order). */
+  listActive(): Promise<Build[]>;
+  /** Recent succeeded builds of the project, newest first, to estimate its compile duration. */
+  recentFinished(projectId: string, limit: number): Promise<Build[]>;
   countQueuedForUser(userId: string): Promise<number>;
   /**
    * Marks a queued/running build as failed (orphaned job or crashed worker). Returns false if it
