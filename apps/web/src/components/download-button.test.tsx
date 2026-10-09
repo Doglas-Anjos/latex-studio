@@ -24,13 +24,12 @@ const succeeded: Build = {
   finishedAt: null,
 };
 
-function setup(builds: Build[], canEdit = true) {
+function setup(builds: Build[], canEdit = true, tools = {} as unknown as ToolsService) {
   const compile = {
     builds: vi.fn().mockResolvedValue(builds),
     downloadPdf: vi.fn(),
   } as unknown as CompileService;
   const projects = { downloadSource: vi.fn() } as unknown as ProjectService;
-  const tools = {} as unknown as ToolsService;
   const { container } = renderWithApp(
     <DownloadButton projectId="p1" canEdit={canEdit} />,
     new Container()
@@ -62,4 +61,14 @@ it('downloads the project source from the caret menu', async () => {
   await userEvent.click(caret);
   await userEvent.click(screen.getByRole('button', { name: /Fonte \(\.zip\)/ }));
   expect(projects.downloadSource).toHaveBeenCalledWith('p1');
+});
+
+it('surfaces an error when an export fails instead of failing silently', async () => {
+  const tools = {
+    requestExport: vi.fn().mockRejectedValue(new Error('spawn pandoc ENOENT')),
+  } as unknown as ToolsService;
+  const { container } = setup([succeeded], true, tools);
+  await userEvent.click(container.querySelector('summary') as HTMLElement);
+  await userEvent.click(screen.getByRole('button', { name: /Word \(\.docx\)/ }));
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Falha ao exportar/);
 });

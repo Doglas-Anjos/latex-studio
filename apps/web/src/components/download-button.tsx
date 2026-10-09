@@ -79,6 +79,11 @@ export function DownloadButton({ projectId, canEdit }: { projectId: string; canE
           ))}
       </Menu>
       {exportAs.isPending && <span className="pdf-download-busy">Exportando…</span>}
+      {exportAs.isError && (
+        <span className="pdf-download-error" role="alert">
+          Falha ao exportar. Tente de novo.
+        </span>
+      )}
     </div>
   );
 }

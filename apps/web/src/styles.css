@@ -4422,3 +4422,8 @@ button.log-row:hover {
   font-size: 0.75rem;
   color: var(--chrome-muted);
 }
+/* Export failure notice: a red lifted toward the light chrome ink so it reads on the dark header. */
+.pdf-download-error {
+  font-size: 0.75rem;
+  color: color-mix(in srgb, var(--danger) 65%, var(--chrome-ink));
+}
