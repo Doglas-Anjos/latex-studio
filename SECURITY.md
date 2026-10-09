@@ -15,6 +15,19 @@ If you discover a security vulnerability in latex-studio, please report it respo
 
 We will acknowledge your report within 7 days and provide updates on the remediation status. Critical vulnerabilities may be prioritized for faster resolution.
 
+## Known accepted advisories
+
+`pnpm audit` is configured (in `package.json` → `pnpm.auditConfig.ignoreGhsas`) to ignore the
+following advisories, after review:
+
+- **nanoid < 3.3.18** — GHSA-28wg-ghj8-5hjv, GHSA-2v37-7h3g-55p8, GHSA-xwg4-73v4-xw9w.
+  These are denial-of-service bugs triggered by calling `nanoid()` with a negative, zero or
+  overflowing size. The only path to it is the transitive `hunspell-asm > emscripten-wasm-loader`,
+  whose single call site is `nanoid(45)` — a fixed, positive constant, run server-side and never
+  from user input, so none of the bugs are reachable. There is no safe upgrade: `emscripten-wasm-loader`
+  requires nanoid 2.x's function-style default export, which nanoid 3.x removed, so forcing the patched
+  line breaks the spell checker. Revisit when `hunspell-asm` moves off nanoid 2.x.
+
 ## Supported Versions
 
 | Version | Supported |
