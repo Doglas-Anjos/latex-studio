@@ -17,6 +17,7 @@ describe('loadConfig', () => {
     expect(config.API_PORT).toBe(4000);
     expect(config.COMPILE_TIMEOUT_MS).toBe(1000);
     expect(config.COMPILE_CONCURRENCY).toBe(1);
+    expect(config.TOOLS_CONCURRENCY).toBe(1);
     expect(config.AUTH_MAX_TOKEN_TTL_S).toBe(900);
     expect(config.AUTH_JWKS_URL).toBeUndefined();
   });

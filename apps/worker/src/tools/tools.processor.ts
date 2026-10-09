@@ -23,7 +23,7 @@ import {
 } from '@latex-studio/core';
 import { projects } from '@latex-studio/core/schema';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
-import { Inject } from '@nestjs/common';
+import { Inject, type OnApplicationBootstrap } from '@nestjs/common';
 import type { Job } from 'bullmq';
 import { Sandbox } from '../compile/sandbox';
 import { snapshotProject } from '../snapshot';
@@ -198,8 +198,8 @@ const fail = (e: unknown): never => {
   throw new Error((err.stderr || err.message).slice(0, MAX_STDERR));
 };
 
-@Processor(TOOLS_QUEUE, { concurrency: 1 })
-export class ToolsProcessor extends WorkerHost {
+@Processor(TOOLS_QUEUE)
+export class ToolsProcessor extends WorkerHost implements OnApplicationBootstrap {
   private readonly builds: SafePath;
 
   constructor(
@@ -209,6 +209,11 @@ export class ToolsProcessor extends WorkerHost {
   ) {
     super();
     this.builds = new SafePath(config.BUILDS_DIR);
+  }
+
+  // @Processor options are fixed at class definition, before the config is loaded.
+  onApplicationBootstrap() {
+    this.worker.concurrency = this.config.TOOLS_CONCURRENCY;
   }
 
   async process(job: Job<ToolJobData>): Promise<unknown> {

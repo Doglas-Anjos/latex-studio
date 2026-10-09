@@ -70,6 +70,7 @@ services:
       REPOS_DIR: /data/repos
       BUILDS_DIR: /data/builds
       COMPILE_CONCURRENCY: ${COMPILE_CONCURRENCY:-1}
+      TOOLS_CONCURRENCY: ${TOOLS_CONCURRENCY:-1}
       COMPILE_TIMEOUT_MS: ${COMPILE_TIMEOUT_MS:-180000}
       COMPILE_MEMORY_MB: ${COMPILE_MEMORY_MB:-1024}
     # Reaps TeX processes orphaned by a timeout kill.

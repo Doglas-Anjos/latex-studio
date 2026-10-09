@@ -9,6 +9,8 @@ const baseSchema = z.object({
   REPOS_DIR: z.string().min(1),
   BUILDS_DIR: z.string().min(1),
   COMPILE_CONCURRENCY: z.coerce.number().int().positive().default(1),
+  // Export/format/wordcount jobs run in parallel per worker, independently of compiles.
+  TOOLS_CONCURRENCY: z.coerce.number().int().positive().default(1),
   COMPILE_TIMEOUT_MS: z.coerce.number().int().positive().default(180000),
   COMPILE_MEMORY_MB: z.coerce.number().int().positive().default(1024),
   MAX_UPLOAD_MB: z.coerce.number().positive().default(50),
