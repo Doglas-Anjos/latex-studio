@@ -35,6 +35,28 @@ O Caddy obtém TLS automaticamente para `APP_DOMAIN`. Quem pode entrar é decidi
 - O token é um JWT (RS256 publicado em `AUTH_JWKS_URL`, ou HS256 com `AUTH_SECRET`) com `iss`, `aud` (= `AUTH_AUDIENCE`, só desta aplicação), `sub` estável, `exp` de no máximo `AUTH_MAX_TOKEN_TTL_S`, e as claims `email` e `name`, que viram a conta aqui.
 - Quem pode usar o app é decidido no FasorX: ele só deve emitir o token `latex` para quem tem direito, pois aqui não há aprovação nem bloqueio.
 
+### Conectar outro provedor de identidade (OIDC): Entra ID/Azure AD, Keycloak, AD
+
+O app não tem login próprio: ele confia num JWT assinado que chega no header `Authorization`. O FasorX é só o emissor padrão — qualquer provedor OIDC serve. Para uma instalação de universidade sem o FasorX, aponte as variáveis `AUTH_*` para o seu provedor:
+
+- `AUTH_JWKS_URL` → o JWKS do provedor (RS256). Entra ID/Azure AD: `https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys`; Keycloak: `https://<host>/realms/<realm>/protocol/openid-connect/certs`. Use `AUTH_SECRET` (≥32 bytes) só para HS256 com segredo compartilhado.
+- `AUTH_ISSUER` → o `iss` do provedor (Entra: `https://login.microsoftonline.com/<tenant-id>/v2.0`; Keycloak: `https://<host>/realms/<realm>`).
+- `AUTH_AUDIENCE` → o `aud` desta aplicação (o Application/Client ID que você registrar no provedor).
+- O token precisa trazer `sub` estável, `email` e `name`, e `exp` dentro de `AUTH_MAX_TOKEN_TTL_S`.
+
+**Active Directory on-prem** não emite JWT (fala LDAP/Kerberos): ponha um **ADFS**, o **Entra ID** (via Azure AD Connect) ou o **Keycloak** federando o diretório na frente — aí vira OIDC e cai nas variáveis acima. O front web (`VITE_FASORX_*`) espera o fluxo do FasorX; para outro provedor, o deploy faz o login no provedor e entrega o JWT ao app (a verificação no backend é a mesma).
+
+**Quem pode entrar** é decidido no provedor: só emita o token desta aplicação para os usuários/grupos autorizados — aqui não há aprovação nem bloqueio próprios. Admins da plataforma (veem e governam tudo) saem de `SUPERADMIN_EMAILS` (lista de e-mails separados por vírgula). Dentro de cada projeto, o acesso é por papel (dono/editor/revisor/leitor).
+
+### Capacidade e workers
+
+A capacidade de processamento tem duas alavancas independentes:
+
+- **Jobs em paralelo por worker** (variáveis de ambiente): `COMPILE_CONCURRENCY` (compilações simultâneas) e `TOOLS_CONCURRENCY` (export/wordcount/auto-indent simultâneos). Padrão 1 cada. Cada compilação pode usar até `COMPILE_MEMORY_MB`, então dimensione pela CPU/RAM da máquina.
+- **Número de workers** (escala horizontal): rode mais contêineres worker com `docker compose up -d --scale worker=N`. Eles dividem a mesma fila (Redis/BullMQ), sem configuração extra.
+
+As duas alavancas são lidas no boot: depois de mudar, reinicie os workers (`docker compose up -d` recria quem mudou). Como referência, uma VPS de 2 vCPU/4 GB atende ~100 usuários com os padrões.
+
 Backup noturno (dump do Postgres + tar dos repositórios): `./scripts/backup.sh /srv/backups` via cron.
 
 ## Desenvolvimento
