@@ -445,12 +445,13 @@
   border-top: 1px solid var(--line);
 }
 
-/* FasorX platform footer: three-part bar (copyright · data notice · hub link). */
+/* FasorX platform footer: copyright · data notice · hub link, centered as one compact group. */
 .fasorx-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  justify-content: center;
+  gap: 0.25rem 0.9rem;
   margin-top: 1.5rem;
   padding-bottom: 1rem;
   color: var(--muted);
@@ -463,11 +464,17 @@
 .fasorx-footer a:hover {
   color: var(--ink);
 }
+.fasorx-footer-sep {
+  opacity: 0.5;
+}
+/* Stacked on phones, where dangling separators would look odd. */
 @media (max-width: 36rem) {
   .fasorx-footer {
     flex-direction: column;
-    gap: 0.4rem;
-    text-align: center;
+    gap: 0.35rem;
+  }
+  .fasorx-footer-sep {
+    display: none;
   }
 }
 

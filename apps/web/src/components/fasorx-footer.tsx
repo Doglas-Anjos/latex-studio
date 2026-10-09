@@ -4,9 +4,15 @@ export function FasorxFooter() {
   return (
     <footer className="fasorx-footer">
       <span>© {new Date().getFullYear()} FasorX</span>
+      <span className="fasorx-footer-sep" aria-hidden="true">
+        ·
+      </span>
       <a href="https://fasorx.com.br/privacidade/" target="_blank" rel="noreferrer">
         Cookies e dados
       </a>
+      <span className="fasorx-footer-sep" aria-hidden="true">
+        ·
+      </span>
       <a href="https://fasorx.com.br" target="_blank" rel="noreferrer">
         fasorx.com.br
       </a>
