@@ -25,6 +25,7 @@ import {
   RemoveDialog,
 } from '../components/dashboard/dialogs';
 import { HelpDialog } from '../components/dashboard/help-dialog';
+import { FasorxFooter } from '../components/fasorx-footer';
 import { InviteDialog, openInvite } from '../components/members-panel';
 import { Menu } from '../components/menu';
 import { ROLE_ICON, RoleBadge } from '../components/role-badge';
@@ -209,11 +210,13 @@ export function ProjectsPage() {
         )}
       </section>
 
-      <footer className="dashboard-footer">
+      <div className="dashboard-footer">
         <Button variant="ghost" size="compact" onClick={() => helpRef.current?.showModal()}>
           <CircleHelp size={16} aria-hidden="true" /> Como funciona
         </Button>
-      </footer>
+      </div>
+
+      <FasorxFooter />
 
       <HelpDialog dialogRef={helpRef} />
       <CreateDialog dialogRef={createRef} onDone={open} />

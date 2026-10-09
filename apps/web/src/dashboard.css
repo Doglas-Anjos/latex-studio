@@ -445,6 +445,32 @@
   border-top: 1px solid var(--line);
 }
 
+/* FasorX platform footer: three-part bar (copyright · data notice · hub link). */
+.fasorx-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-bottom: 1rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.fasorx-footer a {
+  color: var(--muted);
+  text-decoration: underline;
+}
+.fasorx-footer a:hover {
+  color: var(--ink);
+}
+@media (max-width: 36rem) {
+  .fasorx-footer {
+    flex-direction: column;
+    gap: 0.4rem;
+    text-align: center;
+  }
+}
+
 /* Tablet and below: each table row becomes a card (name on top, date and actions below). */
 @media (max-width: 48rem) {
   .project-table {
