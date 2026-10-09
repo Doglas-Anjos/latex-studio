@@ -1,0 +1,10 @@
+# Accepted advisories (rationale in SECURITY.md).
+#
+# nanoid < 3.3.18 DoS / predictable-id. The only path to nanoid is the transitive
+# hunspell-asm > emscripten-wasm-loader, whose single call site is nanoid(45) — a fixed, positive
+# size, run server-side and never from user input — so none of these are reachable. There is no
+# safe upgrade: nanoid 3.x drops the function-style default export that emscripten-wasm-loader
+# needs, which breaks the spell checker. Revisit when hunspell-asm moves off nanoid 2.x.
+CVE-2026-67213
+CVE-2026-67214
+CVE-2026-73086
