@@ -12,7 +12,9 @@ describe('subjectGraph', () => {
     'the transformer gives attention to the encoder model.',
     'models \\cite{hyndman2018forecasting} again.',
   ].join('\n\n');
-  const g = subjectGraph([{ path: 'main.tex', source }], 'Tese');
+  const files = [{ path: 'main.tex', source }];
+  const first = subjectGraph(files, 'Tese');
+  const g = first.graph;
   /** The hub a term belongs to (the term itself when it is the hub). */
   const area = (t: string) =>
     g.nodes.some((n) => n.id === `h:${t}`)
@@ -36,5 +38,17 @@ describe('subjectGraph', () => {
 
   it('points a click at the first paragraph using the term', () => {
     expect(g.nodes.find((n) => n.label === 'encoder')).toMatchObject({ path: 'main.tex', line: 7 });
+  });
+
+  it('evolves from the previous areas: an area keeps the name it had', () => {
+    expect(first.areas.get('rmse')).toBe(first.areas.get('mape'));
+    // Say the error area was named "mape" last time; a seeded run keeps that name.
+    const errorArea = first.areas.get('rmse');
+    const previous = new Map(
+      [...first.areas].map(([t, hub]) => [t, hub === errorArea ? 'mape' : hub]),
+    );
+    const next = subjectGraph(files, 'Tese', { previous });
+    expect(next.graph.nodes.some((n) => n.id === 'h:mape')).toBe(true);
+    expect(next.areas.get('rmse')).toBe('mape');
   });
 });

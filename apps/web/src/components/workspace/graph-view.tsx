@@ -15,10 +15,13 @@ import { ReferenceServiceToken, type SubjectNode } from '../../services/referenc
 import { useWorkspaceStore } from '../../workspace-store';
 
 // The "Grafo de assuntos": the document as a big picture to drill into — the document at the
-// centre, its chapters as hubs around it, each ringed by the terms that characterise it. Laid out
-// once with d3-force and fit to the view; wheel zooms toward the cursor, drag pans, and a click on
-// a chapter or term jumps to it in the text. ponytail: static layout (nodes can't be dragged).
+// centre, its areas of interest as hubs around it, each ringed by its more specific terms. Laid out
+// with d3-force and fit to the view; wheel zooms toward the cursor, drag pans, and a click on an
+// area or term jumps to it in the text. It follows the document: refetched after edits, and each
+// relayout starts from the previous positions so the map grows in place instead of reshuffling.
+// ponytail: nodes can't be dragged.
 type SimNode = SubjectNode & SimulationNodeDatum;
+type Point = { x: number; y: number };
 // d3 replaces `source`/`target` (the ids) with the node objects once the simulation runs.
 interface SimLink extends SimulationLinkDatum<SimNode> {
   weight: number;
@@ -42,11 +45,48 @@ const radius = (n: SubjectNode) =>
       : Math.max(5, Math.min(12, 4 + Math.sqrt(n.count)));
 const maxLabel = (n: SubjectNode) => (n.kind === 'term' ? 18 : 26);
 const short = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
-// Paint order: terms, then chapters, then the document on top.
+// Paint order: terms, then areas, then the document on top.
 const LAYER = { term: 0, hub: 1, root: 2 } as const;
+/** A node's identity across refetches: its label, so a term promoted to an area keeps its place. */
+const keyOf = (n: SubjectNode) => (n.kind === 'root' ? 'root' : n.label);
 
-function layout(nodes: SimNode[], links: SimLink[]) {
+/**
+ * Starts nodes where they were last time; a new node starts next to a placed neighbour (its area,
+ * for a term), so it settles in beside it. Returns whether there was a previous layout to keep.
+ */
+export function seedPositions(
+  nodes: SimNode[],
+  links: { source: string; target: string }[],
+  prev: Map<string, Point>,
+): boolean {
+  if (prev.size === 0) return false;
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  // Parent first: a link's source is the root or an area, its target what hangs from it.
+  const neighbours = (id: string) =>
+    links.flatMap((l) => (l.target === id ? [l.source] : l.source === id ? [l.target] : []));
+  const placed = (n: SimNode | undefined) => n?.x !== undefined && n.y !== undefined;
+  for (const n of nodes) {
+    const p = prev.get(keyOf(n));
+    if (p) Object.assign(n, p);
+  }
+  // Root, then areas, then terms, so a new area's new terms find it already placed.
+  const order = [...nodes].sort((a, b) => LAYER[b.kind] - LAYER[a.kind]);
+  order.forEach((n, i) => {
+    if (placed(n)) return;
+    const near = neighbours(n.id)
+      .map((id) => byId.get(id))
+      .find(placed);
+    const angle = i * 2.39996; // golden angle: siblings fan out instead of stacking
+    n.x = (near?.x ?? 0) + 40 * Math.cos(angle);
+    n.y = (near?.y ?? 0) + 40 * Math.sin(angle);
+  });
+  return true;
+}
+
+function layout(nodes: SimNode[], links: SimLink[], warm: boolean) {
   forceSimulation(nodes)
+    // A warm start only lets things settle around the newcomers instead of laying out anew.
+    .alpha(warm ? 0.3 : 1)
     .force(
       'link',
       forceLink<SimNode, SimLink>(links)
@@ -69,7 +109,7 @@ function layout(nodes: SimNode[], links: SimLink[]) {
       ),
     )
     .stop()
-    .tick(400);
+    .tick(warm ? 150 : 400);
 }
 
 export function GraphView({ projectId }: { projectId: string }) {
@@ -78,45 +118,76 @@ export function GraphView({ projectId }: { projectId: string }) {
     queryKey: ['references', projectId, 'topics'],
     queryFn: () => refs.topics(projectId),
     staleTime: 30_000,
+    // Collaborators' edits don't bump docVersion: pick them up while the view is open. An
+    // unchanged answer keeps the same `data` (structural sharing), so nothing is laid out again.
+    refetchInterval: 30_000,
   });
+  // Own edits: refetch once typing pauses, after the server's debounced save (2 s) has landed.
+  // Subscribed outside React state so a keystroke doesn't re-render the graph.
+  const { refetch } = topics;
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = useWorkspaceStore.subscribe((s, prev) => {
+      if (s.docVersion === prev.docVersion) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => void refetch(), 5000);
+    });
+    return () => {
+      stop();
+      clearTimeout(timer);
+    };
+  }, [refetch]);
 
+  // Last positions by node identity, so each relayout continues the previous one.
+  const positions = useRef(new Map<string, Point>());
   const graph = useMemo(() => {
     if (!topics.data || topics.data.nodes.length === 0) return null;
     const nodes: SimNode[] = topics.data.nodes
       .map((n) => ({ ...n }))
       .sort((a, b) => LAYER[a.kind] - LAYER[b.kind]);
+    const warm = seedPositions(nodes, topics.data.links, positions.current);
     const links: SimLink[] = topics.data.links.map((l) => ({ ...l }));
-    layout(nodes, links);
+    layout(nodes, links, warm);
+    positions.current = new Map(nodes.map((n) => [keyOf(n), { x: n.x ?? 0, y: n.y ?? 0 }]));
     const xs = nodes.map((n) => n.x ?? 0);
     const ys = nodes.map((n) => n.y ?? 0);
     const minX = Math.min(...xs);
     const minY = Math.min(...ys);
-    const at = (n: SimNode) => ({ x: (n.x ?? 0) - minX + PAD, y: (n.y ?? 0) - minY + PAD });
-    const width = Math.max(...xs) - minX + PAD * 2;
-    const height = Math.max(...ys) - minY + PAD * 2;
-    return { nodes, links, width, height, at };
+    // Simulation coordinates are kept as they are (stable across relayouts); this box frames them.
+    const fit: Box = {
+      x: minX - PAD,
+      y: minY - PAD,
+      w: Math.max(...xs) - minX + PAD * 2,
+      h: Math.max(...ys) - minY + PAD * 2,
+    };
+    const at = (n: SimNode): Point => ({ x: n.x ?? 0, y: n.y ?? 0 });
+    return { nodes, links, fit, at };
   }, [topics.data]);
 
   // The whole graph fits the view via the viewBox; wheel zoom and drag pan move the viewBox.
   const svgRef = useRef<SVGSVGElement>(null);
   const [vb, setVb] = useState<Box | null>(null);
+  // Once the user has zoomed or panned, an update keeps their view; until then it refits.
+  const touched = useRef(false);
   // A press becomes a pan only past a few pixels, so a plain click still reaches a node.
   const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset the viewport when a new graph lays out.
-  useEffect(() => setVb(graph ? { x: 0, y: 0, w: graph.width, h: graph.height } : null), [graph]);
+  useEffect(() => {
+    if (graph) setVb((v) => (v && touched.current ? v : graph.fit));
+  }, [graph]);
 
   if (topics.isPending) return <p className="status-note">Analisando o texto…</p>;
   if (topics.error) return <p className="form-error">Erro ao ler o documento.</p>;
   if (!graph) return <p className="nav-empty">Nenhum assunto encontrado (texto curto demais).</p>;
 
-  const box: Box = vb ?? { x: 0, y: 0, w: graph.width, h: graph.height };
+  const box: Box = vb ?? graph.fit;
   const onWheel = (e: WheelEvent) => {
     const r = svgRef.current?.getBoundingClientRect();
     if (!r) return;
+    touched.current = true;
     const mx = box.x + ((e.clientX - r.left) / r.width) * box.w;
     const my = box.y + ((e.clientY - r.top) / r.height) * box.h;
     const f = e.deltaY < 0 ? 0.85 : 1 / 0.85;
-    const w = Math.min(Math.max(box.w * f, graph.width * 0.15), graph.width * 1.5);
+    const w = Math.min(Math.max(box.w * f, graph.fit.w * 0.15), graph.fit.w * 1.5);
     const h = w * (box.h / box.w);
     setVb({ x: mx - (mx - box.x) * (w / box.w), y: my - (my - box.y) * (h / box.h), w, h });
   };
@@ -130,6 +201,7 @@ export function GraphView({ projectId }: { projectId: string }) {
     if (!d.moved) {
       if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) return;
       d.moved = true;
+      touched.current = true;
       // Captured from here on: the release lands on the svg, so the drag doesn't click a node.
       e.currentTarget.setPointerCapture(e.pointerId);
     }

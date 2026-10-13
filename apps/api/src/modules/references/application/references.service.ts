@@ -63,6 +63,13 @@ function resolveInput(arg: string, fromPath: string, has: (p: string) => boolean
 
 @Injectable()
 export class ReferencesService {
+  /**
+   * Each project's last subject areas (term → area), so the next map evolves from them.
+   * ponytail: in memory, per API instance — a restart (or another instance) regroups from scratch
+   * once; persist it if the map must stay stable across deploys.
+   */
+  private readonly areas = new Map<string, Map<string, string>>();
+
   constructor(@Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage) {}
 
   index(project: Project): Promise<ReferenceIndex> {
@@ -73,8 +80,16 @@ export class ReferencesService {
     return this.scanOutline(this.storage.open(project.id));
   }
 
-  topics(project: Project): Promise<SubjectGraph> {
-    return this.scanTopics(this.storage.open(project.id), project.name);
+  /** The document's areas of interest (body only), evolved from this project's last areas. */
+  async topics(project: Project): Promise<SubjectGraph> {
+    const { order, seen, body } = await this.readOrdered(this.storage.open(project.id));
+    const { graph, areas } = subjectGraph(
+      order.filter((p) => seen.has(p)).map((path) => ({ path, source: body(path) })),
+      project.name,
+      { previous: this.areas.get(project.id) ?? new Map() },
+    );
+    this.areas.set(project.id, areas);
+    return graph;
   }
 
   /**
@@ -105,15 +120,6 @@ export class ReferencesService {
     if (main) visit(main);
     for (const p of sources.keys()) if (!seen.has(p)) order.push(p);
     return { sources, order, seen, body };
-  }
-
-  /** The document's areas of interest: overall subject → areas → their terms (body only). */
-  private async scanTopics(files: ProjectFiles, title: string): Promise<SubjectGraph> {
-    const { order, seen, body } = await this.readOrdered(files);
-    return subjectGraph(
-      order.filter((p) => seen.has(p)).map((path) => ({ path, source: body(path) })),
-      title,
-    );
   }
 
   /**

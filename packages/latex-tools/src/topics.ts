@@ -138,15 +138,25 @@ function paragraphs(files: { path: string; source: string }[]): Paragraph[] {
 
 /**
  * Modularity communities (the local-moving phase of Louvain), visiting nodes in `order` so the
- * result is deterministic. Returns node → community id.
+ * result is deterministic. Starting from `initial` (the last run's areas) instead of singletons
+ * makes it evolutionary: a term only changes area when the new text clearly pulls it elsewhere.
+ * Returns node → community id.
  */
-function communities(adj: Map<string, Map<string, number>>, order: string[]) {
+function communities(
+  adj: Map<string, Map<string, number>>,
+  order: string[],
+  initial = new Map<string, string>(),
+) {
   const deg = new Map(
     order.map((t) => [t, [...(adj.get(t)?.values() ?? [])].reduce((a, b) => a + b, 0)]),
   );
   const m2 = [...deg.values()].reduce((a, b) => a + b, 0) || 1;
-  const comm = new Map(order.map((t) => [t, t]));
-  const tot = new Map(deg);
+  const comm = new Map(order.map((t) => [t, initial.get(t) ?? t]));
+  const tot = new Map<string, number>();
+  for (const t of order) {
+    const c = comm.get(t) as string;
+    tot.set(c, (tot.get(c) ?? 0) + (deg.get(t) ?? 0));
+  }
   for (let pass = 0; pass < 20; pass++) {
     let moved = false;
     for (const t of order) {
@@ -170,11 +180,19 @@ function communities(adj: Map<string, Map<string, number>>, order: string[]) {
   return comm;
 }
 
+/**
+ * The subject map of `files`, plus every pooled term's area (term → hub) to pass back as
+ * `previous` next time, so the map evolves with the text instead of being regrouped from scratch.
+ */
 export function subjectGraph(
   files: { path: string; source: string }[],
   title: string,
-  { areas = 7, perArea = 8 } = {},
-): SubjectGraph {
+  {
+    areas = 7,
+    perArea = 8,
+    previous = new Map<string, string>(),
+  }: { areas?: number; perArea?: number; previous?: Map<string, string> } = {},
+): { graph: SubjectGraph; areas: Map<string, string> } {
   const paras = paragraphs(files);
   // "models" → "model" when the singular also occurs.
   const seen = new Set(paras.flatMap((p) => [...p.terms]));
@@ -228,7 +246,7 @@ export function subjectGraph(
       adj.get(b)?.set(a, Math.max(adj.get(b)?.get(a) ?? 0, cos));
     }
 
-  const comm = communities(adj, pool);
+  const comm = communities(adj, pool, previous);
   const groups = new Map<string, string[]>();
   for (const t of pool)
     if ((adj.get(t)?.size ?? 0) > 0)
@@ -259,6 +277,8 @@ export function subjectGraph(
     nodes.push(node(`t:${t}`, t, 'term'));
     links.push({ source: 'root', target: `t:${t}`, weight: c });
   }
+  const previousHubs = new Set(previous.values());
+  const membership = new Map<string, string>();
   for (const group of ranked) {
     // How tightly a term is bound to this area (its neighbour weight inside the group).
     const affinity = (t: string) => group.reduce((s, u) => s + (adj.get(t)?.get(u) ?? 0), 0);
@@ -267,12 +287,16 @@ export function subjectGraph(
       (a, b) =>
         affinity(b) * Math.sqrt(count(b)) - affinity(a) * Math.sqrt(count(a)) || (a < b ? -1 : 1),
     )[0] as string;
-    // …named by its phrase when the word mostly appears in one ("front" → "pareto front").
-    const hub =
+    // …named by its phrase when the word mostly appears in one ("front" → "pareto front")…
+    const named =
       group
         .filter((t) => t.split(' ').length > 1 && t.split(' ').includes(central))
         .filter((t) => count(t) >= 0.45 * count(central))
         .sort((a, b) => count(b) - count(a))[0] ?? central;
+    // …unless the area already had a name that is still in it: an area keeps its name.
+    const hub =
+      group.filter((t) => previousHubs.has(t)).sort((a, b) => count(b) - count(a))[0] ?? named;
+    for (const t of group) membership.set(t, hub);
     nodes.push(node(`h:${hub}`, hub, 'hub'));
     links.push({ source: 'root', target: `h:${hub}`, weight: 1 });
     // Its words are redundant next to a phrase hub ("wind" around "wind speed").
@@ -287,5 +311,5 @@ export function subjectGraph(
       links.push({ source: `h:${hub}`, target: `t:${t}`, weight: adj.get(hub)?.get(t) ?? 0 });
     }
   }
-  return { nodes, links };
+  return { graph: { nodes, links }, areas: membership };
 }
