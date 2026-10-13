@@ -1424,6 +1424,26 @@ kbd {
   fill: color-mix(in srgb, var(--primary) 12%, var(--surface));
   stroke: var(--primary);
 }
+
+/* Subject graph (components/workspace/graph-view.tsx): force-directed topic network in SVG. */
+.graph-view {
+  height: 100%;
+  overflow: auto;
+}
+.graph-edge {
+  stroke: var(--line);
+  opacity: 0.7;
+}
+.graph-node circle {
+  fill: color-mix(in srgb, var(--primary) 30%, var(--surface));
+  stroke: var(--primary);
+  stroke-width: 1.5;
+}
+.graph-node text {
+  fill: var(--ink);
+  font-size: 11px;
+  pointer-events: none;
+}
 .nav-list {
   display: flex;
   flex-direction: column;

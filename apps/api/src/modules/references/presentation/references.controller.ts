@@ -21,4 +21,10 @@ export class ReferencesController {
   outline(@CurrentProject() project: Project) {
     return this.references.outline(project);
   }
+
+  @Get('topics')
+  @RequireProjectRole('viewer')
+  topics(@CurrentProject() project: Project) {
+    return this.references.topics(project);
+  }
 }

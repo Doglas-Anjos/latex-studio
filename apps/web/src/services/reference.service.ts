@@ -51,9 +51,16 @@ export interface DocumentOutline {
   acronyms: AcronymItem[];
 }
 
+/** A document's "subject graph": frequent terms as nodes, co-occurrence in a paragraph as edges. */
+export interface TopicGraph {
+  nodes: { term: string; count: number }[];
+  edges: { a: string; b: string; weight: number }[];
+}
+
 export interface ReferenceService {
   index(projectId: string): Promise<ReferenceIndex>;
   outline(projectId: string): Promise<DocumentOutline>;
+  topics(projectId: string): Promise<TopicGraph>;
 }
 
 export const ReferenceServiceToken = createToken<ReferenceService>('ReferenceService');
@@ -67,5 +74,9 @@ export class HttpReferenceService implements ReferenceService {
 
   outline(projectId: string) {
     return this.api.get<DocumentOutline>(`/projects/${projectId}/references/outline`);
+  }
+
+  topics(projectId: string) {
+    return this.api.get<TopicGraph>(`/projects/${projectId}/references/topics`);
   }
 }

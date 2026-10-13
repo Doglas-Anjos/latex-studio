@@ -2,6 +2,7 @@ import {
   type Acronym,
   type DocTable,
   type Equation,
+  extractTopics,
   type Figure,
   findAcronyms,
   findBibEntries,
@@ -14,6 +15,7 @@ import {
   findSections,
   findTables,
   type Section,
+  type TopicGraph,
 } from '@latex-studio/latex-tools';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Project } from '../../projects/domain/project';
@@ -71,26 +73,22 @@ export class ReferencesService {
     return this.scanOutline(this.storage.open(project.id));
   }
 
+  topics(project: Project): Promise<TopicGraph> {
+    return this.scanTopics(this.storage.open(project.id));
+  }
+
   /**
-   * Sections, figures, tables, equations and acronyms across every .tex (source scan). Files are
-   * walked in reading order — the `\input`/`\include` chain from the main file — so the section map
-   * nests correctly; any .tex not reached from the main file is scanned last.
+   * Reads every .tex and returns them in reading order — the `\input`/`\include` chain from the
+   * main file, then any unreached file. `body(path)` blanks the main file's preamble; `seen` holds
+   * the files reached from the main file's body.
    */
-  private async scanOutline(files: ProjectFiles): Promise<DocumentOutline> {
-    const out: DocumentOutline = {
-      sections: [],
-      figures: [],
-      tables: [],
-      equations: [],
-      acronyms: [],
-    };
+  private async readOrdered(files: ProjectFiles) {
     const sources = new Map<string, string>();
     for (const f of await files.repo.listFiles()) {
       if (f.size > MAX_SCAN_BYTES || !/\.tex$/i.test(f.path)) continue;
       sources.set(f.path, Buffer.from(await files.repo.readFile(f.path)).toString('utf8'));
     }
     const main = findMainFile(sources);
-    // `body(path)` is the main file past \begin{document}, other files unchanged.
     const body = (path: string) =>
       path === main ? bodyOnly(sources.get(path) as string) : (sources.get(path) as string);
     const order: string[] = [];
@@ -106,7 +104,32 @@ export class ReferencesService {
     };
     if (main) visit(main);
     for (const p of sources.keys()) if (!seen.has(p)) order.push(p);
+    return { sources, order, seen, body };
+  }
 
+  /** The document's subject graph: frequent terms as nodes, co-occurrence as edges (body only). */
+  private async scanTopics(files: ProjectFiles): Promise<TopicGraph> {
+    const { order, seen, body } = await this.readOrdered(files);
+    const text = order
+      .filter((p) => seen.has(p))
+      .map((p) => body(p))
+      .join('\n\n');
+    return extractTopics(text);
+  }
+
+  /**
+   * Sections, figures, tables, equations and acronyms across every .tex (source scan), in reading
+   * order so the section map nests correctly; any .tex not reached from the main file is last.
+   */
+  private async scanOutline(files: ProjectFiles): Promise<DocumentOutline> {
+    const out: DocumentOutline = {
+      sections: [],
+      figures: [],
+      tables: [],
+      equations: [],
+      acronyms: [],
+    };
+    const { sources, order, seen, body } = await this.readOrdered(files);
     for (const path of order) {
       const source = sources.get(path) as string;
       // Sections only from the document body reached from the main file: a preamble/orphan file's

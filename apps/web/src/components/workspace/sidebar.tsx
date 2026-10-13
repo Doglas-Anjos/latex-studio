@@ -9,6 +9,7 @@ import { NavigatorPanel } from '../navigator-panel';
 import { PackagesPanel } from '../packages-panel';
 import { viewLabels } from './activity-bar';
 import { ChangesView } from './changes-view';
+import { GraphView } from './graph-view';
 import { MapView } from './map-view';
 
 export function Sidebar({
@@ -37,7 +38,7 @@ export function Sidebar({
         )}
         {view === 'navigator' && <NavigatorPanel projectId={project.id} />}
         {view === 'map' && <MapView projectId={project.id} />}
-        {view === 'graph' && <p className="nav-empty">Em breve.</p>}
+        {view === 'graph' && <GraphView projectId={project.id} />}
         {view === 'changes' && <ChangesView projectId={project.id} canEdit={canEdit} />}
         {view === 'packages' && <PackagesPanel projectId={project.id} canEdit={canEdit} />}
         {view === 'comments' && (

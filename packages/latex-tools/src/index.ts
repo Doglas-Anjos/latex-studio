@@ -5,4 +5,5 @@ export * from './main-file';
 export * from './package-manifest';
 export * from './reference-index';
 export * from './scrub-paths';
+export * from './topics';
 export * from './usepackage-parser';
