@@ -1442,17 +1442,52 @@ kbd {
 }
 .graph-edge {
   stroke: var(--line);
-  opacity: 0.7;
+  stroke-width: 1.2;
+  opacity: 0.8;
+}
+/* Document → chapter edges: the spine of the map. */
+.graph-edge[data-spine] {
+  stroke: color-mix(in srgb, var(--chrome-accent) 60%, var(--line));
+  stroke-width: 2;
 }
 .graph-node circle {
-  fill: color-mix(in srgb, var(--primary) 30%, var(--surface));
-  stroke: var(--primary);
   stroke-width: 1.5;
+}
+.graph-node[data-kind="term"] circle {
+  fill: color-mix(in srgb, var(--primary) 28%, var(--surface));
+  stroke: var(--primary);
+}
+.graph-node[data-kind="hub"] circle {
+  fill: color-mix(in srgb, var(--chrome-accent) 70%, var(--surface));
+  stroke: var(--chrome-accent);
+}
+.graph-node[data-kind="root"] circle {
+  fill: var(--chrome-accent);
+  stroke: color-mix(in srgb, var(--chrome-accent) 55%, var(--ink));
+  stroke-width: 2.5;
 }
 .graph-node text {
   fill: var(--ink);
-  font-size: 11px;
+  font-size: 10px;
   pointer-events: none;
+}
+.graph-node[data-kind="hub"] text {
+  font-size: 12px;
+  font-weight: 600;
+}
+.graph-node[data-kind="root"] text {
+  font-size: 13px;
+  font-weight: 700;
+}
+.graph-node[tabindex] {
+  cursor: pointer;
+}
+.graph-node[tabindex]:hover circle,
+.graph-node:focus-visible circle {
+  stroke-width: 3;
+}
+.graph-node:focus-visible {
+  outline: none;
 }
 .nav-list {
   display: flex;

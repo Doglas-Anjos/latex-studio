@@ -51,16 +51,26 @@ export interface DocumentOutline {
   acronyms: AcronymItem[];
 }
 
-/** A document's "subject graph": frequent terms as nodes, co-occurrence in a paragraph as edges. */
-export interface TopicGraph {
-  nodes: { term: string; count: number }[];
-  edges: { a: string; b: string; weight: number }[];
+/** A node of the subject map: the document (root), a chapter (hub) or a characteristic term. */
+export interface SubjectNode {
+  id: string;
+  label: string;
+  kind: 'root' | 'hub' | 'term';
+  count: number;
+  /** Where a click jumps: a hub's heading, a term's first use in its chapter. */
+  path?: string;
+  line?: number;
+}
+/** The document as a big picture: root → chapters → the terms that characterise each chapter. */
+export interface SubjectGraph {
+  nodes: SubjectNode[];
+  links: { source: string; target: string; weight: number }[];
 }
 
 export interface ReferenceService {
   index(projectId: string): Promise<ReferenceIndex>;
   outline(projectId: string): Promise<DocumentOutline>;
-  topics(projectId: string): Promise<TopicGraph>;
+  topics(projectId: string): Promise<SubjectGraph>;
 }
 
 export const ReferenceServiceToken = createToken<ReferenceService>('ReferenceService');
@@ -77,6 +87,6 @@ export class HttpReferenceService implements ReferenceService {
   }
 
   topics(projectId: string) {
-    return this.api.get<TopicGraph>(`/projects/${projectId}/references/topics`);
+    return this.api.get<SubjectGraph>(`/projects/${projectId}/references/topics`);
   }
 }

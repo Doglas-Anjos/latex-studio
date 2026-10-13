@@ -2,7 +2,6 @@ import {
   type Acronym,
   type DocTable,
   type Equation,
-  extractTopics,
   type Figure,
   findAcronyms,
   findBibEntries,
@@ -15,7 +14,8 @@ import {
   findSections,
   findTables,
   type Section,
-  type TopicGraph,
+  type SubjectGraph,
+  subjectGraph,
 } from '@latex-studio/latex-tools';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Project } from '../../projects/domain/project';
@@ -73,8 +73,8 @@ export class ReferencesService {
     return this.scanOutline(this.storage.open(project.id));
   }
 
-  topics(project: Project): Promise<TopicGraph> {
-    return this.scanTopics(this.storage.open(project.id));
+  topics(project: Project): Promise<SubjectGraph> {
+    return this.scanTopics(this.storage.open(project.id), project.name);
   }
 
   /**
@@ -107,14 +107,13 @@ export class ReferencesService {
     return { sources, order, seen, body };
   }
 
-  /** The document's subject graph: frequent terms as nodes, co-occurrence as edges (body only). */
-  private async scanTopics(files: ProjectFiles): Promise<TopicGraph> {
+  /** The document's areas of interest: overall subject → areas → their terms (body only). */
+  private async scanTopics(files: ProjectFiles, title: string): Promise<SubjectGraph> {
     const { order, seen, body } = await this.readOrdered(files);
-    const text = order
-      .filter((p) => seen.has(p))
-      .map((p) => body(p))
-      .join('\n\n');
-    return extractTopics(text);
+    return subjectGraph(
+      order.filter((p) => seen.has(p)).map((path) => ({ path, source: body(path) })),
+      title,
+    );
   }
 
   /**
