@@ -181,19 +181,33 @@ function communities(
 }
 
 /**
+ * How many areas, and terms per area, a document of `paragraphs` paragraphs gets: a short article
+ * ~3 x 5, a thesis (~400 paragraphs) ~7 x 8, a book up to 12 x 10.
+ */
+export function autoSize(paragraphs: number): { areas: number; perArea: number } {
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(v)));
+  return { areas: clamp(paragraphs / 60, 3, 12), perArea: clamp(4 + paragraphs / 100, 5, 10) };
+}
+
+/**
  * The subject map of `files`, plus every pooled term's area (term → hub) to pass back as
  * `previous` next time, so the map evolves with the text instead of being regrouped from scratch.
+ * `areas`/`perArea` fix the size; left undefined they scale with the document (autoSize).
  */
 export function subjectGraph(
   files: { path: string; source: string }[],
   title: string,
-  {
-    areas = 7,
-    perArea = 8,
-    previous = new Map<string, string>(),
-  }: { areas?: number; perArea?: number; previous?: Map<string, string> } = {},
+  options: {
+    areas?: number | undefined;
+    perArea?: number | undefined;
+    previous?: Map<string, string>;
+  } = {},
 ): { graph: SubjectGraph; areas: Map<string, string> } {
   const paras = paragraphs(files);
+  const auto = autoSize(paras.length);
+  const areas = options.areas ?? auto.areas;
+  const perArea = options.perArea ?? auto.perArea;
+  const previous = options.previous ?? new Map<string, string>();
   // "models" → "model" when the singular also occurs.
   const seen = new Set(paras.flatMap((p) => [...p.terms]));
   const canon = (t: string) => (/[^su]s$/.test(t) && seen.has(t.slice(0, -1)) ? t.slice(0, -1) : t);
@@ -202,10 +216,12 @@ export function subjectGraph(
   const df = new Map<string, number>();
   for (const p of paras) for (const t of p.terms) df.set(t, (df.get(t) ?? 0) + 1);
   const count = (t: string) => df.get(t) ?? 0;
+  // Enough candidate terms to fill every area, with room for the ones clustering leaves out.
+  const poolSize = Math.max(100, areas * (perArea + 4));
   const vocab = [...df.keys()]
     .filter((t) => count(t) >= 3)
     .sort((a, b) => count(b) - count(a) || (a < b ? -1 : 1))
-    .slice(0, 150);
+    .slice(0, poolSize + 50);
 
   // Terms in a large share of paragraphs are the document's overall subject, not an area. The cut
   // adapts to the document: twice the median share, and never below 15%.
@@ -218,7 +234,7 @@ export function subjectGraph(
       .map((t): [string, number, number] => [t, count(t), count(t) * phrase(t)]),
     6,
   );
-  const pool = vocab.filter((t) => share(t) < cut).slice(0, 100);
+  const pool = vocab.filter((t) => share(t) < cut).slice(0, poolSize);
 
   // Cosine co-occurrence between pooled terms, kept as each term's 5 nearest neighbours.
   const index = new Map(pool.map((t, i) => [t, i]));

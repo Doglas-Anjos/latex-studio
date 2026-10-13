@@ -43,6 +43,12 @@ describe('loadConfig', () => {
     });
     expect(config.AUTH_AUDIENCE).toBe('latex');
   });
+
+  it('leaves the subject graph size automatic unless a count is set', () => {
+    expect(loadConfig({ ...valid, SUBJECT_GRAPH_AREAS: '' }).SUBJECT_GRAPH_AREAS).toBeUndefined();
+    expect(loadConfig({ ...valid, SUBJECT_GRAPH_AREAS: '10' }).SUBJECT_GRAPH_AREAS).toBe(10);
+    expect(() => loadConfig({ ...valid, SUBJECT_GRAPH_TERMS: '0' })).toThrow();
+  });
 });
 
 describe('loadWorkerConfig', () => {

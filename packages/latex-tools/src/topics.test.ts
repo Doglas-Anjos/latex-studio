@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { subjectGraph } from './topics';
+import { autoSize, subjectGraph } from './topics';
+
+describe('autoSize', () => {
+  it('scales the map with the document, within bounds', () => {
+    expect(autoSize(40)).toEqual({ areas: 3, perArea: 5 });
+    expect(autoSize(415)).toEqual({ areas: 7, perArea: 8 });
+    expect(autoSize(5000)).toEqual({ areas: 12, perArea: 10 });
+  });
+});
 
 describe('subjectGraph', () => {
   // Two areas that never share a paragraph, plus "model", which is in every paragraph.
@@ -38,6 +46,12 @@ describe('subjectGraph', () => {
 
   it('points a click at the first paragraph using the term', () => {
     expect(g.nodes.find((n) => n.label === 'encoder')).toMatchObject({ path: 'main.tex', line: 7 });
+  });
+
+  it('honours a fixed size over the automatic one', () => {
+    const one = subjectGraph(files, 'Tese', { areas: 1, perArea: 1 }).graph;
+    expect(one.nodes.filter((n) => n.kind === 'hub')).toHaveLength(1);
+    expect(one.links.filter((l) => l.source.startsWith('h:'))).toHaveLength(1);
   });
 
   it('evolves from the previous areas: an area keeps the name it had', () => {

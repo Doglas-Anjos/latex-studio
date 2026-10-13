@@ -31,6 +31,11 @@ const baseSchema = z.object({
 
 const optional = (schema: z.ZodType<string>) =>
   z.preprocess((v) => (v === '' ? undefined : v), schema.optional());
+/** An optional small positive integer; empty or unset means "decide automatically". */
+const optionalCount = z.preprocess(
+  (v) => (v === '' ? undefined : v),
+  z.coerce.number().int().min(1).max(30).optional(),
+);
 
 /**
  * Identity comes from the application in front (FasorX) as a signed JWT in `Authorization`.
@@ -52,6 +57,10 @@ const envSchema = baseSchema
     // same on the hosted instance and on a self-hosted university install. Empty = no admins
     // (except the local user in local mode).
     SUPERADMIN_EMAILS: optional(z.string()),
+    // Subject graph size: areas around the document, and terms around each area. Unset = scaled
+    // to the document (a short article gets a few, a thesis or book more); set = fixed.
+    SUBJECT_GRAPH_AREAS: optionalCount,
+    SUBJECT_GRAPH_TERMS: optionalCount,
   })
   .refine((c) => c.AUTH_JWKS_URL || c.AUTH_SECRET || new URL(c.APP_URL).hostname === 'localhost', {
     message: 'AUTH_JWKS_URL or AUTH_SECRET is required unless APP_URL is localhost',

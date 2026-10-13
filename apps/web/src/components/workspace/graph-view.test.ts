@@ -1,5 +1,17 @@
 import { expect, it } from 'vitest';
-import { seedPositions } from './graph-view';
+import { caption, seedPositions } from './graph-view';
+
+it('fits whole words inside the circle, shrinking the font before cutting', () => {
+  expect(caption('wind', 32, 11)).toEqual({ lines: ['wind'], size: 11 });
+  expect(caption('pareto front', 32, 11)).toEqual({ lines: ['pareto', 'front'], size: 11 });
+  // Splits after a hyphen, and shrinks until "dominated" fits whole.
+  expect(caption('non-dominated', 24, 10)).toEqual({ lines: ['non-', 'dominated'], size: 7.5 });
+  // Past the smallest font, it falls back to two cut lines.
+  const long = caption('a very long subject name that never fits', 20, 10);
+  expect(long.size).toBe(7);
+  expect(long.lines).toHaveLength(2);
+  expect(long.lines[1]?.endsWith('…')).toBe(true);
+});
 
 const node = (
   id: string,

@@ -1,3 +1,4 @@
+import { APP_CONFIG, type AppConfig } from '@latex-studio/core';
 import {
   type Acronym,
   type DocTable,
@@ -70,7 +71,10 @@ export class ReferencesService {
    */
   private readonly areas = new Map<string, Map<string, string>>();
 
-  constructor(@Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage) {}
+  constructor(
+    @Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
+  ) {}
 
   index(project: Project): Promise<ReferenceIndex> {
     return this.scan(this.storage.open(project.id));
@@ -86,7 +90,12 @@ export class ReferencesService {
     const { graph, areas } = subjectGraph(
       order.filter((p) => seen.has(p)).map((path) => ({ path, source: body(path) })),
       project.name,
-      { previous: this.areas.get(project.id) ?? new Map() },
+      {
+        // Unset → scaled to the document; set in the env → fixed for every project.
+        areas: this.config.SUBJECT_GRAPH_AREAS,
+        perArea: this.config.SUBJECT_GRAPH_TERMS,
+        previous: this.areas.get(project.id) ?? new Map(),
+      },
     );
     this.areas.set(project.id, areas);
     return graph;

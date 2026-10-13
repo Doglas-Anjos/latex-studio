@@ -1425,69 +1425,233 @@ kbd {
   stroke: var(--primary);
 }
 
-/* Subject graph (components/workspace/graph-view.tsx): force-directed topic network in SVG,
-   fit to the view; wheel zooms and drag pans (overscroll contained so the page never scrolls). */
+/* Subject graph (components/workspace/graph-view.tsx), Neo4j-browser style: coloured nodes with
+   their caption inside, arrows, live physics. Node fills/text colours come from SVG attributes
+   (one colour per area), so no rule here may set `fill` on a node's circle or text. */
 .graph-view {
+  position: relative;
   height: 100%;
   overflow: hidden;
   overscroll-behavior: contain;
+  background:
+    radial-gradient(circle, color-mix(in srgb, var(--line) 70%, transparent) 1px, transparent 1px) 0
+    0 / 22px 22px;
 }
 .graph-view svg {
   display: block;
   cursor: grab;
   touch-action: none;
+  user-select: none;
 }
 .graph-view svg:active {
   cursor: grabbing;
 }
 .graph-edge {
-  stroke: var(--line);
-  stroke-width: 1.2;
-  opacity: 0.8;
+  stroke: var(--muted);
+  stroke-width: 1.3;
+  opacity: 0.55;
+  transition: opacity 0.15s ease;
 }
-/* Document → chapter edges: the spine of the map. */
+/* Document → area edges: the spine of the map. */
 .graph-edge[data-spine] {
-  stroke: color-mix(in srgb, var(--chrome-accent) 60%, var(--line));
-  stroke-width: 2;
+  stroke-width: 2.2;
+  opacity: 0.7;
+}
+.graph-arrow path {
+  fill: var(--muted);
+}
+.graph-node {
+  cursor: pointer;
+  transition: opacity 0.15s ease;
 }
 .graph-node circle {
-  stroke-width: 1.5;
-}
-.graph-node[data-kind="term"] circle {
-  fill: color-mix(in srgb, var(--primary) 28%, var(--surface));
-  stroke: var(--primary);
-}
-.graph-node[data-kind="hub"] circle {
-  fill: color-mix(in srgb, var(--chrome-accent) 70%, var(--surface));
-  stroke: var(--chrome-accent);
+  stroke-width: 2;
+  transition: stroke-width 0.1s ease;
 }
 .graph-node[data-kind="root"] circle {
-  fill: var(--chrome-accent);
-  stroke: color-mix(in srgb, var(--chrome-accent) 55%, var(--ink));
-  stroke-width: 2.5;
-}
-.graph-node text {
-  fill: var(--ink);
-  font-size: 10px;
-  pointer-events: none;
-}
-.graph-node[data-kind="hub"] text {
-  font-size: 12px;
-  font-weight: 600;
-}
-.graph-node[data-kind="root"] text {
-  font-size: 13px;
-  font-weight: 700;
-}
-.graph-node[tabindex] {
-  cursor: pointer;
-}
-.graph-node[tabindex]:hover circle,
-.graph-node:focus-visible circle {
   stroke-width: 3;
 }
-.graph-node:focus-visible {
+.graph-node text {
+  font-family: var(--font-ui, system-ui, sans-serif);
+  pointer-events: none;
+}
+.graph-node[data-kind="hub"] text,
+.graph-node[data-kind="root"] text {
+  font-weight: 700;
+}
+.graph-node:hover circle,
+.graph-node:focus-visible circle {
+  stroke-width: 4;
+}
+/* The thicker outline above marks focus; the browser's square ring around an SVG <g> would not. */
+.graph-node:focus {
   outline: none;
+}
+/* Pinned by a drag: a dashed ring says "I stay here" (Reorganizar releases it). */
+.graph-node[data-pinned] circle:not(.graph-halo) {
+  stroke-dasharray: 4 3;
+}
+/* Hover/selection focus: everything outside the focused neighbourhood fades back. */
+.graph-node[data-dim],
+.graph-edge[data-dim] {
+  opacity: 0.12;
+}
+.graph-halo {
+  fill: none;
+  stroke: var(--focus);
+  stroke-width: 5;
+  opacity: 0.55;
+}
+
+/* Overlays: legend (top-left), controls (top-right), details (bottom). */
+.graph-legend,
+.graph-controls,
+.graph-inspector {
+  position: absolute;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  font-size: 0.75rem;
+}
+.graph-legend {
+  top: 0.5rem;
+  left: 0.5rem;
+  max-height: 45%;
+  overflow: auto;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+}
+.graph-legend button,
+.graph-chip,
+.graph-link {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+.graph-legend button {
+  width: 100%;
+  padding: 0.2rem 0.45rem;
+  border-radius: 5px;
+  text-align: left;
+}
+.graph-legend button:hover,
+.graph-chip:hover {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.graph-dot {
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+}
+.graph-controls {
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  padding: 0.15rem;
+}
+.graph-controls button {
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.graph-controls button:hover {
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.graph-legend button:focus-visible,
+.graph-controls button:focus-visible,
+.graph-inspector button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+.graph-inspector {
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  max-height: 42%;
+  overflow: auto;
+  padding: 0.55rem 0.7rem;
+  color: var(--ink);
+}
+.graph-inspector header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+}
+.graph-inspector header strong {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.graph-inspector header button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.graph-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
+  margin: 0.25rem 0 0.4rem;
+  color: var(--muted);
+}
+.graph-link {
+  display: inline;
+  padding: 0;
+  color: var(--primary);
+  text-decoration: underline;
+}
+.graph-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+.graph-chip {
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.graph-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+  padding: 0.3rem 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  background: var(--primary);
+  color: var(--primary-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) {
+  .graph-edge,
+  .graph-node,
+  .graph-node circle {
+    transition: none;
+  }
 }
 .nav-list {
   display: flex;
