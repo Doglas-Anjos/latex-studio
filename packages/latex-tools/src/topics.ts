@@ -44,9 +44,10 @@ const STOP = new Set(
   ).split(/\s+/),
 );
 
-// Environments holding maths, data, drawings or code rather than prose.
+// Environments holding maths, data, drawings or code rather than prose, front matter (abstracts,
+// acronym and symbol lists) that restates every subject at once, and glossary definitions.
 const NON_PROSE =
-  /\\begin\{(equation|align|gather|multline|displaymath|math|tabularx?|longtable|tikzpicture|pgfpicture|ganttchart|forest|algorithm|algorithmic|verbatim|lstlisting|minted)\*?\}[\s\S]*?\\end\{\1\*?\}/g;
+  /\\begin\{(equation|align|gather|multline|displaymath|math|tabularx?|longtable|tikzpicture|pgfpicture|ganttchart|forest|algorithm|algorithmic|verbatim|lstlisting|minted|abstract|resumo|resumen|siglas|simbolos|fichacatalografica)\*?\}[\s\S]*?\\end\{\1\*?\}|^[ \t]*\\new(?:acronym|glossaryentry|abbreviation)\b[^\n]*/gm;
 // Glossary uses (\acrshort{moo}, \gls{emd}…): the document's own declared key concepts.
 const ACRONYM = /\\(?:acr(?:short|long|full)|[gG]ls[a-z]*)\{([^}]{1,40})\}/g;
 // Commands whose (first) argument is a key, path, colour or name, never prose: \cite{..}, \ref{..},
@@ -272,25 +273,35 @@ export function subjectGraph(
     .sort((a, b) => b.reduce((s, t) => s + count(t), 0) - a.reduce((s, t) => s + count(t), 0))
     .slice(0, areas);
 
-  // First paragraph line that mentions the term, for a click to land on.
-  const firstUse = (t: string) => {
-    const p = paras.find((q) => q.terms.has(t));
-    if (!p) return {};
-    const i = p.lines.findIndex((l) => l.toLowerCase().includes(t));
-    return { path: p.path, line: p.start + Math.max(0, i) };
+  // Where a click lands: the paragraph using the term together with the most of its closest
+  // neighbours in its area (its main discussion, not a passing mention); ties go to the earliest.
+  const mainUse = (t: string, area: string[]) => {
+    const near = area.filter((u) => adj.get(t)?.has(u));
+    const related = near.length ? near : area;
+    let best: Paragraph | undefined;
+    let score = -1;
+    for (const p of paras) {
+      if (!p.terms.has(t)) continue;
+      const s = related.filter((u) => p.terms.has(u)).length;
+      if (s > score) [best, score] = [p, s];
+    }
+    if (!best) return {};
+    const i = best.lines.findIndex((l) => l.toLowerCase().includes(t));
+    return { path: best.path, line: best.start + Math.max(0, i) };
   };
-  const node = (id: string, t: string, kind: SubjectKind): SubjectNode => ({
+  const node = (id: string, t: string, kind: SubjectKind, area: string[]): SubjectNode => ({
     id,
     label: t,
     kind,
     count: count(t),
-    ...firstUse(t),
+    ...mainUse(t, area),
   });
 
   const nodes: SubjectNode[] = [{ id: 'root', label: title, kind: 'root', count: 0 }];
   const links: SubjectGraph['links'] = [];
+  const generalTerms = general.map(([t]) => t);
   for (const [t, c] of general) {
-    nodes.push(node(`t:${t}`, t, 'term'));
+    nodes.push(node(`t:${t}`, t, 'term', generalTerms));
     links.push({ source: 'root', target: `t:${t}`, weight: c });
   }
   const previousHubs = new Set(previous.values());
@@ -313,7 +324,7 @@ export function subjectGraph(
     const hub =
       group.filter((t) => previousHubs.has(t)).sort((a, b) => count(b) - count(a))[0] ?? named;
     for (const t of group) membership.set(t, hub);
-    nodes.push(node(`h:${hub}`, hub, 'hub'));
+    nodes.push(node(`h:${hub}`, hub, 'hub', group));
     links.push({ source: 'root', target: `h:${hub}`, weight: 1 });
     // Its words are redundant next to a phrase hub ("wind" around "wind speed").
     const rest = group.filter((t) => t !== hub && !hub.split(' ').includes(t));
@@ -323,7 +334,7 @@ export function subjectGraph(
       perArea,
     );
     for (const [t] of sats) {
-      nodes.push(node(`t:${t}`, t, 'term'));
+      nodes.push(node(`t:${t}`, t, 'term', group));
       links.push({ source: `h:${hub}`, target: `t:${t}`, weight: adj.get(hub)?.get(t) ?? 0 });
     }
   }

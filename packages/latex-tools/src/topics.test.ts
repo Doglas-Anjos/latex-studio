@@ -48,6 +48,23 @@ describe('subjectGraph', () => {
     expect(g.nodes.find((n) => n.label === 'encoder')).toMatchObject({ path: 'main.tex', line: 7 });
   });
 
+  it('points a click at the main discussion, never the abstract or a passing mention', () => {
+    const tex = [
+      '\\newacronym{enc}{ENC}{Encoder Attention Transformer}',
+      '',
+      '\\begin{abstract}',
+      'encoder, attention and transformer.',
+      '\\end{abstract}',
+      '',
+      'an encoder, briefly.',
+      '',
+      source,
+    ].join('\n');
+    const withAbstract = subjectGraph([{ path: 'main.tex', source: tex }], 'Tese').graph;
+    // The attention paragraph (line 7 of `source`) sits at line 15 now.
+    expect(withAbstract.nodes.find((n) => n.label === 'encoder')).toMatchObject({ line: 15 });
+  });
+
   it('honours a fixed size over the automatic one', () => {
     const one = subjectGraph(files, 'Tese', { areas: 1, perArea: 1 }).graph;
     expect(one.nodes.filter((n) => n.kind === 'hub')).toHaveLength(1);
