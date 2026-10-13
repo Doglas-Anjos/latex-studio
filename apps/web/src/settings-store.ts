@@ -46,6 +46,8 @@ export type ThemeSetting = 'light' | 'dark' | 'system';
 export type SidebarView =
   | 'files'
   | 'navigator'
+  | 'map'
+  | 'graph'
   | 'changes'
   | 'packages'
   | 'comments'

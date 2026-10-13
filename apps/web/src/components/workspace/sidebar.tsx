@@ -9,6 +9,7 @@ import { NavigatorPanel } from '../navigator-panel';
 import { PackagesPanel } from '../packages-panel';
 import { viewLabels } from './activity-bar';
 import { ChangesView } from './changes-view';
+import { MapView } from './map-view';
 
 export function Sidebar({
   project,
@@ -35,6 +36,8 @@ export function Sidebar({
           <FileTree projectId={project.id} canEdit={canEdit} mainFile={project.mainFile} />
         )}
         {view === 'navigator' && <NavigatorPanel projectId={project.id} />}
+        {view === 'map' && <MapView projectId={project.id} />}
+        {view === 'graph' && <p className="nav-empty">Em breve.</p>}
         {view === 'changes' && <ChangesView projectId={project.id} canEdit={canEdit} />}
         {view === 'packages' && <PackagesPanel projectId={project.id} canEdit={canEdit} />}
         {view === 'comments' && (

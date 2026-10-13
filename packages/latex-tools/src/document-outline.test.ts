@@ -1,5 +1,35 @@
 import { describe, expect, it } from 'vitest';
-import { findAcronyms, findEquations, findFigures, findTables } from './document-outline';
+import {
+  findAcronyms,
+  findEquations,
+  findFigures,
+  findInputs,
+  findSections,
+  findTables,
+} from './document-outline';
+
+describe('findSections', () => {
+  it('reads level, title (skipping [short]) and line, and ignores commented ones', () => {
+    const src = [
+      '\\chapter{Introdução}',
+      '\\section[short]{Contexto \\& motivação}',
+      '% \\section{Comentada}',
+      '\\subsection*{Detalhe}',
+    ].join('\n');
+    expect(findSections(src)).toEqual([
+      { level: 1, title: 'Introdução', line: 1 },
+      { level: 2, title: 'Contexto \\& motivação', line: 2 },
+      { level: 3, title: 'Detalhe', line: 4 },
+    ]);
+  });
+});
+
+describe('findInputs', () => {
+  it('returns \\input/\\include targets in order, skipping comments', () => {
+    const src = '\\input{capitulos/cap_01}\n% \\input{old}\n\\include{cap_02}';
+    expect(findInputs(src)).toEqual(['capitulos/cap_01', 'cap_02']);
+  });
+});
 
 describe('findFigures', () => {
   it('extracts caption (with nested braces), label and image path', () => {

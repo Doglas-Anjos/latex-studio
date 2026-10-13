@@ -1388,6 +1388,42 @@ kbd {
   font-size: 0.78rem;
   color: var(--muted);
 }
+
+/* Document section map (components/workspace/map-view.tsx): a horizontal mind-map in SVG. */
+.map-view {
+  height: 100%;
+  overflow: auto;
+  padding: 0.25rem;
+}
+.map-edge {
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+.map-node rect {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1.5;
+  transition:
+    fill 0.1s ease,
+    stroke 0.1s ease;
+}
+.map-node text {
+  fill: var(--ink);
+  font-size: 11px;
+  pointer-events: none;
+}
+.map-node[data-level="root"] rect {
+  fill: color-mix(in srgb, var(--primary) 16%, var(--surface));
+  stroke: var(--primary);
+}
+.map-node[data-level="0"] rect,
+.map-node[data-level="1"] rect {
+  stroke: color-mix(in srgb, var(--primary) 55%, var(--line));
+}
+.map-node:hover rect {
+  fill: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  stroke: var(--primary);
+}
 .nav-list {
   display: flex;
   flex-direction: column;

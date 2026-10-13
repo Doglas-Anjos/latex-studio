@@ -35,8 +35,16 @@ export interface AcronymItem {
   path: string;
   line: number;
 }
-/** Figures, tables, equations and acronyms of a project, for the navigator panel. */
+export interface SectionItem {
+  /** 0 = part … 4 = subsubsection. */
+  level: number;
+  title: string;
+  path: string;
+  line: number;
+}
+/** Sections, figures, tables, equations and acronyms of a project, for the navigator and map. */
 export interface DocumentOutline {
+  sections: SectionItem[];
   figures: FigureItem[];
   tables: TableItem[];
   equations: EquationItem[];

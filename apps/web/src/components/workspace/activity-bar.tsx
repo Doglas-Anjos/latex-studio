@@ -5,9 +5,11 @@ import {
   ListTree,
   type LucideIcon,
   MessageSquare,
+  Network,
   Package,
   Settings,
   Users,
+  Waypoints,
 } from 'lucide-react';
 import { useRef } from 'react';
 import { useHistoryStatus } from '../../hooks/use-history-status';
@@ -16,20 +18,24 @@ import { SettingsDialog } from '../settings-dialog';
 
 export const viewLabels: Record<SidebarView, string> = {
   files: 'Arquivos',
+  navigator: 'Navegador',
+  map: 'Mapa',
+  graph: 'Grafo de assuntos',
   changes: 'Mudanças',
   packages: 'Bibliotecas',
   comments: 'Comentários',
   history: 'Histórico',
-  navigator: 'Navegador',
   members: 'Membros',
 };
 export const sidebarViewIcons: Record<SidebarView, LucideIcon> = {
   files: Files,
+  navigator: ListTree,
+  map: Waypoints,
+  graph: Network,
   changes: GitCompare,
   packages: Package,
   comments: MessageSquare,
   history: History,
-  navigator: ListTree,
   members: Users,
 };
 

@@ -12,11 +12,16 @@ const TABULAR = /\\begin\{tabular\}[\s\S]{0,8000}?\\end\{tabular\}/;
 const NEWACRONYM =
   /\\newacronym\s*(?:\[[^\]]{0,200}\])?\s*\{([^}]{0,100})\}\s*\{([^}]{0,100})\}\s*\{([^}]{0,500})\}/g;
 const EQ_ENVS = ['equation', 'align', 'gather', 'multline', 'dmath'];
+// Sectioning commands, outermost first: the index is the heading's depth for the document map.
+const SECTION_CMDS = ['part', 'chapter', 'section', 'subsection', 'subsubsection'];
+const SECTION_RE = /\\(part|chapter|section|subsection|subsubsection)\*?(?![a-zA-Z])/g;
+const INPUT_RE = /\\(?:input|include)\s*\{([^}]{0,400})\}/g;
 
 export type Figure = { caption: string; label?: string; image?: string; line: number };
 export type DocTable = { caption: string; label?: string; source?: string; line: number };
 export type Equation = { label?: string; source: string; line: number };
 export type Acronym = { key: string; short: string; long: string; line: number };
+export type Section = { level: number; title: string; line: number };
 
 const lineAt = (source: string, idx: number): number => {
   let line = 1;
@@ -113,6 +118,35 @@ export function findEquations(source: string): Equation[] {
     }
   }
   return out.sort((a, b) => a.line - b.line);
+}
+
+/** Sectioning commands in document order, with a 0-based depth (part=0 … subsubsection=4). */
+export function findSections(source: string): Section[] {
+  const out: Section[] = [];
+  for (const m of source.matchAll(SECTION_RE)) {
+    const start = m.index ?? 0;
+    if (commented(source, start)) continue;
+    const cmd = m[1] as string;
+    // `source.slice(start)` puts the command at index 0; bracedArg then skips an optional [short].
+    const title = bracedArg(source.slice(start), new RegExp(`\\\\${cmd}\\*?`)) ?? '';
+    out.push({
+      level: SECTION_CMDS.indexOf(cmd),
+      title: title.trim(),
+      line: lineAt(source, start),
+    });
+  }
+  return out;
+}
+
+/** `\input`/`\include` targets in document order (raw args, no extension resolution). */
+export function findInputs(source: string): string[] {
+  const out: string[] = [];
+  for (const text of source.split('\n')) {
+    const cut = text.search(COMMENT_START);
+    const code = cut === -1 ? text : text.slice(0, cut);
+    for (const m of code.matchAll(INPUT_RE)) out.push((m[1] ?? '').trim());
+  }
+  return out;
 }
 
 export function findAcronyms(source: string): Acronym[] {

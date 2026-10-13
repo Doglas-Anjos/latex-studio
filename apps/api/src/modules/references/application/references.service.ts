@@ -8,8 +8,12 @@ import {
   findBibItems,
   findEquations,
   findFigures,
+  findInputs,
   findLabels,
+  findMainFile,
+  findSections,
   findTables,
+  type Section,
 } from '@latex-studio/latex-tools';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Project } from '../../projects/domain/project';
@@ -26,13 +30,34 @@ export type RefLocation = { key: string; path: string; line: number };
 export type ReferenceIndex = { labels: RefLocation[]; citeKeys: RefLocation[] };
 
 type AtPath<T> = T & { path: string };
-/** Figures, tables, equations and acronyms of a project, for the navigator panel. */
+/** Sections, figures, tables, equations and acronyms of a project, for the navigator and map. */
 export type DocumentOutline = {
+  sections: AtPath<Section>[];
   figures: AtPath<Figure>[];
   tables: AtPath<DocTable>[];
   equations: AtPath<Equation>[];
   acronyms: AtPath<Acronym>[];
 };
+
+const DOCUMENT = /\\begin\s*\{document\}/;
+/**
+ * The main file with its preamble blanked (non-newline chars → spaces), so `\section`/`\input` in
+ * the preamble (e.g. in a customizations file) are skipped while line numbers stay exact. Files
+ * without `\begin{document}` (the chapters) are returned unchanged.
+ */
+function bodyOnly(source: string): string {
+  const m = DOCUMENT.exec(source);
+  if (!m) return source;
+  return source.slice(0, m.index).replace(/[^\n]/g, ' ') + source.slice(m.index);
+}
+
+/** `arg` resolved to an existing project .tex (root-relative or next to the including file), or null. */
+function resolveInput(arg: string, fromPath: string, has: (p: string) => boolean): string | null {
+  const dir = fromPath.includes('/') ? fromPath.slice(0, fromPath.lastIndexOf('/') + 1) : '';
+  const bases = [arg.replace(/^\.\//, ''), `${dir}${arg.replace(/^\.\//, '')}`];
+  const cands = bases.flatMap((b) => (/\.tex$/i.test(b) ? [b] : [`${b}.tex`, b]));
+  return cands.find(has) ?? null;
+}
 
 @Injectable()
 export class ReferencesService {
@@ -46,16 +71,52 @@ export class ReferencesService {
     return this.scanOutline(this.storage.open(project.id));
   }
 
-  /** Figures, tables, equations and acronyms across every .tex (source scan; no compiled data). */
+  /**
+   * Sections, figures, tables, equations and acronyms across every .tex (source scan). Files are
+   * walked in reading order — the `\input`/`\include` chain from the main file — so the section map
+   * nests correctly; any .tex not reached from the main file is scanned last.
+   */
   private async scanOutline(files: ProjectFiles): Promise<DocumentOutline> {
-    const out: DocumentOutline = { figures: [], tables: [], equations: [], acronyms: [] };
+    const out: DocumentOutline = {
+      sections: [],
+      figures: [],
+      tables: [],
+      equations: [],
+      acronyms: [],
+    };
+    const sources = new Map<string, string>();
     for (const f of await files.repo.listFiles()) {
       if (f.size > MAX_SCAN_BYTES || !/\.tex$/i.test(f.path)) continue;
-      const source = Buffer.from(await files.repo.readFile(f.path)).toString('utf8');
-      for (const d of findFigures(source)) out.figures.push({ ...d, path: f.path });
-      for (const d of findTables(source)) out.tables.push({ ...d, path: f.path });
-      for (const d of findEquations(source)) out.equations.push({ ...d, path: f.path });
-      for (const d of findAcronyms(source)) out.acronyms.push({ ...d, path: f.path });
+      sources.set(f.path, Buffer.from(await files.repo.readFile(f.path)).toString('utf8'));
+    }
+    const main = findMainFile(sources);
+    // `body(path)` is the main file past \begin{document}, other files unchanged.
+    const body = (path: string) =>
+      path === main ? bodyOnly(sources.get(path) as string) : (sources.get(path) as string);
+    const order: string[] = [];
+    const seen = new Set<string>();
+    const visit = (path: string) => {
+      if (seen.has(path) || !sources.has(path)) return;
+      seen.add(path);
+      order.push(path);
+      for (const arg of findInputs(body(path))) {
+        const next = resolveInput(arg, path, (p) => sources.has(p));
+        if (next) visit(next);
+      }
+    };
+    if (main) visit(main);
+    for (const p of sources.keys()) if (!seen.has(p)) order.push(p);
+
+    for (const path of order) {
+      const source = sources.get(path) as string;
+      // Sections only from the document body reached from the main file: a preamble/orphan file's
+      // sectioning commands are macro definitions, not the document's structure.
+      if (seen.has(path))
+        for (const d of findSections(body(path))) if (d.title) out.sections.push({ ...d, path });
+      for (const d of findFigures(source)) out.figures.push({ ...d, path });
+      for (const d of findTables(source)) out.tables.push({ ...d, path });
+      for (const d of findEquations(source)) out.equations.push({ ...d, path });
+      for (const d of findAcronyms(source)) out.acronyms.push({ ...d, path });
     }
     return out;
   }
