@@ -5,12 +5,13 @@ import { useService } from '../di/service-provider';
 import { type Project, ProjectServiceToken } from '../services/project.service';
 import {
   type DiffView,
+  resolveTheme,
   type Settings,
   SYNTAX_TOKENS,
   type SyntaxToken,
   useSettingsStore,
 } from '../settings-store';
-import { activeTheme, SYNTAX_THEMES } from '../syntax-themes';
+import { SYNTAX_THEMES, themePalette } from '../syntax-themes';
 import { Button } from './button';
 import { Dialog } from './dialog';
 
@@ -48,7 +49,7 @@ const defaultColor = (token: SyntaxToken) => {
   return /^#[0-9a-f]{3}$/i.test(v) ? `#${[...v.slice(1)].map((c) => c + c).join('')}` : '#000000';
 };
 
-const APPEARANCE_KEYS = ['theme', 'syntax', 'editorFont', 'fontSize'] as const;
+const APPEARANCE_KEYS = ['theme', 'syntaxTheme', 'syntax', 'editorFont', 'fontSize'] as const;
 
 /** Keeps only valid appearance fields from untrusted JSON. */
 function parseAppearance(raw: unknown): Partial<Settings> {
@@ -56,6 +57,8 @@ function parseAppearance(raw: unknown): Partial<Settings> {
   const out: Partial<Settings> = {};
   if (typeof o.theme === 'string' && Object.hasOwn(THEMES, o.theme))
     out.theme = o.theme as Settings['theme'];
+  if (typeof o.syntaxTheme === 'string' && (o.syntaxTheme === '' || o.syntaxTheme in SYNTAX_THEMES))
+    out.syntaxTheme = o.syntaxTheme;
   if (typeof o.editorFont === 'string' && FONTS.some(([, v]) => v === o.editorFont))
     out.editorFont = o.editorFont;
   if (typeof o.fontSize === 'number' && o.fontSize >= 11 && o.fontSize <= 20)
@@ -341,6 +344,9 @@ function AppearancePanel() {
   const s = useSettingsStore();
   const { set } = s;
   const importRef = useRef<HTMLInputElement>(null);
+  // The family palette for the mode in effect, so the colour swatches show the family's colours.
+  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+  const palette = themePalette(s.syntaxTheme, resolveTheme(s.theme, prefersDark));
 
   const exportJson = () => {
     const data = Object.fromEntries(APPEARANCE_KEYS.map((k) => [k, s[k]]));
@@ -427,18 +433,14 @@ function AppearancePanel() {
       <h3 className="settings-h3">Cores de sintaxe</h3>
       <Row
         title="Paleta"
-        description="Aplica um conjunto de cores pronto (com o tema claro/escuro combinado). Ajuste fino abaixo."
+        description="Escolhe uma família de cores; a variante clara ou escura segue o tema acima. Ajuste fino abaixo."
         control={
           <select
             aria-label="Paleta de cores"
-            value={
-              Object.keys(s.syntax).length === 0 ? 'default' : activeTheme(s.syntax) || 'custom'
+            value={s.syntaxTheme || 'default'}
+            onChange={(e) =>
+              set({ syntaxTheme: e.target.value === 'default' ? '' : e.target.value })
             }
-            onChange={(e) => {
-              const t = SYNTAX_THEMES[e.target.value];
-              if (t) set({ theme: t.theme, syntax: { ...t.syntax } });
-              else if (e.target.value === 'default') set({ syntax: {} });
-            }}
           >
             <option value="default">Padrão do tema</option>
             {Object.entries(SYNTAX_THEMES).map(([id, t]) => (
@@ -446,9 +448,6 @@ function AppearancePanel() {
                 {t.label}
               </option>
             ))}
-            {activeTheme(s.syntax) === '' && Object.keys(s.syntax).length > 0 && (
-              <option value="custom">Personalizado</option>
-            )}
           </select>
         }
       />
@@ -457,7 +456,7 @@ function AppearancePanel() {
           <label key={token} className="check">
             <input
               type="color"
-              value={s.syntax[token] ?? defaultColor(token)}
+              value={s.syntax[token] ?? palette?.[token] ?? defaultColor(token)}
               onChange={(e) => set({ syntax: { ...s.syntax, [token]: e.target.value } })}
             />
             {label}
@@ -469,7 +468,13 @@ function AppearancePanel() {
           variant="ghost"
           size="compact"
           onClick={() =>
-            set({ theme: 'system', syntax: {}, editorFont: DEFAULT_FONT, fontSize: 14 })
+            set({
+              theme: 'system',
+              syntaxTheme: '',
+              syntax: {},
+              editorFont: DEFAULT_FONT,
+              fontSize: 14,
+            })
           }
         >
           Restaurar padrão

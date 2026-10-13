@@ -56,6 +56,9 @@ export type DiffView = 'split' | 'unified' | 'words' | 'auto';
 
 export interface Settings {
   theme: ThemeSetting;
+  /** Syntax theme family id (see syntax-themes.ts); '' = the theme's built-in colours. */
+  syntaxTheme: string;
+  /** Per-token colour overrides, layered on top of the chosen family. */
   syntax: Partial<Record<SyntaxToken, string>>;
   editorFont: string;
   fontSize: number;
@@ -88,6 +91,7 @@ interface SettingsState extends Settings {
 
 const defaults: Settings = {
   theme: 'system',
+  syntaxTheme: '',
   syntax: {},
   editorFont: 'ui-monospace, "Cascadia Code", Consolas, monospace',
   fontSize: 14,

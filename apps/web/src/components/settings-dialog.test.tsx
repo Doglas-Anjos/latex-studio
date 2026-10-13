@@ -8,7 +8,6 @@ import { Container } from '../di/container';
 import type { Project } from '../services/project.service';
 import { type ProjectService, ProjectServiceToken } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
-import { SYNTAX_THEMES } from '../syntax-themes';
 import { renderWithApp } from '../test/render';
 import { SettingsDialog } from './settings-dialog';
 
@@ -55,12 +54,13 @@ it('changes the LaTeX engine on the project', async () => {
   expect(projects.update).toHaveBeenCalledWith('p1', { engine: 'xelatex' });
 });
 
-it('applies a preset palette to the store', async () => {
+it('picks a palette family without forcing the base theme', async () => {
   setup();
   await userEvent.click(screen.getByRole('button', { name: 'Aparência', hidden: true }));
   await userEvent.selectOptions(screen.getByLabelText('Paleta de cores'), 'monokai');
-  expect(useSettingsStore.getState().syntax).toEqual(SYNTAX_THEMES.monokai?.syntax);
-  expect(useSettingsStore.getState().theme).toBe('dark');
+  expect(useSettingsStore.getState().syntaxTheme).toBe('monokai');
+  // The light/dark choice stays the user's; the family just supplies colours for whichever is active.
+  expect(useSettingsStore.getState().theme).toBe('system');
 });
 
 it('imports JSON through a real button under Aparência', async () => {
