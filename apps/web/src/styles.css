@@ -1425,10 +1425,20 @@ kbd {
   stroke: var(--primary);
 }
 
-/* Subject graph (components/workspace/graph-view.tsx): force-directed topic network in SVG. */
+/* Subject graph (components/workspace/graph-view.tsx): force-directed topic network in SVG,
+   fit to the view; wheel zooms and drag pans (overscroll contained so the page never scrolls). */
 .graph-view {
   height: 100%;
-  overflow: auto;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+.graph-view svg {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+.graph-view svg:active {
+  cursor: grabbing;
 }
 .graph-edge {
   stroke: var(--line);
