@@ -41,8 +41,8 @@ export class DrizzleUserRepository implements UserRepository {
   }
 
   async list({ search, limit, offset }: { search?: string; limit: number; offset: number }) {
-    // Escape LIKE wildcards in the admin's search text (Postgres LIKE escape is backslash).
-    const term = search?.trim().replace(/[%_]/g, '$&');
+    // Escape LIKE wildcards in the admin's search text (Postgres' default LIKE escape is backslash).
+    const term = search?.trim().replace(/[\\%_]/g, '\\$&');
     const where = term
       ? or(ilike(users.email, `%${term}%`), ilike(users.name, `%${term}%`))
       : undefined;
