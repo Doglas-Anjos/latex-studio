@@ -118,16 +118,14 @@ export class PackagesService {
       if (!(await files.isFile(project.mainFile)))
         throw new NotFoundException('Main file not found');
       const source = await readMain(files, project.mainFile);
-      const { packages, remaining } = extractUsepackages(source);
-      if (packages.length === 0) return { moved: 0 };
-
       const manifest = await this.read(files);
-      const known = new Set(manifest.map((e) => e.name));
-      for (const p of packages) {
-        if (known.has(p.name)) continue;
-        known.add(p.name);
-        manifest.push({ ...p, enabled: true, order: manifest.length });
-      }
+      // Names already in the manifest stay in the source: renderPackagesTex handles them there.
+      const { packages, remaining } = extractUsepackages(
+        source,
+        new Set(manifest.map((e) => e.name)),
+      );
+      if (packages.length === 0) return { moved: 0 };
+      for (const p of packages) manifest.push({ ...p, enabled: true, order: manifest.length });
       // Validate before stripping the main file: a 400 after it would lose those packages.
       const next = normalize(manifest);
       await files.write(project.mainFile, insertPackagesInput(remaining));
@@ -151,8 +149,13 @@ export class PackagesService {
    */
   private async scan(files: ProjectFiles): Promise<PackageUsage[]> {
     const usage: PackageUsage[] = [];
+    // ponytail: files past the 4 MB total are not scanned (like ReferencesService), so a package
+    // loaded only there shows as unused; the parse runs on the API event loop.
+    let budget = 4 * MAX_SCAN_BYTES;
     for (const f of await files.repo.listFiles()) {
       if (f.path === TEX || f.size > MAX_SCAN_BYTES || !/\.(tex|sty|cls)$/.test(f.path)) continue;
+      if (f.size > budget) continue;
+      budget -= f.size;
       const source = Buffer.from(await files.repo.readFile(f.path)).toString('utf8');
       for (const u of findUsepackages(source)) usage.push({ ...u, path: f.path });
     }

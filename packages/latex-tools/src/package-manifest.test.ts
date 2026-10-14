@@ -83,16 +83,8 @@ describe('parseManifest', () => {
     const entry = (options: string) =>
       JSON.stringify([{ name: 'geometry', options, enabled: true, order: 0 }]);
     expect(parseManifest(entry('margin={2cm,3cm}, a4paper'))).toHaveLength(1);
-    expect(parseManifest(entry('font=\\small, labelsep={\\}}'))).toHaveLength(1);
-    for (const bad of [
-      ']{x}\\input{/etc/passwd}%',
-      'a={b',
-      'a}{',
-      'a=\\{b}',
-      'a\nb',
-      'a#1',
-      'x'.repeat(201),
-    ])
+    expect(parseManifest(entry('font=\\small, labelsep={\\}}, x=a\\\\'))).toHaveLength(1);
+    for (const bad of [']{x}%', 'a={b', 'a}{', 'a=\\{b}', 'a\\', 'a\nb', 'a#1', 'x'.repeat(201)])
       expect(() => parseManifest(entry(bad)), bad).toThrow('options');
   });
 });

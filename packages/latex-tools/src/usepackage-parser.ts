@@ -8,7 +8,15 @@ const PACKAGE_CMD =
 // first % not preceded by a backslash
 const COMMENT_START = /(?<!\\)%/;
 
-export function extractUsepackages(source: string): {
+/**
+ * Moves the preamble's `\usepackage` commands out of `source`. A command stays in the source when
+ * the manifest cannot hold it, or when one of its names is in `keep` (already in the manifest) or
+ * was already moved: moving it would drop its options, or the package itself if it is disabled.
+ */
+export function extractUsepackages(
+  source: string,
+  keep: ReadonlySet<string> = new Set(),
+): {
   packages: Array<{ name: string; options?: string }>;
   remaining: string;
 } {
@@ -17,6 +25,7 @@ export function extractUsepackages(source: string): {
   const body = docStart === -1 ? '' : source.slice(docStart);
 
   const packages: Array<{ name: string; options?: string }> = [];
+  const moved = new Set<string>();
   const kept: string[] = [];
   for (const line of preamble.split('\n')) {
     const cut = line.search(COMMENT_START);
@@ -27,9 +36,14 @@ export function extractUsepackages(source: string): {
         .split(',')
         .map((n) => n.trim())
         .filter(Boolean);
-      // Only what the manifest accepts moves (`styles/custom`, `\pkg`, `[x=\y]` stay in the .tex).
-      if (!list.every((n) => PACKAGE_NAME.test(n)) || !validOptions(options?.trim() ?? ''))
+      // Only what the manifest accepts moves (`styles/custom`, `\pkg`, `[x\]` stay in the .tex).
+      if (
+        !list.every((n) => PACKAGE_NAME.test(n)) ||
+        !validOptions(options?.trim() ?? '') ||
+        list.some((n) => keep.has(n) || moved.has(n))
+      )
         return m;
+      for (const name of list) moved.add(name);
       for (const name of list)
         packages.push(options ? { name, options: options.trim() } : { name });
       return '';

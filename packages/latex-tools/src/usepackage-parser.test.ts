@@ -43,20 +43,23 @@ describe('extractUsepackages', () => {
       '\\usepackage{styles/custom}',
       '\\usepackage{\\mypkg, amsmath}',
       '\\usepackage[a={b]{c}',
+      '\\usepackage[font=\\small\\ ]{subcaption}', // trimmed it would end in a lone `\`
+      '\\usepackage[draft]{xcolor}', // already in the manifest
     ];
     const src = [
       ...kept,
       '\\usepackage[font=\\small]{caption}',
       '\\usepackage[margin={2cm,3cm}]{geometry}',
       '\\usepackage{hyperref}',
+      '\\usepackage[hidelinks]{hyperref}', // a second load keeps its options in the source
     ];
-    const { packages, remaining } = extractUsepackages(src.join('\n'));
+    const { packages, remaining } = extractUsepackages(src.join('\n'), new Set(['xcolor']));
     expect(packages).toEqual([
       { name: 'caption', options: 'font=\\small' },
       { name: 'geometry', options: 'margin={2cm,3cm}' },
       { name: 'hyperref' },
     ]);
-    expect(remaining).toBe(kept.join('\n'));
+    expect(remaining).toBe([...kept, '\\usepackage[hidelinks]{hyperref}'].join('\n'));
     const manifest = packages.map((p, order) => ({ ...p, enabled: true, order }));
     expect(parseManifest(JSON.stringify(manifest))).toEqual(manifest);
   });
@@ -107,7 +110,7 @@ describe('insertPackagesInput with a multi-line documentclass', () => {
     );
   });
   it('skips a commented line once, not once per \\documentclass on it', () => {
-    const src = `${'%\\documentclass'.repeat(14_000)}\n\\documentclass{article}\nx`;
+    const src = `${'%\\documentclass'.repeat(70_000)}\n\\documentclass{article}\nx`;
     const start = performance.now();
     expect(insertPackagesInput(src).split('\n')[2]).toBe('\\input{latex-packages}');
     expect(performance.now() - start).toBeLessThan(300);

@@ -20,10 +20,13 @@ export const PACKAGE_NAME = /^[A-Za-z0-9._-]{1,100}$/;
  */
 export const PACKAGE_OPTIONS = /^[^[\]%#\r\n]{0,200}$/;
 
-/** Final `{`/`}` depth of `s` (`\{`, `\}` are not groups), or negative once a `}` closes too many. */
+/**
+ * Final `{`/`}` depth of `s` (`\{`, `\}` are not groups), or negative once a `}` closes too many.
+ * A lone trailing `\` counts as negative too: it would turn the closing `]` into `\]`.
+ */
 const braceDepth = (s: string) =>
   [...s.replace(/\\./g, '')].reduce(
-    (d, c) => (d < 0 ? d : c === '{' ? d + 1 : c === '}' ? d - 1 : d),
+    (d, c) => (d < 0 ? d : c === '{' ? d + 1 : c === '}' || c === '\\' ? d - 1 : d),
     0,
   );
 
@@ -102,7 +105,7 @@ export function parseManifest(json: string): PackageManifest {
     }
     if (e.options !== undefined && (typeof e.options !== 'string' || !validOptions(e.options))) {
       throw new Error(
-        `${at} has invalid "options" (no [ ] \\ % # or line breaks, balanced braces)`,
+        `${at} has invalid "options" (no [ ] % # or line breaks, no trailing \\, balanced braces)`,
       );
     }
     if (typeof e.enabled !== 'boolean') throw new Error(`${at} needs a boolean "enabled"`);

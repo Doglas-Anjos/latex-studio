@@ -121,4 +121,16 @@ describe('PackagesService', () => {
     // What the panel PUTs next must pass the DTO.
     expect(validateSync(plainToInstance(SetPackagesDto, { packages: manifest }))).toEqual([]);
   });
+
+  it('migrate leaves the commands of packages the manifest already lists', async () => {
+    await storage
+      .open(project.id)
+      .write(
+        'main.tex',
+        '\\documentclass{article}\n\\usepackage[margin=2cm]{geometry}\n\\usepackage{amsmath}\n\\begin{document}\n\\end{document}\n',
+      );
+    await service.set(project, user, [{ name: 'geometry', enabled: false, order: 0 }]);
+    expect((await service.migrate(project, user)).moved).toBe(1);
+    expect(await text('main.tex')).toContain('\\usepackage[margin=2cm]{geometry}');
+  });
 });
