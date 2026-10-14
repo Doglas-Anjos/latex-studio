@@ -39,23 +39,25 @@ describe('IdentityService', () => {
     expect(users.rows).toHaveLength(1);
   });
 
-  it('keys rate limits on the verified user, else on the IP (IPv6 by /64)', async () => {
-    const verifier: TokenVerifier = {
-      verify: async (token) =>
-        token === 'good' ? { identity: ana, expiresAt: Date.now() / 1000 + 300 } : null,
-    };
-    const identity = new IdentityService(new FakeUsers(), verifier);
-    const req = (authorization?: string, ip = '10.0.0.1') => ({
-      headers: { authorization, host: 'latex.example.com' },
-      ip,
-    });
-    const key = await rateLimitKey(identity, req('Bearer good'));
-    expect(key).toMatch(/^user:/);
-    expect(await rateLimitKey(identity, req('Bearer good', '10.0.0.2'))).toBe(key);
-    expect(await rateLimitKey(identity, req('Bearer forged'))).toBe('10.0.0.1');
-    expect(await rateLimitKey(identity, req(undefined, '2001:db8:1:2:3:4:5:6'))).toBe(
-      '2001:db8:1:2',
+  it('keys rate limits on the already-verified user, else on the IP (IPv6 by /64)', async () => {
+    const verify = vi.fn(async (token: string) =>
+      token === 'good' ? { identity: ana, expiresAt: Date.now() / 1000 + 300 } : null,
     );
+    const identity = new IdentityService(new FakeUsers(), { verify });
+    const req = (authorization?: string, ip = '10.0.0.1') => ({ headers: { authorization }, ip });
+    // Before the guard verified it, a token counts against its IP; the key never verifies.
+    expect(rateLimitKey(identity, req('Bearer good'))).toBe('10.0.0.1');
+    await identity.resolve('good', 'latex.example.com');
+    const key = rateLimitKey(identity, req('Bearer good'));
+    expect(key).toMatch(/^user:/);
+    expect(rateLimitKey(identity, req('Bearer good', '10.0.0.2'))).toBe(key);
+    expect(rateLimitKey(identity, req('Bearer forged'))).toBe('10.0.0.1');
+    expect(verify).toHaveBeenCalledTimes(1);
+    expect(rateLimitKey(identity, req(undefined, '2001:db8:1:2:3:4:5:6'))).toBe('2001:db8:1:2');
+    expect(rateLimitKey(identity, req(undefined, '2001:db8::1:2:3:4'))).toBe('2001:db8:0:0');
+    expect(rateLimitKey(identity, req(undefined, '2001:db8::5:6:7:8'))).toBe('2001:db8:0:0');
+    expect(rateLimitKey(identity, req(undefined, '::1'))).toBe('0:0:0:0');
+    expect(rateLimitKey(identity, req(undefined, '::ffff:10.0.0.1'))).toBe('::ffff:10.0.0.1');
   });
 
   it('reads the bearer token from the header', () => {

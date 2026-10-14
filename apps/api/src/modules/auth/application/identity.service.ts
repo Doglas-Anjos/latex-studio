@@ -54,6 +54,12 @@ export class IdentityService {
     this.cache.set(token, { user, expiresAt: verified.expiresAt });
     return user;
   }
+
+  /** The user `token` was already verified as (still valid), without verifying it again. */
+  cachedUser(token: string | null): User | null {
+    const hit = token ? this.cache.get(token) : undefined;
+    return hit && hit.expiresAt > Date.now() / 1000 ? hit.user : null;
+  }
 }
 
 /** The token from an `Authorization` header, or null. */
@@ -66,18 +72,22 @@ export function bearerToken(header: string | undefined): string | null {
  * Rate-limit bucket: the verified user, else the client IP (on IPv6 its /64, which one client
  * usually owns). Per person because a campus NAT puts a whole university behind one address;
  * never an unverified `sub`, which anyone could forge to dodge a limit or spend someone else's.
- * Valid tokens hit the resolve cache, so the guard does not verify them twice.
+ * Only reads the cache the guard fills: a token's first request counts against the IP, and a
+ * flood of forged tokens costs no signature check once the IP is over its limit.
  */
-export async function rateLimitKey(
-  identity: Pick<IdentityService, 'resolve'>,
-  request: {
-    headers: { authorization?: string | undefined; host?: string | undefined };
-    ip: string;
-  },
-): Promise<string> {
-  const { authorization, host } = request.headers;
-  const user = await identity.resolve(bearerToken(authorization), host).catch(() => null);
-  if (user) return `user:${user.id}`;
-  const { ip } = request;
-  return ip.includes(':') ? ip.split(':').slice(0, 4).join(':') : ip;
+export function rateLimitKey(
+  identity: Pick<IdentityService, 'cachedUser'>,
+  request: { headers: { authorization?: string | undefined }; ip: string },
+): string {
+  const user = identity.cachedUser(bearerToken(request.headers.authorization));
+  return user ? `user:${user.id}` : ipBucket(request.ip);
+}
+
+/** IPv4 as is; IPv6 by its /64 (`::` expanded first). */
+function ipBucket(ip: string): string {
+  if (!ip.includes(':') || ip.includes('.')) return ip; // IPv4, or IPv4-mapped IPv6
+  const [head = '', tail] = ip.split('::');
+  const h = head ? head.split(':') : [];
+  const t = tail ? tail.split(':') : [];
+  return [...h, ...Array(8 - h.length - t.length).fill('0'), ...t].slice(0, 4).join(':');
 }
