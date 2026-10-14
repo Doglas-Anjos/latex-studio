@@ -131,7 +131,16 @@ export function MapView({ projectId }: { projectId: string }) {
               data-level={s ? s.level : 'root'}
               transform={`translate(${n.x + PAD},${n.y + PAD})`}
               onClick={jump}
-              onKeyDown={jump && ((e) => (e.key === 'Enter' || e.key === ' ') && jump())}
+              onKeyDown={
+                jump &&
+                ((e) => {
+                  if (e.key !== 'Enter' && e.key !== ' ') return;
+                  e.preventDefault(); // Space would also scroll the map
+                  jump();
+                })
+              }
+              role={s ? 'button' : undefined}
+              aria-label={s ? `Ir para ${n.label}` : undefined}
               tabIndex={s ? 0 : undefined}
               style={s ? { cursor: 'pointer' } : undefined}
             >
