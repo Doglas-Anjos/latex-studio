@@ -56,6 +56,8 @@ const NON_PROSE_ENV =
 const GLOSSARY_DEF = /^[ \t]*\\new(?:acronym|glossaryentry|abbreviation)\b[^\n]*/gm;
 // Inline and display maths.
 const MATH = /\$\$|\$|\\\[|\\\(/g;
+// The closer of each MATH opener; `$$` and `$` close themselves.
+const CLOSER: Record<string, string> = { '\\[': '\\]', '\\(': '\\)' };
 // Glossary uses (\acrshort{moo}, \gls{emd}…): the document's own declared key concepts.
 const ACRONYM = /\\(?:acr(?:short|long|full)|[gG]ls[a-z]*)\{([^}]{1,40})\}/g;
 // Commands whose (first) argument is a key, path, colour or name, never prose: \cite{..}, \ref{..},
@@ -91,10 +93,7 @@ function blankSpans(text: string, open: RegExp, closeOf: (open: string) => strin
 
 /** Strip LaTeX down to readable prose: comments, maths/data, keys, commands and braces removed. */
 function toProse(tex: string): string {
-  // `$$`→`$$`, `$`→`$`, `\[`→`\]`, `\(`→`\)`.
-  return blankSpans(tex.replace(/(?<!\\)%[^\n]*/g, ' '), MATH, (o) =>
-    o.replace('[', ']').replace('(', ')'),
-  )
+  return blankSpans(tex.replace(/(?<!\\)%[^\n]*/g, ' '), MATH, (o) => CLOSER[o] ?? o)
     .replace(KEY_ARG, ' ')
     .replace(/\\[a-zA-Z]+\*?(\s*\[[^\]]{0,300}\])?/g, ' ') // command + optional [..]; keeps {..} text
     .replace(/[{}~\\]/g, ' ');

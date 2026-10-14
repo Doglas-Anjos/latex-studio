@@ -50,6 +50,8 @@ export const isGitPath = (path: string) =>
 
 /** Validates a user path, answering 400 instead of SafePath's plain Error. */
 export function checkPath(files: ProjectFiles, path: string): void {
+  // A repeated query parameter arrives as an array; refuse it before any string method runs.
+  if (typeof path !== 'string') throw new BadRequestException('Invalid path');
   try {
     files.safe.resolve(path);
   } catch {
