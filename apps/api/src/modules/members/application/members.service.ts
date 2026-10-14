@@ -41,6 +41,8 @@ export class MembersService {
       throw new BadRequestException('The owner role cannot be assigned');
     }
     await this.projects.setMember(project.id, user.id, role);
+    // Re-inviting an existing member changes their role: close their sockets like setRole does.
+    this.sync.revoke(project.id, user.id);
     await this.audit?.record(actorId, 'member.invite', project.id, { userId: user.id, role });
     return this.list(project);
   }

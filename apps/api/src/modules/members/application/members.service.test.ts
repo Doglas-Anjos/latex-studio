@@ -50,8 +50,9 @@ describe('MembersService', () => {
     expect(await projects.roleOf('p1', anaId)).toBe('editor');
     await service.remove(project, 'owner-1', anaId);
     expect(await projects.roleOf('p1', anaId)).toBeNull();
-    // Both close Ana's open doc sockets, so the new role (or no access) applies on reconnect.
-    expect(sync.calls).toEqual([`revoke ${anaId}`, `revoke ${anaId}`]);
+    // Each closes Ana's open doc sockets, so the new role (or no access) applies on reconnect;
+    // invite too, since re-inviting a member is a role change.
+    expect(sync.calls).toEqual([`revoke ${anaId}`, `revoke ${anaId}`, `revoke ${anaId}`]);
     await expect(service.remove(project, 'owner-1', 'owner-1')).rejects.toThrow(
       BadRequestException,
     );
