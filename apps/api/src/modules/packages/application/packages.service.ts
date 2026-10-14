@@ -1,3 +1,4 @@
+import { APP_CONFIG, type AppConfig } from '@latex-studio/core';
 import {
   extractUsepackages,
   findUsepackages,
@@ -14,7 +15,14 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
-import { commitAs, MAX_SCAN_BYTES, readSources } from '../../projects/application/project-files';
+import {
+  assertAccountQuota,
+  assertQuota,
+  commitAs,
+  MAX_SCAN_BYTES,
+  megabytes,
+  readSources,
+} from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
 import {
@@ -63,12 +71,14 @@ async function readMain(files: ProjectFiles, path: string): Promise<string> {
   return head.toString();
 }
 
+const manifestText = (manifest: PackageManifest) => `${JSON.stringify(manifest, null, 2)}\n`;
+
 async function writeManifest(
   files: ProjectFiles,
   manifest: PackageManifest,
   usage: PackageUsage[],
 ) {
-  await files.write(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`);
+  await files.write(MANIFEST, manifestText(manifest));
   await files.write(TEX, renderPackagesTex(manifest, usage));
 }
 
@@ -79,6 +89,8 @@ export class PackagesService {
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
+    @Inject(APP_CONFIG)
+    private readonly config: Pick<AppConfig, 'PROJECT_QUOTA_MB' | 'USER_QUOTA_MB'>,
   ) {}
 
   async get(project: Project): Promise<PackageManifest> {
@@ -96,14 +108,14 @@ export class PackagesService {
         bypassed && (await files.isFile(project.mainFile))
           ? await readMain(files, project.mainFile)
           : null;
+      const withInput = main === null ? null : insertPackagesInput(main);
+      const rewrite = withInput !== null && withInput !== main;
+      await this.assertFits(project, files, next, usage, rewrite ? withInput : '');
       await writeManifest(files, next, usage);
       const paths = [MANIFEST, TEX];
-      if (main !== null) {
-        const withInput = insertPackagesInput(main);
-        if (withInput !== main) {
-          await files.write(project.mainFile, withInput);
-          paths.push(project.mainFile);
-        }
+      if (rewrite) {
+        await files.write(project.mainFile, withInput);
+        paths.push(project.mainFile);
       }
       await commitAs(this.projects, files, project.id, user, 'Update packages', paths);
       await this.syncDocs(project.id, files, paths);
@@ -127,7 +139,10 @@ export class PackagesService {
       for (const p of packages) manifest.push({ ...p, enabled: true, order: manifest.length });
       // Validate before stripping the main file: a 400 after it would lose those packages.
       const next = normalize(manifest);
-      await files.write(project.mainFile, insertPackagesInput(remaining));
+      const stripped = insertPackagesInput(remaining);
+      // The tex is rendered from the stripped source below; usage only changes a few comments.
+      await this.assertFits(project, files, next, [], stripped);
+      await files.write(project.mainFile, stripped);
       await writeManifest(files, next, await this.scan(files));
       const paths = [project.mainFile, MANIFEST, TEX];
       const message = `Move ${packages.length} packages to the manifest`;
@@ -135,6 +150,26 @@ export class PackagesService {
       await this.syncDocs(project.id, files, paths);
       return { moved: packages.length, manifest: next };
     });
+  }
+
+  /**
+   * 413 unless the manifest, its tex and `main` (the main file rewritten, '' if not) fit in the
+   * project and account quotas, counted as new bytes. Before writing: a refusal changes nothing.
+   */
+  private async assertFits(
+    project: Project,
+    files: ProjectFiles,
+    manifest: PackageManifest,
+    usage: PackageUsage[],
+    main: string,
+  ) {
+    const bytes = [manifestText(manifest), renderPackagesTex(manifest, usage), main].reduce(
+      (sum, text) => sum + Buffer.byteLength(text),
+      0,
+    );
+    await assertQuota(files, megabytes(this.config.PROJECT_QUOTA_MB), bytes);
+    const mb = this.config.USER_QUOTA_MB;
+    await assertAccountQuota(this.projects, this.storage, mb, project, bytes);
   }
 
   usage(project: Project): Promise<PackageUsage[]> {

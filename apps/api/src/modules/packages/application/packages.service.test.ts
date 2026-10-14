@@ -41,7 +41,10 @@ describe('PackagesService', () => {
     await files.repo.writeFile('main.tex', MAIN);
     await files.repo.commitAll('Initial commit', { name: 'Ana', email: 'ana@example.com' });
     sync = new FakeDocumentSync();
-    service = new PackagesService(storage, new ProjectLock(), sync, new FakeProjects());
+    service = new PackagesService(storage, new ProjectLock(), sync, new FakeProjects(), {
+      PROJECT_QUOTA_MB: 1,
+      USER_QUOTA_MB: undefined,
+    });
   });
 
   afterEach(() => rm(dir, { recursive: true, force: true }));
@@ -132,5 +135,27 @@ describe('PackagesService', () => {
     await service.set(project, user, [{ name: 'geometry', enabled: false, order: 0 }]);
     expect((await service.migrate(project, user)).moved).toBe(1);
     expect(await text('main.tex')).toContain('\\usepackage[margin=2cm]{geometry}');
+  });
+
+  it('refuses set and migrate past the project or the account quota, changing nothing', async () => {
+    const projects = new FakeProjects();
+    const owned = await projects.create({ id: project.id, name: 'P' }, user.id);
+    await projects.create({ id: 'p2', name: 'Q' }, user.id);
+    const config = { PROJECT_QUOTA_MB: 1, USER_QUOTA_MB: 2 };
+    const capped = new PackagesService(storage, new ProjectLock(), sync, projects, config);
+    const files = storage.open(project.id);
+    const entry = [{ name: 'amsmath', enabled: true, order: 0 }];
+
+    await files.write('fill.bin', new Uint8Array(1024 * 1024));
+    await expect(capped.set(owned, user, entry)).rejects.toThrow('Project quota exceeded');
+    await expect(capped.migrate(owned, user)).rejects.toThrow('Project quota exceeded');
+    await files.repo.deleteFile('fill.bin');
+
+    // The project fits now; the owner's other project fills the 2 MB account.
+    await (await storage.init('p2')).write('fill.bin', new Uint8Array(2 * 1024 * 1024));
+    await expect(capped.set(owned, user, entry)).rejects.toThrow(/^Cota de armazenamento/);
+    await expect(capped.migrate(owned, user)).rejects.toThrow(/^Cota de armazenamento/);
+    expect(await lastMessage()).toBe('Initial commit');
+    expect(await text('main.tex')).toBe(MAIN);
   });
 });
