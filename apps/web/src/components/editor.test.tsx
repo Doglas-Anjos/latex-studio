@@ -146,9 +146,8 @@ describe('closeWhenSynced', () => {
 describe('collab editor refused by the server', () => {
   afterEach(cleanup);
 
-  it('keeps the session while the file is listed (a token problem), freezes once it is gone', async () => {
-    const list = vi.fn().mockResolvedValue([{ path: 'notes.txt', size: 10 }]);
-    const container = new Container()
+  const services = (list: FileService['list']) =>
+    new Container()
       .register(FileServiceToken, { ...fake(), list })
       .register(CommentServiceToken, { list: vi.fn().mockResolvedValue([]) } as never)
       .register(IdentityToken, { enabled: false, token: async () => null } as never)
@@ -158,7 +157,10 @@ describe('collab editor refused by the server', () => {
       .register(ReferenceServiceToken, {} as never)
       .register(SpellcheckServiceToken, {} as never)
       .register(AuthServiceToken, { me: vi.fn().mockResolvedValue({ id: 'u1' }) } as never);
-    renderWithApp(<Editor projectId="p1" path="notes.txt" role={ROLE} />, container);
+
+  it('keeps the session while the file is listed (a token problem), freezes once it is gone', async () => {
+    const list = vi.fn().mockResolvedValue([{ path: 'notes.txt', size: 10 }]);
+    renderWithApp(<Editor projectId="p1" path="notes.txt" role={ROLE} />, services(list));
     const provider = providers.at(-1) as InstanceType<typeof FakeProvider>;
 
     act(() => provider.emit('authenticationFailed', { reason: 'permission-denied' }));
@@ -170,6 +172,15 @@ describe('collab editor refused by the server', () => {
     list.mockResolvedValue([]);
     act(() => provider.emit('authenticationFailed', { reason: 'permission-denied' }));
     expect((await screen.findByRole('alert')).textContent).toBe('Arquivo removido ou renomeado');
+    expect(provider.disconnect).toHaveBeenCalled();
+  });
+
+  it('stops retrying a file too large to load', async () => {
+    const list = vi.fn().mockResolvedValue([{ path: 'big.txt', size: 8 * 1024 * 1024 + 1 }]);
+    renderWithApp(<Editor projectId="p1" path="big.txt" role={ROLE} />, services(list));
+    const provider = providers.at(-1) as InstanceType<typeof FakeProvider>;
+    act(() => provider.emit('authenticationFailed', { reason: 'permission-denied' }));
+    expect((await screen.findByRole('alert')).textContent).toMatch(/grande demais/);
     expect(provider.disconnect).toHaveBeenCalled();
   });
 });

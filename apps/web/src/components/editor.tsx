@@ -15,7 +15,7 @@ import { basicSetup } from 'codemirror';
 import { Heading, MessageSquarePlus, Rows, Type, X } from 'lucide-react';
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
-import type * as Y from 'yjs';
+import * as Y from 'yjs';
 import { useMe } from '../auth-hooks';
 import type { CommentScope } from '../comment-scope';
 import { lineRangeAt, SCOPE_LABELS, scopeEmptyReason, scopeRange } from '../comment-scope';
@@ -63,6 +63,8 @@ import { encodeAnchorPos, resolveAnchorPos } from './yjs-anchor';
 import { ZoomControls } from './zoom-controls';
 
 const COLLAB_EXT = /\.(tex|bib|sty|cls|txt|md|json)$/i;
+/** The server's cap: it refuses to load a larger file, or to grow a doc's text (state: 2×) past it. */
+const MAX_DOC_CHARS = 8 * 1024 * 1024;
 const IMAGE_EXT = /\.(png|jpe?g|gif|svg|webp)$/i;
 
 const SCOPE_SHORTCUTS: { scope: CommentScope; key: string; hint: string }[] = [
@@ -206,7 +208,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const me = useMe().data;
   const meRef = useRef(me);
   meRef.current = me;
-  const [gone, setGone] = useState(false);
+  const [frozen, setFrozen] = useState<string | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   // Read before React detaches the view (a layout cleanup runs first); a detached scroller says 0.
   const leftAt = useRef(0);
@@ -346,7 +348,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     ytextRef.current = ytext;
     const wrap = new Compartment();
     const ro = new Compartment();
-    setGone(false);
+    setFrozen(null);
     const wrapping = (on: boolean) => (on ? EditorView.lineWrapping : []);
     const isTex = path.endsWith('.tex');
     const visual = new Compartment();
@@ -577,26 +579,36 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     };
     awareness?.on('change', onAwareness);
     // The server refuses or drops a document whose file was deleted or renamed (here or by a
-    // collaborator): stop reconnecting and keep the text visible but frozen.
+    // collaborator), or that is too large: stop reconnecting and keep the text visible but frozen.
     let closed = false;
-    const markGone = () => {
+    const freeze = (reason: string) => {
       if (closed) return;
       closed = true;
       dropSession(session.key);
       view.dispatch({ effects: ro.reconfigure(EditorState.readOnly.of(true)) });
-      setGone(true);
+      setFrozen(reason);
     };
     // It also refuses an expired or missing token, and a per-document close (code 1000) also
-    // happens on server shutdown: only a file missing from the list counts. Otherwise the session
+    // happens on server shutdown: only the file list tells them apart. Otherwise the session
     // and its unsynced edits stay; the provider retries by itself, and a list call without a
     // session sends the person to log in.
-    const checkGone = () =>
+    const checkRefused = () =>
       files
         .list(projectId)
-        .then((list) => !list.some((f) => f.path === path) && markGone())
+        .then((list) => {
+          const file = list.find((f) => f.path === path);
+          if (!file) freeze('Arquivo removido ou renomeado');
+          else if (
+            (file.size ?? 0) > MAX_DOC_CHARS ||
+            ytext.length > MAX_DOC_CHARS ||
+            Y.encodeStateAsUpdate(doc).byteLength > 2 * MAX_DOC_CHARS
+          )
+            freeze('Arquivo grande demais para edição colaborativa (baixe-o ou divida-o)');
+        })
         .catch(() => {});
-    provider.on('authenticationFailed', checkGone);
-    const onClose = ({ event }: { event: { code: number } }) => event.code === 1000 && checkGone();
+    provider.on('authenticationFailed', checkRefused);
+    const onClose = ({ event }: { event: { code: number } }) =>
+      event.code === 1000 && checkRefused();
     provider.on('close', onClose);
     const unsubscribe = useWorkspaceStore.subscribe((s, prev) => {
       if (s.pendingLine !== null && s.pendingLine !== prev.pendingLine) revealLine(view, path);
@@ -621,7 +633,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       setPopup(null);
       setPopupBody('');
       provider.off('synced', onSynced);
-      provider.off('authenticationFailed', checkGone);
+      provider.off('authenticationFailed', checkRefused);
       provider.off('close', onClose);
       cancelAnimationFrame(restoreFrame);
       session.parked = {
@@ -709,9 +721,9 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           </Menu>
         )}
       </EditorToolbar>
-      {gone && (
+      {frozen && (
         <p className="form-error" role="alert">
-          Arquivo removido ou renomeado
+          {frozen}
         </p>
       )}
       <div ref={host} className="editor-host" data-blame={activeBlame ? '' : undefined} />
