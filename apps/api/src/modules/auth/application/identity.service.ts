@@ -61,3 +61,23 @@ export function bearerToken(header: string | undefined): string | null {
   const [scheme, token] = header?.split(' ', 2) ?? [];
   return scheme?.toLowerCase() === 'bearer' && token?.trim() ? token.trim() : null;
 }
+
+/**
+ * Rate-limit bucket: the verified user, else the client IP (on IPv6 its /64, which one client
+ * usually owns). Per person because a campus NAT puts a whole university behind one address;
+ * never an unverified `sub`, which anyone could forge to dodge a limit or spend someone else's.
+ * Valid tokens hit the resolve cache, so the guard does not verify them twice.
+ */
+export async function rateLimitKey(
+  identity: Pick<IdentityService, 'resolve'>,
+  request: {
+    headers: { authorization?: string | undefined; host?: string | undefined };
+    ip: string;
+  },
+): Promise<string> {
+  const { authorization, host } = request.headers;
+  const user = await identity.resolve(bearerToken(authorization), host).catch(() => null);
+  if (user) return `user:${user.id}`;
+  const { ip } = request;
+  return ip.includes(':') ? ip.split(':').slice(0, 4).join(':') : ip;
+}

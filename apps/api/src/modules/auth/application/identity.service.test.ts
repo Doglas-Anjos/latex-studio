@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import type { TokenVerifier } from '../domain/token-verifier';
-import { bearerToken, IdentityService, LOCAL_IDENTITY } from './identity.service';
+import { bearerToken, IdentityService, LOCAL_IDENTITY, rateLimitKey } from './identity.service';
 
 const ana = {
   issuer: 'https://fasorx.example',
@@ -37,6 +37,25 @@ describe('IdentityService', () => {
     expect((await identity.resolve('good', host))?.id).toBe(user?.id);
     expect(verify).toHaveBeenCalledTimes(2);
     expect(users.rows).toHaveLength(1);
+  });
+
+  it('keys rate limits on the verified user, else on the IP (IPv6 by /64)', async () => {
+    const verifier: TokenVerifier = {
+      verify: async (token) =>
+        token === 'good' ? { identity: ana, expiresAt: Date.now() / 1000 + 300 } : null,
+    };
+    const identity = new IdentityService(new FakeUsers(), verifier);
+    const req = (authorization?: string, ip = '10.0.0.1') => ({
+      headers: { authorization, host: 'latex.example.com' },
+      ip,
+    });
+    const key = await rateLimitKey(identity, req('Bearer good'));
+    expect(key).toMatch(/^user:/);
+    expect(await rateLimitKey(identity, req('Bearer good', '10.0.0.2'))).toBe(key);
+    expect(await rateLimitKey(identity, req('Bearer forged'))).toBe('10.0.0.1');
+    expect(await rateLimitKey(identity, req(undefined, '2001:db8:1:2:3:4:5:6'))).toBe(
+      '2001:db8:1:2',
+    );
   });
 
   it('reads the bearer token from the header', () => {

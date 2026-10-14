@@ -18,6 +18,7 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import Redis from 'ioredis';
 import { WebSocketServer } from 'ws';
 import { AppModule } from './app.module';
+import { IdentityService, rateLimitKey } from './modules/auth/application/identity.service';
 import { HOCUSPOCUS } from './modules/collab/infrastructure/hocuspocus.server';
 
 // Local development reads the repo's .env; containers get their environment from compose.
@@ -32,6 +33,7 @@ async function bootstrap() {
     new FastifyAdapter({ trustProxy: (_address, hop) => hop < 1 }),
   );
   const config = app.get<AppConfig>(APP_CONFIG);
+  const identity = app.get(IdentityService);
   app.enableShutdownHooks();
 
   await app.register(helmet, {
@@ -54,8 +56,7 @@ async function bootstrap() {
     }),
     // Fail open: if Redis is down or full, availability beats strict limiting (argon2 still bounds auth).
     skipOnError: true,
-    // One IPv6 client usually owns a whole /64, so key on the prefix.
-    keyGenerator: ({ ip }) => (ip.includes(':') ? ip.split(':').slice(0, 4).join(':') : ip),
+    keyGenerator: (request) => rateLimitKey(identity, request),
     // Nest's exception handler turns plain errors into 500; an HttpException keeps the 429.
     errorResponseBuilder: (_request, context) =>
       new HttpException(`Rate limit exceeded, retry in ${context.after}`, 429),
