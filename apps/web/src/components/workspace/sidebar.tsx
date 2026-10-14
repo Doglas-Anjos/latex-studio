@@ -38,7 +38,8 @@ export function Sidebar({
         )}
         {view === 'navigator' && <NavigatorPanel projectId={project.id} />}
         {view === 'map' && <MapView projectId={project.id} />}
-        {view === 'graph' && <GraphView projectId={project.id} />}
+        {/* Keyed: another project must not inherit this one's layout, pins and colours. */}
+        {view === 'graph' && <GraphView key={project.id} projectId={project.id} />}
         {view === 'changes' && <ChangesView projectId={project.id} canEdit={canEdit} />}
         {view === 'packages' && <PackagesPanel projectId={project.id} canEdit={canEdit} />}
         {view === 'comments' && (

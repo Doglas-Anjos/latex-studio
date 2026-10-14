@@ -291,14 +291,19 @@ export function GraphView({ projectId }: { projectId: string }) {
   const fit = frame(model.nodes);
   const box = touched.current && vb ? vb : fit;
   const sel = selected ? model.byId.get(selected) : undefined;
+  // A refetch can drop the hovered or selected node: then it focuses nothing, not dims everything.
+  const live = (id: string | null) => (id && model.byId.has(id) ? id : null);
+  const hovered = live(hover);
+  const area = live(hoverArea);
+  const picked = live(selected);
 
   // Hover a node → it and its neighbours; hover an area in the legend → that area; else selection.
-  const focus = hover
-    ? new Set([hover, ...(model.neighbours.get(hover) ?? [])])
-    : hoverArea
-      ? new Set(model.nodes.filter((n) => model.areaOf.get(n.id) === hoverArea).map((n) => n.id))
-      : selected
-        ? new Set([selected, ...(model.neighbours.get(selected) ?? [])])
+  const focus = hovered
+    ? new Set([hovered, ...(model.neighbours.get(hovered) ?? [])])
+    : area
+      ? new Set(model.nodes.filter((n) => model.areaOf.get(n.id) === area).map((n) => n.id))
+      : picked
+        ? new Set([picked, ...(model.neighbours.get(picked) ?? [])])
         : null;
 
   /** Client coordinates → SVG user space. */
@@ -395,6 +400,8 @@ export function GraphView({ projectId }: { projectId: string }) {
         onPointerDown={(e) => onDown(e)}
         onPointerMove={onMove}
         onPointerUp={onUp}
+        // A cancelled drag (touch turned scroll, lost capture) ends like a drop, so the sim cools.
+        onPointerCancel={onUp}
       >
         <defs>
           <marker
