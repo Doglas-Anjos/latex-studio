@@ -2,6 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppConfig } from '@latex-studio/core';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
 import { ProjectLock } from '../../projects/application/project-lock';
@@ -9,6 +11,7 @@ import type { Project } from '../../projects/domain/project';
 import { FsProjectStorage } from '../../projects/infrastructure/fs-project-storage';
 import { FakeProjects } from '../../projects/testing/fake-project.repository';
 import type { User } from '../../users/domain/user';
+import { SetPackagesDto } from '../presentation/packages.dto';
 import { PackagesService } from './packages.service';
 
 const user: User = {
@@ -98,5 +101,24 @@ describe('PackagesService', () => {
 
     expect(await service.migrate(project, user)).toEqual({ moved: 0 });
     expect(await service.get(project)).toHaveLength(2);
+  });
+
+  it('migrate leaves what the manifest cannot hold and the result can be saved back', async () => {
+    await storage
+      .open(project.id)
+      .write(
+        'main.tex',
+        '\\documentclass{article}\n\\usepackage{styles/custom}\n\\usepackage[margin={2cm,3cm}]{geometry}\n\\begin{document}\n\\end{document}\n',
+      );
+    const { manifest } = await service.migrate(project, user);
+    expect(manifest).toEqual([
+      { name: 'geometry', options: 'margin={2cm,3cm}', enabled: true, order: 0 },
+    ]);
+    const main = await text('main.tex');
+    expect(main).toContain('\\usepackage{styles/custom}');
+    expect(main).not.toContain('geometry');
+    expect(await text('latex-packages.tex')).toContain('\\usepackage[margin={2cm,3cm}]{geometry}');
+    // What the panel PUTs next must pass the DTO.
+    expect(validateSync(plainToInstance(SetPackagesDto, { packages: manifest }))).toEqual([]);
   });
 });

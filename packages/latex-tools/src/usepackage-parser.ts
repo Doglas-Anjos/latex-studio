@@ -1,3 +1,5 @@
+import { PACKAGE_NAME, validOptions } from './package-manifest';
+
 // \usepackage[opts]{a,b} or \RequirePackage; options optional, spaces tolerated
 // Bounded quantifiers: unbounded `[^}]*` scans to the end of the line from every match start,
 // which a 1 MB line of `\usepackage{` turns into tens of seconds (ReDoS).
@@ -20,13 +22,16 @@ export function extractUsepackages(source: string): {
     const cut = line.search(COMMENT_START);
     const code = cut === -1 ? line : line.slice(0, cut);
     const comment = cut === -1 ? '' : line.slice(cut);
-    const stripped = code.replace(PACKAGE_CMD, (_m, options: string | undefined, names: string) => {
-      for (const name of names
+    const stripped = code.replace(PACKAGE_CMD, (m, options: string | undefined, names: string) => {
+      const list = names
         .split(',')
         .map((n) => n.trim())
-        .filter(Boolean)) {
+        .filter(Boolean);
+      // Only what the manifest accepts moves (`styles/custom`, `\pkg`, `[x=\y]` stay in the .tex).
+      if (!list.every((n) => PACKAGE_NAME.test(n)) || !validOptions(options?.trim() ?? ''))
+        return m;
+      for (const name of list)
         packages.push(options ? { name, options: options.trim() } : { name });
-      }
       return '';
     });
     if (stripped !== code && stripped.trim() === '' && comment === '') continue;

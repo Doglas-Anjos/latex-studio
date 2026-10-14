@@ -128,8 +128,9 @@ export class PackagesService {
         known.add(p.name);
         manifest.push({ ...p, enabled: true, order: manifest.length });
       }
-      await files.write(project.mainFile, insertPackagesInput(remaining));
+      // Validate before stripping the main file: a 400 after it would lose those packages.
       const next = normalize(manifest);
+      await files.write(project.mainFile, insertPackagesInput(remaining));
       await writeManifest(files, next, await this.scan(files));
       const paths = [project.mainFile, MANIFEST, TEX];
       const message = `Move ${packages.length} packages to the manifest`;

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { parseManifest } from './package-manifest';
 import { extractUsepackages, findUsepackages, insertPackagesInput } from './usepackage-parser';
 
 const source = [
@@ -35,6 +36,24 @@ describe('extractUsepackages', () => {
   it('handles RequirePackage and spaces', () => {
     const { packages } = extractUsepackages('\\RequirePackage [a=b] { x }\n');
     expect(packages).toEqual([{ name: 'x', options: 'a=b' }]);
+  });
+
+  it('moves only what the manifest accepts and leaves the rest in the source', () => {
+    const kept = [
+      '\\usepackage{styles/custom}',
+      '\\usepackage{\\mypkg, amsmath}',
+      '\\usepackage[font=\\small]{caption}',
+      '\\usepackage[a={b]{c}',
+    ];
+    const src = [...kept, '\\usepackage[margin={2cm,3cm}]{geometry}', '\\usepackage{hyperref}'];
+    const { packages, remaining } = extractUsepackages(src.join('\n'));
+    expect(packages).toEqual([
+      { name: 'geometry', options: 'margin={2cm,3cm}' },
+      { name: 'hyperref' },
+    ]);
+    expect(remaining).toBe(kept.join('\n'));
+    const manifest = packages.map((p, order) => ({ ...p, enabled: true, order }));
+    expect(parseManifest(JSON.stringify(manifest))).toEqual(manifest);
   });
 });
 
