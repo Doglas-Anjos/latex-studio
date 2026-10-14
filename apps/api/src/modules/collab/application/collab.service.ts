@@ -44,12 +44,21 @@ export class CollabService {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
-  /** `"<projectId>/<path>"` → its parts; only text files inside the project. */
+  /**
+   * `"<projectId>/<path>"` → its parts; only text files inside the project. The id must be the
+   * canonical lowercase one: Postgres matches any case, but revoke/forget/flush match documents
+   * by name, and an uppercase twin would escape them.
+   */
   parseDocumentName(documentName: string): { projectId: string; path: string } {
     const slash = documentName.indexOf('/');
     const projectId = documentName.slice(0, slash);
     const path = documentName.slice(slash + 1);
-    if (slash < 0 || !isUUID(projectId) || !TEXT_EXTENSIONS.has(extname(path).toLowerCase())) {
+    if (
+      slash < 0 ||
+      !isUUID(projectId) ||
+      projectId !== projectId.toLowerCase() ||
+      !TEXT_EXTENSIONS.has(extname(path).toLowerCase())
+    ) {
       throw new BadRequestException('Invalid document name');
     }
     try {

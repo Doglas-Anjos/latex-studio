@@ -95,6 +95,11 @@ describe('CollabService', () => {
     ).rejects.toThrow();
   });
 
+  it('refuses a non-canonical (uppercase) project id', () => {
+    expect(() => collab.parseDocumentName(`${projectId.toUpperCase()}/main.tex`)).toThrow();
+    expect(collab.parseDocumentName(`${projectId}/main.tex`).projectId).toBe(projectId);
+  });
+
   it('makes viewers read-only', async () => {
     await expect(auth(await login('viewer'))).resolves.toMatchObject({ readOnly: true });
   });
