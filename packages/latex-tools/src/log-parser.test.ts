@@ -88,6 +88,25 @@ it('does not treat package names from the log as regexes', () => {
   expect(parseLatexLog(log).warnings).toEqual([{ message: 'bad more', line: 3 }]);
 });
 
+it('keeps the file across plain parens, and stays linear and capped on a runaway log', () => {
+  const log = [
+    '(./a.tex (plain',
+    '(./b.tex',
+    'LaTeX Warning: x on input line 1.',
+    ')',
+    'LaTeX Warning: y on input line 2.',
+    ')',
+  ];
+  expect(parseLatexLog(log.join('\n')).warnings).toEqual([
+    { file: './b.tex', message: 'x', line: 1 },
+    { file: './a.tex', message: 'y', line: 2 },
+  ]);
+  const runaway = `${'('.repeat(100_000)}\n${'LaTeX Warning: x\n'.repeat(6000)}`;
+  const start = performance.now();
+  expect(parseLatexLog(runaway).warnings).toHaveLength(1000);
+  expect(performance.now() - start).toBeLessThan(300);
+});
+
 it('parses file:line errors whose path has a Windows drive letter', () => {
   const log =
     'C:MiKTeX\texlatex\fontspec\fontspec.sty:101: Fatal Package fontspec Error: requires XeTeX\nl.101 msg_fatal:nn';

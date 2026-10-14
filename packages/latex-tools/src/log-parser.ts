@@ -1,6 +1,9 @@
 export type LogEntry = { file?: string; line?: number; message: string };
 
-const ON_LINE = /\s*on input line (\d+)\.?$/;
+// No leading `\s*`: unanchored, it rescans a run of spaces from each of its positions (quadratic on
+// the 10000-char lines max_print_line allows). The message is trimmed after the replace anyway.
+const ON_LINE = /on input line (\d+)\.?$/;
+const MAX_ENTRIES = 1000;
 
 export type ParsedLog = { errors: LogEntry[]; warnings: LogEntry[]; info: LogEntry[] };
 
@@ -17,10 +20,11 @@ export function parseLatexLog(log: string): ParsedLog {
   const errors: LogEntry[] = [];
   const warnings: LogEntry[] = [];
   const info: LogEntry[] = [];
-  // open files; undefined = a plain "(" that is not a file
+  // One entry per open "(": the innermost file at that depth, so a plain "(" repeats its parent's
+  // file and the current file is the top, not a search down a stack that every "(" grows.
   const stack: Array<string | undefined> = [];
   const withFile = (): { file?: string } => {
-    const file = stack.findLast((f) => f !== undefined);
+    const file = stack.at(-1);
     return file === undefined ? {} : { file };
   };
   const lines = log.split(/\r?\n/);
@@ -94,8 +98,13 @@ export function parseLatexLog(log: string): ParsedLog {
 
     for (const m of text.matchAll(/\(([^\s()]*)|\)/g)) {
       if (m[0] === ')') stack.pop();
-      else stack.push(/^(\.{0,2}\/|[A-Za-z]:)|\.\w+$/.test(m[1] ?? '') ? m[1] : undefined);
+      else stack.push(/^(\.{0,2}\/|[A-Za-z]:)|\.\w+$/.test(m[1] ?? '') ? m[1] : stack.at(-1));
     }
   }
-  return { errors, warnings, info };
+  // A runaway document can log hundreds of thousands of warnings; the first ones are what matter.
+  return {
+    errors: errors.slice(0, MAX_ENTRIES),
+    warnings: warnings.slice(0, MAX_ENTRIES),
+    info: info.slice(0, MAX_ENTRIES),
+  };
 }
