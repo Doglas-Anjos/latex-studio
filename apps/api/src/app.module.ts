@@ -1,5 +1,6 @@
 import { ConfigModule, DatabaseModule } from '@latex-studio/core';
 import { Controller, Get, Module } from '@nestjs/common';
+import { RouteConfig } from '@nestjs/platform-fastify';
 import { AdminModule } from './modules/admin/admin.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -20,6 +21,8 @@ import { SpellcheckModule } from './modules/spellcheck/spellcheck.module';
 class HealthController {
   @Public()
   @Get()
+  // "Process alive" for the container healthcheck, even while Redis (the rate-limit store) is down.
+  @RouteConfig({ rateLimit: false })
   health() {
     return { status: 'ok' };
   }
