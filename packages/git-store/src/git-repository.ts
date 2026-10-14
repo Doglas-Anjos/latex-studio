@@ -168,13 +168,10 @@ export class GitRepository {
     }));
   }
 
+  /** `path` as of commit `sha`; null when it is missing or a folder there. */
   async readFileAt(sha: string, path: string): Promise<Uint8Array | null> {
-    try {
-      return (await git.readBlob({ fs, dir: this.dir, oid: sha, filepath: path })).blob;
-    } catch (e) {
-      if ((e as { code?: string }).code === 'NotFoundError') return null;
-      throw e;
-    }
+    const oid = await this.blobOid(sha, path);
+    return oid ? (await git.readBlob({ fs, dir: this.dir, oid })).blob : null;
   }
 
   async changedFiles(

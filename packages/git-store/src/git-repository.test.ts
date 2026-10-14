@@ -45,6 +45,7 @@ it('commits, logs, diffs and reads history', async () => {
     new TextDecoder().decode((await repo.readFileAt(first as string, 'main.tex')) as Uint8Array),
   ).toBe('v1');
   expect(await repo.readFileAt(first as string, 'nope.tex')).toBeNull();
+  expect(await repo.readFileAt(second as string, 'sub/dir')).toBeNull(); // a folder
 
   await repo.rename('main.tex', 'moved/main.tex');
   expect((await repo.listFiles()).map((f) => f.path).sort()).toEqual([
