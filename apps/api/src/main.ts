@@ -75,14 +75,21 @@ async function bootstrap() {
   await app.init();
 
   // Collaborative editing shares the HTTP server. Upgrades skip Nest guards: Hocuspocus'
-  // onAuthenticate checks the Origin, the bearer token and the project role itself.
+  // onAuthenticate checks the Origin, the bearer token and the project role itself. A foreign
+  // Origin is refused here already, before a socket is held open for it.
   const hocuspocus = app.get<Hocuspocus>(HOCUSPOCUS);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
+  const appOrigin = new URL(config.APP_URL).origin;
   app
     .getHttpAdapter()
     .getInstance()
     .server.on('upgrade', (request, socket, head) => {
       if (!request.url?.startsWith('/collab')) return socket.destroy();
+      if (request.headers.origin !== appOrigin) {
+        return socket.end(
+          'HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
+        );
+      }
       wss.handleUpgrade(request, socket, head, (ws) => {
         const headers = new Headers();
         for (let i = 0; i < request.rawHeaders.length; i += 2) {
