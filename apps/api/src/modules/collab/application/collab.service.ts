@@ -113,11 +113,12 @@ export class CollabService {
 
   /**
    * Autosave: persists the Yjs state and flushes the text to the working tree. Never commits.
+   * Resolves to the state's size in bytes.
    * ponytail: no quota check on flush (it would list the whole tree every 2 s); the project
    * quota is enforced on uploads only.
    */
-  async store(projectId: string, path: string, doc: Y.Doc): Promise<void> {
-    await this.lock.run(projectId, async () => {
+  store(projectId: string, path: string, doc: Y.Doc): Promise<number> {
+    return this.lock.run(projectId, async () => {
       // Snapshot both the instant this turn starts, before any await: a store queued behind a
       // `commitFile` (or another store) must persist what the doc holds right now, never a value
       // captured earlier while waiting its turn, which could by now be older than what an earlier
@@ -127,6 +128,7 @@ export class CollabService {
       const text = doc.getText('content').toString();
       await this.docs.save(projectId, path, state);
       await this.storage.open(projectId).write(path, text);
+      return state.byteLength;
     });
   }
 

@@ -5,6 +5,18 @@ import { type CollabService, MAX_DOC_CHARS } from '../application/collab.service
 
 export const HOCUSPOCUS = Symbol('HOCUSPOCUS');
 
+/**
+ * Cap on a doc's encoded state (its DB row, re-encoded on every save): a full-size doc plus as
+ * much again of history. Shared types other than `content`, embeds and tombstones all count.
+ */
+export const MAX_STATE_BYTES = 2 * MAX_DOC_CHARS;
+/**
+ * Each loaded doc's state size as last measured (load, store) plus every update applied since:
+ * an upper bound that costs nothing per message.
+ * ponytail: deletions count as growth until the next store (2-10 s) re-measures, and bytes bound
+ * the item count (heap) only loosely; count the `doc.store` structs too if that bites.
+ */
+const stateBytes = new WeakMap<Y.Doc, number>();
 const MAX_PRESENCE_BYTES = 4096;
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -30,6 +42,13 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
       if (document.getText('content').length > MAX_DOC_CHARS) {
         throw new Error('Document too large');
       }
+    },
+    // Type 0 (sync step 1) is only a state vector; a read-only connection's updates are dropped.
+    async beforeSync({ document, connection, type, payload }) {
+      if (type === 0 || connection.readOnly) return;
+      const bytes = (stateBytes.get(document) ?? 0) + payload.byteLength;
+      if (bytes > MAX_STATE_BYTES) throw new Error('Document too large');
+      stateBytes.set(document, bytes);
     },
     // Presence comes from the verified token, not the client: no one can show up under another
     // name or id. Only the cursor and a plain colour pass through, and oversized states are dropped.
@@ -68,6 +87,8 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
         // from disk with new item ids, and a client still holding the old doc merges both copies.
         await collab.saveState(projectId, path, document);
       } else Y.applyUpdate(document, loaded);
+      const bytes = typeof loaded === 'string' ? Buffer.byteLength(loaded) : loaded.byteLength;
+      stateBytes.set(document, bytes);
     },
     // Server-side changes (restore, format, initial load) carry no user; a throw here would
     // bring the whole API down as an unhandled rejection, so this hook never throws.
@@ -83,7 +104,7 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
       // DocumentSync.forget dropped this doc (file renamed or deleted): never write it back.
       if (instance.documents.get(documentName) !== document) return;
       const { projectId, path } = collab.parseDocumentName(documentName);
-      await collab.store(projectId, path, document);
+      stateBytes.set(document, await collab.store(projectId, path, document));
     },
   });
 }
