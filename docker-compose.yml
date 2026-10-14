@@ -1,3 +1,6 @@
+# Fixed project name, so volumes are latex-studio_* whatever the folder (scripts/backup.sh uses it).
+name: latex-studio
+
 # Cap container log growth: 3 x 10 MB per service, so a chatty or looping service can't fill the disk.
 x-logging: &default-logging
   driver: json-file

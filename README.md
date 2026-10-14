@@ -20,12 +20,18 @@ TypeScript em todo o projeto. NestJS (Fastify) + Hocuspocus na API, worker NestJ
 
 ## Subir em produção (Docker Compose)
 
-Requisitos: Docker com Compose, uma VPS com 2 vCPU e 4 GB RAM é suficiente para ~100 usuários.
+Requisitos: Docker com Compose e uma VPS com 2 vCPU, 4 GB de RAM (~100 usuários) e uns 15 GB de disco livre (a imagem do worker com o TeX Live completo tem ~6 GB).
 
 ```bash
-cp .env.example .env   # preencha senhas e as variáveis AUTH_* / VITE_FASORX_*
+cp .env.example .env
 docker compose up -d --build
 ```
+
+No `.env`, antes de subir:
+
+- `APP_DOMAIN` e `APP_URL=https://<APP_DOMAIN>`;
+- senhas novas em `POSTGRES_PASSWORD` (repita em `DATABASE_URL`) e `REDIS_PASSWORD` (repita em `REDIS_URL`);
+- as variáveis `AUTH_*` do emissor dos tokens (o FasorX ou outro provedor OIDC, abaixo) e `VITE_FASORX_URL`. Sem verificador a API se recusa a subir: o compose roda com `NODE_ENV=production`, onde o modo local não existe.
 
 O Caddy obtém TLS automaticamente para `APP_DOMAIN`. Quem pode entrar é decidido pelo FasorX; a primeira visita cria a conta aqui. Para convidar alguém para um projeto, a pessoa precisa ter aberto o app ao menos uma vez.
 
@@ -52,7 +58,7 @@ O app não tem login próprio: ele confia num JWT assinado que chega no header `
 
 A capacidade de processamento tem duas alavancas independentes:
 
-- **Jobs em paralelo por worker** (variáveis de ambiente): `COMPILE_CONCURRENCY` (compilações simultâneas) e `TOOLS_CONCURRENCY` (export/wordcount/auto-indent simultâneos). Padrão 1 cada. Cada compilação pode usar até `COMPILE_MEMORY_MB`, então dimensione pela CPU/RAM da máquina.
+- **Jobs em paralelo por worker** (variáveis de ambiente): `COMPILE_CONCURRENCY` (compilações simultâneas) e `TOOLS_CONCURRENCY` (export/wordcount/auto-indent simultâneos). Padrão 1 cada. Cada compilação pode usar até `COMPILE_MEMORY_MB`, então dimensione pela CPU/RAM da máquina e suba junto o `mem_limit` do worker no `docker-compose.yml` (cerca de N × `COMPILE_MEMORY_MB` + 512 MB).
 - **Número de workers** (escala horizontal): rode mais contêineres worker com `docker compose up -d --scale worker=N`. Eles dividem a mesma fila (Redis/BullMQ), sem configuração extra.
 
 As duas alavancas são lidas no boot: depois de mudar, reinicie os workers (`docker compose up -d` recria quem mudou). Como referência, uma VPS de 2 vCPU/4 GB atende ~100 usuários com os padrões.
@@ -65,7 +71,20 @@ Requisitos: Node 22.22 ou superior, pnpm 12 (`npm i -g pnpm`), Docker, e um TeX 
 
 ```bash
 pnpm install
-cp .env.example .env            # DATABASE_URL/REDIS_URL para localhost; AUTH_* e VITE_FASORX_* vazios = sem login
+cp .env.example .env
+```
+
+No `.env`, troque estas linhas (com `AUTH_*` e `VITE_FASORX_URL` vazios, como vêm, é o modo local: sem login, a API só escuta em localhost):
+
+```bash
+APP_URL=http://localhost:5173
+DATABASE_URL=postgres://latex:change-me@localhost:5432/latex
+REDIS_URL=redis://:change-me@localhost:6379
+REPOS_DIR=/caminho/absoluto/latex-studio/data/repos     # a pasta data/ já é ignorada pelo git
+BUILDS_DIR=/caminho/absoluto/latex-studio/data/builds
+```
+
+```bash
 docker compose -f docker-compose.dev.yml up -d    # Postgres em 5432 e Redis em 6379 (POSTGRES_PORT/REDIS_PORT mudam)
 pnpm build                      # compila os pacotes compartilhados (packages/*)
 pnpm --filter @latex-studio/api dev               # lê o .env da raiz automaticamente
