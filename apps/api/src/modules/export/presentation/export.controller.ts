@@ -50,7 +50,8 @@ export class ExportController {
 
   @RouteConfig(RATE_LIMIT)
   @Get('export/source-with-history.zip')
-  @RequireProjectRole('viewer')
+  // The .git carries every author's e-mail, which only the owner sees (members list, history API).
+  @RequireProjectRole('owner')
   @Header('X-Content-Type-Options', 'nosniff')
   async sourceWithHistory(@CurrentProject() project: Project): Promise<StreamableFile> {
     return new StreamableFile(await this.exporter.sourceZip(project, true), {

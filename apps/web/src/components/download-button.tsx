@@ -21,7 +21,16 @@ const EXPORTS: [ExportFormat, string][] = [
  * caret offers the project source and the Word/Markdown/HTML exports. Shown to everyone (viewers
  * can download the PDF and source); only editors see the exports, which run a worker job.
  */
-export function DownloadButton({ projectId, canEdit }: { projectId: string; canEdit: boolean }) {
+export function DownloadButton({
+  projectId,
+  canEdit,
+  isOwner = false,
+}: {
+  projectId: string;
+  canEdit: boolean;
+  /** The .git in the history zip holds every author's e-mail, which only the owner sees. */
+  isOwner?: boolean;
+}) {
   const compile = useService(CompileServiceToken);
   const projects = useService(ProjectServiceToken);
   const tools = useService(ToolsServiceToken);
@@ -77,12 +86,14 @@ export function DownloadButton({ projectId, canEdit }: { projectId: string; canE
         >
           <Archive size={16} aria-hidden="true" /> Fonte (.zip)
         </button>
-        <button
-          type="button"
-          onClick={() => void download(() => projects.downloadSource(projectId, true))}
-        >
-          <GitBranch size={16} aria-hidden="true" /> Fonte com histórico (.zip)
-        </button>
+        {isOwner && (
+          <button
+            type="button"
+            onClick={() => void download(() => projects.downloadSource(projectId, true))}
+          >
+            <GitBranch size={16} aria-hidden="true" /> Fonte com histórico (.zip)
+          </button>
+        )}
         {canEdit &&
           EXPORTS.map(([format, label]) => (
             <button

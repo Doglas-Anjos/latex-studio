@@ -103,7 +103,11 @@ describe('HistoryService', () => {
     expect(status.baseline?.sha).toBe(v2);
     expect(status.changes).toEqual([{ path: 'a.tex', type: 'modify' }]);
 
-    const { lines } = await service.blame(project, 'a.tex');
+    const { lines, commits } = await service.blame(project, 'a.tex');
+    expect(Object.values(commits).map((c) => c.author)).toEqual([
+      { name: ana.name },
+      { name: ana.name },
+    ]);
     expect(lines.map((l) => [l.from, l.to, l.sha === null])).toEqual([
       [1, 1, false],
       [2, 2, false],
@@ -153,7 +157,9 @@ describe('HistoryService', () => {
     await service.commitFile(project, ana, 'a.tex');
 
     const [head] = await service.log(project);
-    expect(head?.message).toBe('Update a.tex\n\nCo-authored-by: bruno <bruno>');
+    // Names only: e-mails never leave through the history API.
+    expect(head?.message).toBe('Update a.tex\n\nCo-authored-by: bruno');
+    expect(head?.author).toEqual({ name: ana.name });
     expect((await service.status(project)).changes).toEqual([{ path: 'b.tex', type: 'modify' }]);
     expect(projects.edits.map((e) => e.userId)).toEqual(['carla']);
   });

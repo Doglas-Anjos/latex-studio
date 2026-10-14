@@ -62,7 +62,7 @@ class RunMarker extends GutterMarker {
     }
     const date = new Date(c.date);
     el.textContent = `${c.author.name.split(' ')[0]} · ${ageLabel(date)}`;
-    el.title = `${c.author.name} <${c.author.email}>\n${date.toLocaleString('pt-BR')}\n${c.message}`;
+    el.title = `${c.author.name}\n${date.toLocaleString('pt-BR')}\n${c.message}`;
     return el;
   }
 }

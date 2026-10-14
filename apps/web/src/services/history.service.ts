@@ -4,7 +4,7 @@ import type { ApiClient } from './api-client';
 export interface HistoryEntry {
   sha: string;
   message: string;
-  author: { name: string; email: string };
+  author: { name: string };
   date: string;
 }
 
@@ -25,10 +25,7 @@ export interface BlameRun {
 }
 
 export interface Blame {
-  commits: Record<
-    string,
-    { author: { name: string; email: string }; date: string; message: string }
-  >;
+  commits: Record<string, { author: { name: string }; date: string; message: string }>;
   lines: BlameRun[];
 }
 

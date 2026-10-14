@@ -31,6 +31,17 @@ function checkSha(sha: string): void {
   if (!SHA.test(sha)) throw new BadRequestException('Invalid commit sha');
 }
 
+// The `<e-mail>` of each Co-authored-by trailer (the name stays).
+const TRAILER_EMAIL = /^(Co-authored-by: [^<\n]*?) ?<[^>\n]*>$/gim;
+const withoutEmails = (message: string) => message.replace(TRAILER_EMAIL, '$1');
+/**
+ * A commit as the API serves it: authors by name only. Like the member list (e-mails for the owner
+ * only), every viewer reads the history, so e-mails stay in git and leave only in the owner's zip.
+ */
+function byName<T extends { author: { name: string }; message: string }>(c: T) {
+  return { ...c, author: { name: c.author.name }, message: withoutEmails(c.message) };
+}
+
 @Injectable()
 export class HistoryService {
   constructor(
@@ -45,8 +56,8 @@ export class HistoryService {
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
   ) {}
 
-  log(project: Project, limit = 50) {
-    return this.storage.open(project.id).repo.log(limit);
+  async log(project: Project, limit = 50) {
+    return (await this.storage.open(project.id).repo.log(limit)).map(byName);
   }
 
   /** Commits that touched `path`, newest first. */
@@ -54,7 +65,7 @@ export class HistoryService {
     const files = this.storage.open(project.id);
     if (!path) throw new BadRequestException('Missing path');
     checkPath(files, path);
-    return files.repo.fileLog(path, limit);
+    return files.repo.fileLog(path, limit).then((commits) => commits.map(byName));
   }
 
   changes(project: Project, fromSha: string, toSha: string) {
@@ -83,7 +94,9 @@ export class HistoryService {
     const [base] = await repo.log(1);
     const changes = await repo.workingChanges(base?.sha ?? null);
     return {
-      baseline: base ? { sha: base.sha, message: base.message, date: base.date } : null,
+      baseline: base
+        ? { sha: base.sha, message: withoutEmails(base.message), date: base.date }
+        : null,
       changes,
     };
   }
@@ -95,7 +108,9 @@ export class HistoryService {
     checkPath(files, path);
     if (!(await files.isFile(path))) throw new NotFoundException('File not found');
     try {
-      return await files.repo.blame(path);
+      const { commits, lines } = await files.repo.blame(path);
+      const named = Object.fromEntries(Object.entries(commits).map(([sha, c]) => [sha, byName(c)]));
+      return { commits: named, lines };
     } catch (e) {
       if ((e as Error).message === 'File too large to blame') throw new PayloadTooLargeException();
       if ((e as { code?: string }).code === 'ENOENT') throw new NotFoundException('File not found');

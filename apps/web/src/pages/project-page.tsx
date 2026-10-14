@@ -173,7 +173,11 @@ export function ProjectPage() {
           </fieldset>
         )}
         <div className="wsh-end">
-          <DownloadButton projectId={project.id} canEdit={canEdit} />
+          <DownloadButton
+            projectId={project.id}
+            canEdit={canEdit}
+            isOwner={project.role === 'owner'}
+          />
           <span className="wsh-divider" aria-hidden="true" />
           {project.role === 'owner' && (
             <Button
