@@ -31,7 +31,7 @@ import { useSettingsStore } from '../settings-store';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { useBuilds } from './use-builds';
-import { waitForJob } from './use-tools-job';
+import { useWaitForJob } from './use-tools-job';
 
 const statusText = {
   queued: 'Na fila…',
@@ -198,7 +198,7 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
       ? `Sem resposta há ${elapsedSeconds(build)}s; clique para tentar novamente`
       : undefined;
 
-  const waitFor = <T,>(jobId: string) => waitForJob<T>(tools, projectId, jobId);
+  const waitFor = useWaitForJob(projectId);
   const [formatProgress, setFormatProgress] = useState('');
   // Every .tex through latexindent: the open file via the editor (keeps cursors), others via PUT.
   const formatAll = useMutation({

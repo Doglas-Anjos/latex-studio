@@ -9,7 +9,7 @@ import { ToolsServiceToken } from '../../services/tools.service';
 import { useSettingsStore } from '../../settings-store';
 import { useWorkspaceStore } from '../../workspace-store';
 import { useBuilds } from '../use-builds';
-import { waitForJob } from '../use-tools-job';
+import { useWaitForJob } from '../use-tools-job';
 
 const FORMATTABLE = /\.(tex|sty|cls|bib)$/i;
 
@@ -45,6 +45,7 @@ export function StatusBar({
   const blameOn = useWorkspaceStore((s) => s.blameOn);
   const toggleBlame = useWorkspaceStore((s) => s.toggleBlame);
   const tools = useService(ToolsServiceToken);
+  const waitForJob = useWaitForJob(projectId);
   const history = useService(HistoryServiceToken);
   const queryClient = useQueryClient();
   const { data: builds } = useBuilds(projectId);
@@ -94,12 +95,13 @@ export function StatusBar({
       const before = commands.getText();
       try {
         const { jobId } = await tools.format(projectId, activePath, before);
-        const r = await waitForJob<{ text: string }>(tools, projectId, jobId);
+        const r = await waitForJob<{ text: string }>(jobId);
         // Someone typed meanwhile, or another file is open now: applying would clobber it.
         const live = useWorkspaceStore.getState().editorCommands;
         if (r && (live !== commands || commands.getText() !== before)) throw new Error('changed');
         if (r) commands.applyText(r.text);
       } catch (e) {
+        if ((e as Error).name === 'AbortError') return; // left the project meanwhile
         if ((e as Error).message === 'changed') {
           setNote('O documento mudou durante a formatação; tente de novo');
           return;

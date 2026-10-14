@@ -6,7 +6,7 @@ import { ProjectServiceToken } from '../services/project.service';
 import { type ExportFormat, ToolsServiceToken } from '../services/tools.service';
 import { Menu } from './menu';
 import { useBuilds } from './use-builds';
-import { waitForJob } from './use-tools-job';
+import { useWaitForJob } from './use-tools-job';
 
 const EXPORTS: [ExportFormat, string][] = [
   ['docx', 'Word (.docx)'],
@@ -24,6 +24,7 @@ export function DownloadButton({ projectId, canEdit }: { projectId: string; canE
   const compile = useService(CompileServiceToken);
   const projects = useService(ProjectServiceToken);
   const tools = useService(ToolsServiceToken);
+  const waitForJob = useWaitForJob(projectId);
   const { data: builds } = useBuilds(projectId);
   const build = builds?.[0];
   const pdfReady = build?.status === 'succeeded';
@@ -31,7 +32,7 @@ export function DownloadButton({ projectId, canEdit }: { projectId: string; canE
   const exportAs = useMutation({
     mutationFn: async (format: ExportFormat) => {
       const { jobId } = await tools.requestExport(projectId, format);
-      await waitForJob(tools, projectId, jobId);
+      await waitForJob(jobId);
       await tools.downloadJobFile(projectId, jobId, `project.${format}`);
     },
   });
