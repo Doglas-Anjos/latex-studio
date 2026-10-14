@@ -357,8 +357,11 @@ a {
   font-size: 0.9rem;
 }
 
+/* minmax(0, 1fr): a grid track otherwise grows to its content's min width, and a long
+   nowrap file name then pushes the whole dialog sideways instead of being cut with "…". */
 .dropzone-field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.6rem;
 }
 .dropzone {
@@ -399,6 +402,7 @@ a {
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.25rem;
 }
 .dropzone-files li {
@@ -702,6 +706,10 @@ a {
 .dialog[data-wide] {
   width: min(100% - 2rem, 64rem);
   max-height: min(92vh, 52rem);
+}
+.dialog[data-wide="md"] {
+  width: min(100% - 2rem, clamp(32rem, 50vw, 46rem));
+  max-height: min(90vh, 50rem);
 }
 .dialog[data-wide="full"] {
   width: calc(100vw - 2rem);
@@ -2121,6 +2129,63 @@ select.role-chip {
   overflow: hidden;
   clip-path: inset(50%);
   white-space: nowrap;
+}
+
+/* Toasts (components/toaster.tsx): bottom right, above the page or inside the open dialog */
+.toaster {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 1000;
+  display: grid;
+  gap: 0.5rem;
+  width: min(100vw - 2rem, 26rem);
+}
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.75rem 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--primary);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+  animation: toast-in 0.16s ease-out;
+}
+.toast[data-tone="error"] {
+  border-left-color: var(--danger);
+}
+.toast span {
+  flex: 1;
+  min-width: 0;
+}
+.toast-close {
+  flex: none;
+  display: inline-flex;
+  padding: 0.15rem;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.toast-close:hover {
+  color: var(--ink);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
 }
 
 /* Workspace shell */

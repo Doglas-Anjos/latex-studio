@@ -33,13 +33,16 @@ export function Dialog({
   tone?: 'danger';
   /** While true, blocks the Escape key and the X from closing the dialog mid-mutation. */
   pending?: boolean | undefined;
-  /** Editors and tools (formula, table) that need room, not a short form; 'full' fills the window. */
-  wide?: boolean | 'full';
+  /**
+   * Editors and tools (formula, table) that need room, not a short form; 'full' fills the window;
+   * 'md' grows with the screen for forms with a file picker (import).
+   */
+  wide?: boolean | 'full' | 'md';
   /** Header buttons left of the X (e.g. full screen). */
   actions?: ReactNode;
   /** Actions pinned below the scrollable body; stay visible without scrolling. */
   footer?: ReactNode;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   return (
     <DialogContext value={{ ref, pending }}>
