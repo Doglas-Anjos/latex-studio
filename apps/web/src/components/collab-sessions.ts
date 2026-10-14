@@ -14,13 +14,21 @@ export function markUnsynced(provider: object, dirty: boolean) {
 }
 
 type Closable = Pick<HocuspocusProvider, 'hasUnsyncedChanges' | 'on' | 'destroy'>;
+/** Resolves true when the server will never take this doc's edits (file gone, too large, no access). */
+export type Refused = () => Promise<boolean>;
+
 /**
  * Destroys provider and doc once the last local edit reached the server. Until then the session
  * lives on, reconnecting by itself, and keeps the beforeunload guard: there is no local copy (no
- * y-indexeddb), so giving up would lose edits typed while offline. A doc the server refuses (file
- * gone or too large, session ended) can never take them: that ends it too.
+ * y-indexeddb), so giving up would lose edits typed while offline. A refusal (auth failed, or a
+ * per-document close) may be temporary, an expired token or a restarting server: it ends the
+ * session only when `refused` confirms the doc can never take the edits.
  */
-export function closeWhenSynced(provider: Closable, doc: Pick<Y.Doc, 'destroy'>) {
+export function closeWhenSynced(
+  provider: Closable,
+  doc: Pick<Y.Doc, 'destroy'>,
+  refused: Refused = async () => true,
+) {
   let done = false;
   const finish = () => {
     if (done) return;
@@ -31,7 +39,13 @@ export function closeWhenSynced(provider: Closable, doc: Pick<Y.Doc, 'destroy'>)
   };
   if (!provider.hasUnsyncedChanges) return finish();
   provider.on('unsyncedChanges', ({ number }: { number: number }) => number === 0 && finish());
-  provider.on('authenticationFailed', finish);
+  const check = () =>
+    void refused().then(
+      (r) => r && finish(),
+      () => {},
+    );
+  provider.on('authenticationFailed', check);
+  provider.on('close', ({ event }: { event: { code: number } }) => event.code === 1000 && check());
 }
 
 /**
@@ -50,6 +64,8 @@ export interface CollabSession {
   status: Connection;
   /** Where the person was when they left the tab; restored when the view is rebuilt. */
   parked: { selection: unknown; scrollTop: number; length: number } | null;
+  /** Whether the server refuses this doc for good (see closeWhenSynced). */
+  refused: Refused;
 }
 
 /** Open tabs beyond this many reconnect when revisited; each kept session holds a websocket. */
@@ -63,6 +79,7 @@ export function openSession(
   projectId: string,
   path: string,
   token: () => Promise<string>,
+  refused: (doc: Y.Doc) => Promise<boolean>,
 ): CollabSession {
   const key = `${projectId}/${path}`;
   active = key;
@@ -97,6 +114,7 @@ export function openSession(
     undo: new Y.UndoManager(ytext),
     status: 'connecting',
     parked: null,
+    refused: () => refused(doc),
   };
   session.provider.on('unsyncedChanges', ({ number }: { number: number }) =>
     markUnsynced(session.provider, number > 0),
@@ -115,14 +133,18 @@ export function openSession(
   return session;
 }
 
-/** Ends a session once its last local edit reached the server. */
+/**
+ * Ends a session once its last local edit reached the server.
+ * ponytail: reopening the file while this one still waits builds a fresh session, which does not
+ * show those offline edits until both sync; revive the closing session if that bites.
+ */
 export function closeSession(key: string) {
   const session = sessions.get(key);
   if (!session) return;
   sessions.delete(key);
   if (active === key) active = null;
   session.undo.destroy();
-  closeWhenSynced(session.provider, session.doc);
+  closeWhenSynced(session.provider, session.doc, session.refused);
 }
 
 /** Forgets a session whose file vanished; the caller keeps its frozen text on screen. */

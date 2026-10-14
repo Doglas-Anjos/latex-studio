@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-libra
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
+import { ApiError } from '../services/api-client';
 import { AuthServiceToken } from '../services/auth.service';
 import { CommentServiceToken } from '../services/comment.service';
 import { type FileService, FileServiceToken } from '../services/file.service';
@@ -124,16 +125,24 @@ describe('closeWhenSynced', () => {
     expect(unload()).toBe(false);
   });
 
-  it('keeps offline edits however long it takes, ends on refusal or when nothing is pending', () => {
+  it('keeps offline edits however long it takes, ends on a final refusal or when nothing is pending', async () => {
     vi.useFakeTimers();
     const offline = fakeProvider(true);
     markUnsynced(offline, true);
-    closeWhenSynced(offline as never, { destroy: vi.fn() });
+    let final = false;
+    closeWhenSynced(offline as never, { destroy: vi.fn() }, async () => final);
     vi.advanceTimersByTime(60 * 60_000);
     expect(offline.destroy).not.toHaveBeenCalled();
     expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false);
+    // An expired token or FasorX down: the edits stay, still guarded.
     offline.refuse();
-    expect(offline.destroy).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(offline.on).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(offline.destroy).not.toHaveBeenCalled();
+    // The file is gone (or access lost): nothing can take them any more.
+    final = true;
+    offline.refuse();
+    await vi.waitFor(() => expect(offline.destroy).toHaveBeenCalledTimes(1));
     offline.emit(0);
     expect(offline.destroy).toHaveBeenCalledTimes(1);
 
@@ -182,6 +191,14 @@ describe('collab editor refused by the server', () => {
     act(() => provider.emit('authenticationFailed', { reason: 'permission-denied' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/grande demais/);
     expect(provider.disconnect).toHaveBeenCalled();
+  });
+
+  it('freezes when access to the project was revoked (the server just closes the doc)', async () => {
+    const list = vi.fn().mockRejectedValue(new ApiError(403, 'Forbidden'));
+    renderWithApp(<Editor projectId="p1" path="gone.txt" role={ROLE} />, services(list));
+    const provider = providers.at(-1) as InstanceType<typeof FakeProvider>;
+    act(() => provider.emit('close', { event: { code: 1000 } }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Sem acesso a este projeto');
   });
 });
 

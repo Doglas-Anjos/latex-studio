@@ -21,6 +21,7 @@ import type { CommentScope } from '../comment-scope';
 import { lineRangeAt, SCOPE_LABELS, scopeEmptyReason, scopeRange } from '../comment-scope';
 import { useService } from '../di/service-provider';
 import { useHistoryStatus } from '../hooks/use-history-status';
+import { ApiError } from '../services/api-client';
 import { type Comment, CommentServiceToken, type NewComment } from '../services/comment.service';
 import { FileServiceToken } from '../services/file.service';
 import { HistoryServiceToken } from '../services/history.service';
@@ -343,7 +344,31 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     if (!parent) return;
     // The doc, websocket and undo history live as long as the tab (collab-sessions.ts); only the
     // view is rebuilt here, so coming back to a tab needs no reconnect or full re-sync.
-    const session = openSession(projectId, path, async () => (await identity.token()) ?? '');
+    // Why the server will never take this doc, or null when a refusal may be temporary (an expired
+    // or missing token, a server restart): the provider then retries by itself, and a list call
+    // without a session sends the person to log in. Only the file list tells them apart.
+    const refusal = (doc: Y.Doc): Promise<string | null> =>
+      files.list(projectId).then(
+        (list) => {
+          const file = list.find((f) => f.path === path);
+          if (!file) return 'Arquivo removido ou renomeado';
+          return (file.size ?? 0) > MAX_DOC_CHARS ||
+            doc.getText('content').length > MAX_DOC_CHARS ||
+            Y.encodeStateAsUpdate(doc).byteLength > 2 * MAX_DOC_CHARS
+            ? 'Arquivo grande demais para edição colaborativa (baixe-o ou divida-o)'
+            : null;
+        },
+        (e) =>
+          e instanceof ApiError && (e.status === 403 || e.status === 404)
+            ? 'Sem acesso a este projeto'
+            : null,
+      );
+    const session = openSession(
+      projectId,
+      path,
+      async () => (await identity.token()) ?? '',
+      async (doc) => (await refusal(doc)) !== null,
+    );
     const { doc, provider, ytext, undo } = session;
     // Cursor and scroll from the last visit, unless the text changed length meanwhile.
     const restore = session.parked?.length === ytext.length ? session.parked : null;
@@ -594,24 +619,9 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       view.dispatch({ effects: ro.reconfigure(EditorState.readOnly.of(true)) });
       setFrozen(reason);
     };
-    // It also refuses an expired or missing token, and a per-document close (code 1000) also
-    // happens on server shutdown: only the file list tells them apart. Otherwise the session
-    // and its unsynced edits stay; the provider retries by itself, and a list call without a
-    // session sends the person to log in.
-    const checkRefused = () =>
-      files
-        .list(projectId)
-        .then((list) => {
-          const file = list.find((f) => f.path === path);
-          if (!file) freeze('Arquivo removido ou renomeado');
-          else if (
-            (file.size ?? 0) > MAX_DOC_CHARS ||
-            ytext.length > MAX_DOC_CHARS ||
-            Y.encodeStateAsUpdate(doc).byteLength > 2 * MAX_DOC_CHARS
-          )
-            freeze('Arquivo grande demais para edição colaborativa (baixe-o ou divida-o)');
-        })
-        .catch(() => {});
+    // A per-document close (code 1000) also happens on server shutdown or access revoked; a
+    // temporary refusal keeps the session and its unsynced edits (see `refusal`).
+    const checkRefused = () => void refusal(doc).then((reason) => reason && freeze(reason));
     provider.on('authenticationFailed', checkRefused);
     const onClose = ({ event }: { event: { code: number } }) =>
       event.code === 1000 && checkRefused();
