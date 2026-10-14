@@ -1,16 +1,19 @@
 // Scanners for the project navigator: figures, tables, equations and acronyms, carrying just enough
 // content for a quick client-side preview (image path, tabular source, equation TeX, acronym text).
-// Bounded quantifiers (ReDoS), same discipline as reference-index.ts.
+// Bounded quantifiers (ReDoS), same discipline as reference-index.ts, and no `\s*(?:[..])?\s*`:
+// two adjacent `\s*` split a run of spaces every possible way (quadratic). Matches are scanned
+// forward once (cursor, envBlocks), never rescanned from each match to the line start or file end.
 const COMMENT_START = /(?<!\\)%/;
 const TABLE_SOURCE_CAP = 8000;
 const EQ_SOURCE_CAP = 2000;
+const TITLE_SCAN_CAP = 2000;
 // \caption (not \captionsetup/\captionof); the arg is read with balanced braces so \cite{} inside survives.
 const CAPTION = /\\caption\*?(?![a-zA-Z])/;
 const LABEL1 = /\\label\s*\{([^}]{0,500})\}/;
-const INCLUDEGRAPHICS = /\\includegraphics\s*(?:\[[^\]]{0,300}\])?\s*\{([^}]{0,400})\}/;
+const INCLUDEGRAPHICS = /\\includegraphics\s*(?:\[[^\]]{0,300}\]\s*)?\{([^}]{0,400})\}/;
 const TABULAR = /\\begin\{tabular\}[\s\S]{0,8000}?\\end\{tabular\}/;
 const NEWACRONYM =
-  /\\newacronym\s*(?:\[[^\]]{0,200}\])?\s*\{([^}]{0,100})\}\s*\{([^}]{0,100})\}\s*\{([^}]{0,500})\}/g;
+  /\\newacronym\s*(?:\[[^\]]{0,200}\]\s*)?\{([^}]{0,100})\}\s*\{([^}]{0,100})\}\s*\{([^}]{0,500})\}/g;
 const EQ_ENVS = ['equation', 'align', 'gather', 'multline', 'dmath'];
 // Sectioning commands, outermost first: the index is the heading's depth for the document map.
 const SECTION_CMDS = ['part', 'chapter', 'section', 'subsection', 'subsubsection'];
@@ -23,14 +26,25 @@ export type Equation = { label?: string; source: string; line: number };
 export type Acronym = { key: string; short: string; long: string; line: number };
 export type Section = { level: number; title: string; line: number };
 
-const lineAt = (source: string, idx: number): number => {
+/**
+ * For increasing indexes into `source`: the 1-based line, and whether a `%` (not after `\`) comes
+ * before it on that line. One forward pass over the source in all, not a rescan per match.
+ */
+function cursor(source: string) {
+  let pos = 0;
   let line = 1;
-  for (let i = 0; i < idx; i++) if (source[i] === '\n') line++;
-  return line;
-};
-
-const commented = (source: string, idx: number): boolean =>
-  COMMENT_START.test(source.slice(source.lastIndexOf('\n', idx) + 1, idx));
+  let commented = false;
+  return (idx: number) => {
+    for (; pos < idx; pos++) {
+      const c = source[pos];
+      if (c === '\n') {
+        line++;
+        commented = false;
+      } else if (c === '%' && source[pos - 1] !== '\\') commented = true;
+    }
+    return { line, commented };
+  };
+}
 
 /** Balanced `{...}` content after the first match of `re` (skips one optional `[..]`). null if none. */
 function bracedArg(text: string, re: RegExp): string | null {
@@ -57,21 +71,25 @@ function bracedArg(text: string, re: RegExp): string | null {
 
 /** Each non-commented `\begin{name}…\end{name}` block: its inner body and the \begin line (1-based). */
 function envBlocks(source: string, name: string): { body: string; line: number }[] {
-  const out: { body: string; line: number }[] = [];
-  const begin = new RegExp(`\\\\begin\\{${name}\\*?\\}`, 'g');
-  for (const m of source.matchAll(begin)) {
-    const start = m.index ?? 0;
-    if (commented(source, start)) continue;
-    const bodyStart = start + m[0].length;
-    const end = new RegExp(`\\\\end\\{${name}\\*?\\}`, 'g');
-    end.lastIndex = bodyStart;
-    const e = end.exec(source);
-    out.push({
-      body: source.slice(bodyStart, e ? e.index : source.length),
-      line: lineAt(source, start),
-    });
-  }
-  return out;
+  const at = cursor(source);
+  const begins = [...source.matchAll(new RegExp(`\\\\begin\\{${name}\\*?\\}`, 'g'))].flatMap(
+    (m) => {
+      const { line, commented } = at(m.index);
+      return commented ? [] : [{ start: m.index, bodyStart: m.index + m[0].length, line }];
+    },
+  );
+  const end = new RegExp(`\\\\end\\{${name}\\*?\\}`, 'g');
+  let endAt = -1; // the first \end at or after the last search; source.length when none is left
+  return begins.map(({ bodyStart, line }, i) => {
+    if (endAt < bodyStart) {
+      end.lastIndex = bodyStart;
+      endAt = end.exec(source)?.index ?? source.length;
+    }
+    // These envs never nest, so a body also stops at the next \begin: bodies stay disjoint and an
+    // unclosed \begin costs one scan, not one to the end of the file per \begin (ReDoS).
+    const next = begins[i + 1]?.start ?? source.length;
+    return { body: source.slice(bodyStart, Math.min(endAt, next)), line };
+  });
 }
 
 export function findFigures(source: string): Figure[] {
@@ -123,17 +141,20 @@ export function findEquations(source: string): Equation[] {
 /** Sectioning commands in document order, with a 0-based depth (part=0 … subsubsection=4). */
 export function findSections(source: string): Section[] {
   const out: Section[] = [];
-  for (const m of source.matchAll(SECTION_RE)) {
-    const start = m.index ?? 0;
-    if (commented(source, start)) continue;
+  const at = cursor(source);
+  const matches = [...source.matchAll(SECTION_RE)];
+  for (const [i, m] of matches.entries()) {
+    const start = m.index;
+    const { line, commented } = at(start);
+    if (commented) continue;
     const cmd = m[1] as string;
-    // `source.slice(start)` puts the command at index 0; bracedArg then skips an optional [short].
-    const title = bracedArg(source.slice(start), new RegExp(`\\\\${cmd}\\*?`)) ?? '';
-    out.push({
-      level: SECTION_CMDS.indexOf(cmd),
-      title: title.trim(),
-      line: lineAt(source, start),
-    });
+    // The slice puts the command at index 0; bracedArg then skips an optional [short]. It ends at
+    // the next sectioning command (a title holds none) and is capped, or every unclosed
+    // `\section{` would scan on to the end of the file.
+    const next = Math.min(start + TITLE_SCAN_CAP, matches[i + 1]?.index ?? source.length);
+    const text = source.slice(start, next);
+    const title = bracedArg(text, new RegExp(`\\\\${cmd}\\*?`)) ?? '';
+    out.push({ level: SECTION_CMDS.indexOf(cmd), title: title.trim(), line });
   }
   return out;
 }

@@ -15,12 +15,32 @@ describe('findSections', () => {
       '\\section[short]{Contexto \\& motivação}',
       '% \\section{Comentada}',
       '\\subsection*{Detalhe}',
+      '100\\% \\section{Escaped}',
     ].join('\n');
     expect(findSections(src)).toEqual([
       { level: 1, title: 'Introdução', line: 1 },
       { level: 2, title: 'Contexto \\& motivação', line: 2 },
       { level: 3, title: 'Detalhe', line: 4 },
+      { level: 2, title: 'Escaped', line: 5 },
     ]);
+  });
+});
+
+describe('outline scanners on hostile input', () => {
+  it('stay linear on 200 KB of unclosed commands and environments', () => {
+    const big = (unit: string) => unit.repeat(200_000 / unit.length);
+    const runs: [string, () => unknown][] = [
+      ['sections', () => findSections(big('\\section{'))],
+      ['figures', () => findFigures(big('\\begin{figure}'))],
+      ['tables', () => findTables(big('\\begin{table}\\caption{'))],
+      ['equations', () => findEquations(big('\\begin{equation}x\n'))],
+      ['acronyms', () => findAcronyms(`\\newacronym${' '.repeat(200_000)}`)],
+    ];
+    for (const [name, run] of runs) {
+      const start = performance.now();
+      run();
+      expect(performance.now() - start, name).toBeLessThan(300);
+    }
   });
 });
 
