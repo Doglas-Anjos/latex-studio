@@ -82,4 +82,10 @@ describe('insertPackagesInput with a multi-line documentclass', () => {
       '\\documentclass{article}\r\n\\input{latex-packages}\r\nx',
     );
   });
+  it('skips a commented line once, not once per \\documentclass on it', () => {
+    const src = `${'%\\documentclass'.repeat(14_000)}\n\\documentclass{article}\nx`;
+    const start = performance.now();
+    expect(insertPackagesInput(src).split('\n')[2]).toBe('\\input{latex-packages}');
+    expect(performance.now() - start).toBeLessThan(300);
+  });
 });

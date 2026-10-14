@@ -53,6 +53,14 @@ function normalize(manifest: unknown): PackageManifest {
     }));
 }
 
+/** The main file's text; 413 past MAX_SCAN_BYTES (the scan skips such files too). */
+async function readMain(files: ProjectFiles, path: string): Promise<string> {
+  const head = await files.readHead(path, MAX_SCAN_BYTES + 1);
+  if (head.length > MAX_SCAN_BYTES)
+    throw new PayloadTooLargeException(`${path} is larger than 1 MB`);
+  return head.toString();
+}
+
 async function writeManifest(
   files: ProjectFiles,
   manifest: PackageManifest,
@@ -80,12 +88,15 @@ export class PackagesService {
       const files = this.storage.open(project.id);
       const next = normalize(manifest);
       const usage = await this.scan(files);
+      // the bypass only runs if the main file loads latex-packages.tex; read before writing anything
+      const bypassed = next.some((e) => !e.enabled && usage.some((u) => u.name === e.name));
+      const main =
+        bypassed && (await files.isFile(project.mainFile))
+          ? await readMain(files, project.mainFile)
+          : null;
       await writeManifest(files, next, usage);
       const paths = [MANIFEST, TEX];
-      // the bypass only runs if the main file loads latex-packages.tex
-      const bypassed = next.some((e) => !e.enabled && usage.some((u) => u.name === e.name));
-      if (bypassed && (await files.isFile(project.mainFile))) {
-        const main = (await files.repo.readFile(project.mainFile)).toString();
+      if (main !== null) {
         const withInput = insertPackagesInput(main);
         if (withInput !== main) {
           await files.write(project.mainFile, withInput);
@@ -103,7 +114,7 @@ export class PackagesService {
       const files = this.storage.open(project.id);
       if (!(await files.isFile(project.mainFile)))
         throw new NotFoundException('Main file not found');
-      const source = (await files.repo.readFile(project.mainFile)).toString();
+      const source = await readMain(files, project.mainFile);
       const { packages, remaining } = extractUsepackages(source);
       if (packages.length === 0) return { moved: 0 };
 

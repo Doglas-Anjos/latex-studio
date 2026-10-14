@@ -65,7 +65,13 @@ function documentclassEnd(source: string): number {
   const re = /\\documentclass/g;
   for (let m = re.exec(source); m; m = re.exec(source)) {
     const lineStart = source.lastIndexOf('\n', m.index) + 1;
-    if (COMMENT_START.test(source.slice(lineStart, m.index))) continue; // commented out
+    if (COMMENT_START.test(source.slice(lineStart, m.index))) {
+      // Commented out, and so is the rest of the line: skip it, or each match rescans the line.
+      const nl = source.indexOf('\n', m.index);
+      if (nl < 0) return -1;
+      re.lastIndex = nl;
+      continue;
+    }
     let i = m.index + m[0].length;
     const skipBlank = () => {
       for (;;) {
