@@ -33,7 +33,8 @@ export async function extractZip(zip: Buffer, files: ProjectFiles, quotaBytes: n
     try {
       // yauzl itself rejects absolute paths and `..` segments here.
       for await (const entry of archive.eachEntry()) {
-        const name = entry.fileName.replaceAll('\\', '/');
+        // macOS zips store names in NFD; SafePath only takes NFC.
+        const name = entry.fileName.replaceAll('\\', '/').normalize('NFC');
         if (name.endsWith('/')) continue;
         if (((entry.externalFileAttributes >>> 16) & S_IFMT) === S_IFLNK) continue;
         // A `.git` directory could plant hooks or config in the project repository.

@@ -57,6 +57,12 @@ describe('extractZip', () => {
     expect(await written()).toEqual(['main.tex']);
   });
 
+  it('normalizes entry names to NFC', async () => {
+    // U+212A KELVIN SIGN is plain K in NFC: SafePath accepts the name only once normalized.
+    await extractZip(await makeZip({ 'Kelvin.tex': 'x' }), files, QUOTA);
+    expect(await written()).toEqual(['Kelvin.tex']);
+  });
+
   it('rejects declared sizes above the quota before writing anything', async () => {
     const zip = await makeZip({ 'a.tex': 'small', 'b.tex': Buffer.alloc(QUOTA + 1) });
     await expect(extractZip(zip, files, QUOTA)).rejects.toThrow(/quota/);
