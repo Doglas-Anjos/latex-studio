@@ -78,7 +78,7 @@ export class ExportService {
       copyName,
       async (to) => {
         for (const { path } of await from.repo.listFiles()) {
-          await to.write(path, await from.repo.readFile(path));
+          await to.writeStream(path, (await from.readStream(path)).stream);
         }
         return `Copy of ${project.name}`;
       },

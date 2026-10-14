@@ -2,7 +2,9 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
+import { buffer } from 'node:stream/consumers';
 import type { AppConfig } from '@latex-studio/core';
+import { NotFoundException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
 import type { UploadPart } from '../../projects/application/project-files';
@@ -45,6 +47,14 @@ describe('FilesService', () => {
   });
 
   afterEach(() => rm(dir, { recursive: true, force: true }));
+
+  it('streams a file with its size and answers 404 for a folder', async () => {
+    await service.create(project, ana, 'dir/a.tex', 'hello');
+    const { stream, size } = await service.read(project, 'dir/a.tex');
+    expect(size).toBe(5);
+    expect((await buffer(stream)).toString()).toBe('hello');
+    await expect(service.read(project, 'dir')).rejects.toBeInstanceOf(NotFoundException);
+  });
 
   it('patches the collaborative doc of every uploaded text file, not binaries', async () => {
     await storage.open(project.id).write('main.tex', 'old');

@@ -19,6 +19,8 @@ export interface ProjectFiles {
   isFile(path: string): Promise<boolean>;
   /** At most the first `maxBytes` of a file. */
   readHead(path: string, maxBytes: number): Promise<Buffer>;
+  /** A regular file as a stream, never held whole in memory; EISDIR for a folder. */
+  readStream(path: string): Promise<{ stream: Readable; size: number }>;
 }
 
 export interface ProjectStorage {

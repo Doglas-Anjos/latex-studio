@@ -81,6 +81,15 @@ export class FsProjectStorage implements ProjectStorage {
           await handle.close();
         }
       },
+      async readStream(path) {
+        const handle = await open(await safe.resolveExisting(path), 'r');
+        const stats = await handle.stat();
+        if (!stats.isFile()) {
+          await handle.close();
+          throw Object.assign(new Error(`Not a file: ${path}`), { code: 'EISDIR' });
+        }
+        return { stream: handle.createReadStream(), size: stats.size };
+      },
       async rename(from, to) {
         const target = await parentInside(to);
         await rename(await safe.resolveExisting(from), target);

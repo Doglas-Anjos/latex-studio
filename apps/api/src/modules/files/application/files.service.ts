@@ -1,5 +1,6 @@
 import { createHash, type Hash } from 'node:crypto';
 import { extname } from 'node:path/posix';
+import type { Readable } from 'node:stream';
 import { APP_CONFIG, type AppConfig } from '@latex-studio/core';
 import {
   BadRequestException,
@@ -79,11 +80,11 @@ export class FilesService {
     return this.storage.open(project.id).repo.listFiles();
   }
 
-  async read(project: Project, path: string): Promise<Uint8Array> {
+  async read(project: Project, path: string): Promise<{ stream: Readable; size: number }> {
     const files = this.storage.open(project.id);
     if (!(await pathExists(files, path))) throw new NotFoundException('File not found');
     try {
-      return await files.repo.readFile(path);
+      return await files.readStream(path);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === 'EISDIR') throw new NotFoundException('Not a file');
       throw e;

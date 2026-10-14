@@ -51,12 +51,13 @@ export class FilesController {
     @CurrentProject() project: Project,
     @Param('*') path: string,
   ): Promise<StreamableFile> {
-    const content = await this.files.read(project, path);
+    const { stream, size: length } = await this.files.read(project, path);
     const type = CONTENT_TYPES[extname(path).toLowerCase()];
-    if (type) return new StreamableFile(content, { type });
-    return new StreamableFile(content, {
+    if (type) return new StreamableFile(stream, { type, length });
+    return new StreamableFile(stream, {
       type: 'application/octet-stream',
       disposition: attachment(basename(path)),
+      length,
     });
   }
 
