@@ -73,6 +73,11 @@ services:
       TOOLS_CONCURRENCY: ${TOOLS_CONCURRENCY:-1}
       COMPILE_TIMEOUT_MS: ${COMPILE_TIMEOUT_MS:-180000}
       COMPILE_MEMORY_MB: ${COMPILE_MEMORY_MB:-1024}
+      # Default to a hard requirement so the worker refuses to start without the bubblewrap sandbox
+      # (bwrap works under this service's cap_drop/no-new-privileges; see sandbox.ts). An operator on
+      # a kernel without unprivileged user namespaces can set COMPILE_SANDBOX=auto in .env.
+      COMPILE_SANDBOX: ${COMPILE_SANDBOX:-require}
+      COMPILE_ALLOW_LUALATEX: ${COMPILE_ALLOW_LUALATEX:-false}
     # Reaps TeX processes orphaned by a timeout kill.
     init: true
     depends_on:

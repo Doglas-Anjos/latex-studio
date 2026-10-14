@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import { APP_CONFIG, type WorkerConfig } from '@latex-studio/core';
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
@@ -58,14 +59,16 @@ export function bwrapArgs(workDir: string, env: Record<string, string | undefine
   return args;
 }
 
-/** True if unprivileged bubblewrap can create a namespace here (kernel/seccomp permitting). */
+/**
+ * True if unprivileged bubblewrap can create a namespace here (kernel/seccomp permitting). Probes
+ * with the real mount set via bwrapArgs: binding only /usr (no /lib64 loader symlink) made even a
+ * working bwrap fail `execvp` with ENOENT, so the sandbox was silently off everywhere.
+ */
 async function probe(): Promise<boolean> {
   try {
-    await run(
-      'bwrap',
-      ['--unshare-all', '--die-with-parent', '--ro-bind', '/usr', '/usr', '--', '/usr/bin/true'],
-      { timeout: 5000 },
-    );
+    await run('bwrap', [...bwrapArgs(tmpdir(), { PATH: process.env.PATH }), '--', '/bin/true'], {
+      timeout: 5000,
+    });
     return true;
   } catch {
     return false;
