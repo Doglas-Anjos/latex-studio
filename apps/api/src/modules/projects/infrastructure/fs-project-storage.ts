@@ -75,8 +75,15 @@ export class FsProjectStorage implements ProjectStorage {
       async readHead(path, maxBytes) {
         const handle = await open(await safe.resolveExisting(path), 'r');
         try {
-          const { buffer, bytesRead } = await handle.read(Buffer.alloc(maxBytes), 0, maxBytes, 0);
-          return buffer.subarray(0, bytesRead);
+          // Sized to the file (not the cap), and looped: one read may return fewer bytes.
+          const buffer = Buffer.alloc(Math.min((await handle.stat()).size, maxBytes));
+          let read = 0;
+          while (read < buffer.length) {
+            const { bytesRead } = await handle.read(buffer, read, buffer.length - read, read);
+            if (bytesRead === 0) break;
+            read += bytesRead;
+          }
+          return buffer.subarray(0, read);
         } finally {
           await handle.close();
         }
