@@ -1,4 +1,4 @@
-import { syntaxTree } from '@codemirror/language';
+import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
 import type { EditorState } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import {
@@ -60,7 +60,7 @@ interface Target {
  */
 export function pickTarget(state: EditorState): Target {
   const sel = state.selection.main;
-  const tree = syntaxTree(state);
+  const tree = ensureSyntaxTree(state, state.doc.length, 50) ?? syntaxTree(state);
   let tabular: { from: number; to: number } | null = null;
   let float: { from: number; to: number } | null = null;
   // Both sides: the caret may sit right before \begin{tabular} or right after \end{tabular}.
