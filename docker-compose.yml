@@ -44,6 +44,11 @@ services:
       context: .
       dockerfile: docker/api/Dockerfile
     env_file: .env
+    # Override .env's NODE_ENV=development: in production the config schema refuses local mode
+    # (no AUTH_*), so a stack missing the verifier config fails loudly at startup instead of
+    # running open.
+    environment:
+      NODE_ENV: production
     logging: *default-logging
     init: true
     depends_on:
