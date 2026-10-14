@@ -475,4 +475,49 @@ describe('BuildPanel compile options menu and auto compile', () => {
     act(() => vi.advanceTimersByTime(3000));
     expect(compile.compile).toHaveBeenCalledTimes(1);
   });
+
+  it('compiles edits made during a build once that build ends', async () => {
+    useSettingsStore.getState().set({ autoCompile: true });
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const running: Build = {
+      id: 'b1',
+      projectId: 'p1',
+      status: 'running',
+      engine: 'pdflatex',
+      mainFile: 'main.tex',
+      commitSha: null,
+      exitCode: null,
+      errors: [],
+      warnings: [],
+      createdAt: new Date().toISOString(),
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+    };
+    const builds = vi.fn().mockResolvedValue([running]);
+    const compile = vi.fn().mockResolvedValue({ ...running, id: 'b2', status: 'queued' });
+    renderWithApp(
+      <BuildPanel projectId="p1" canCompile={true} />,
+      new Container()
+        .register(CompileServiceToken, { builds, compile } as unknown as CompileService)
+        .register(ProjectServiceToken, {
+          get: vi.fn().mockResolvedValue(fakeProject),
+        } as unknown as ProjectService)
+        .register(ToolsServiceToken, {} as unknown as ToolsService)
+        .register(FileServiceToken, {} as unknown as FileService)
+        .register(PackageServiceToken, {
+          get: vi.fn().mockResolvedValue([]),
+          usage: vi.fn().mockResolvedValue([]),
+        } as unknown as PackageService),
+    );
+    await screen.findByRole('button', { name: 'Parar' });
+    act(() => useWorkspaceStore.getState().bumpDocVersion());
+    act(() => vi.advanceTimersByTime(3000));
+    expect(compile).not.toHaveBeenCalled();
+    // The running build finishes; the next poll sees it.
+    builds.mockResolvedValue([{ ...running, status: 'succeeded' }]);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1500);
+    });
+    await waitFor(() => expect(compile).toHaveBeenCalledTimes(1));
+  });
 });

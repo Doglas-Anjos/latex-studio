@@ -152,20 +152,33 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
     onError: showPanel,
   });
   // Auto compile: the editor bumps docVersion on each local edit (remote edits and loads do not);
-  // 3 s after the last one, compile unless a build is already requested or in flight.
-  const docVersion = useWorkspaceStore((s) => s.docVersion);
-  const seenVersion = useRef(docVersion);
+  // 3 s after the last one, compile. While a build is requested or in flight the edits wait and
+  // compile as soon as it ends. Subscribed outside React state: a keystroke re-renders nothing.
+  const waiting = useRef(false);
   const autoFire = useRef(() => {});
   autoFire.current = () => {
     const latest = queryClient.getQueryData<Build[]>(['builds', projectId])?.[0];
-    if (!start.isPending && !isActive(latest)) start.mutate();
+    waiting.current = start.isPending || isActive(latest);
+    if (!waiting.current) start.mutate();
   };
   useEffect(() => {
-    if (!autoCompile || !canCompile || docVersion === seenVersion.current) return;
-    seenVersion.current = docVersion;
-    const id = window.setTimeout(() => autoFire.current(), 3000);
-    return () => window.clearTimeout(id);
-  }, [docVersion, autoCompile, canCompile]);
+    if (!autoCompile || !canCompile) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = useWorkspaceStore.subscribe((s, prev) => {
+      if (s.docVersion === prev.docVersion) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => autoFire.current(), 3000);
+    });
+    return () => {
+      stop();
+      clearTimeout(timer);
+      waiting.current = false;
+    };
+  }, [autoCompile, canCompile]);
+  const busyBuilding = start.isPending || isActive(build);
+  useEffect(() => {
+    if (!busyBuilding && waiting.current) autoFire.current();
+  }, [busyBuilding]);
   const [menuOpen, setMenuOpen] = useState(false);
   const caretRef = useRef<HTMLButtonElement>(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
