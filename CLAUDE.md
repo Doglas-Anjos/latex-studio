@@ -10,7 +10,6 @@ Full architecture plan: see `docs/architecture.md`.
 - `apps/worker`: NestJS standalone app consuming BullMQ (compile, export, wordcount, format).
 - `apps/web`: React + Vite, CodeMirror 6 + y-codemirror.next, PDF.js.
 - `packages/core`: NestJS modules shared by api and worker (config, database, queue, storage).
-- `packages/shared`: DTOs and zod schemas shared across api, worker and web.
 - `packages/latex-tools`, `packages/git-store`: pure classes, no framework imports.
 - Postgres 16 via Drizzle, Redis 7, isomorphic-git (never spawn `git`).
 
@@ -37,7 +36,7 @@ Full architecture plan: see `docs/architecture.md`.
 - Lazy senior dev mode: `.claude/rules/ponytail.md` applies. Minimum code that works; no speculative abstractions.
 - Commits: one line, Conventional Commits, English, imperative, <= 72 chars. No body.
   Examples: `feat(api): add compile queue with per-project dedupe`, `fix(web): keep comment anchors after restore`.
-- Lint/format: Biome. Tests: Vitest (packages, web) and Jest via `@nestjs/testing` (api, worker).
+- Lint/format: Biome. Tests: Vitest everywhere.
 
 ## Agent workflow
 - Orchestrator writes a task brief, routes by risk: Haiku for mechanical specs, Sonnet for modules and components,
