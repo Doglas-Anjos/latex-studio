@@ -49,7 +49,13 @@ const envSchema = baseSchema
     NODE_ENV: optional(z.string()),
     APP_URL: z.url(),
     API_PORT: z.coerce.number().int().positive().default(3000),
-    AUTH_JWKS_URL: optional(z.url()),
+    // The keys that decide who anyone is: never over plain http, except from this machine.
+    AUTH_JWKS_URL: optional(
+      z.url().refine((u) => {
+        const { protocol, hostname } = new URL(u);
+        return protocol === 'https:' || (protocol === 'http:' && hostname === 'localhost');
+      }, 'AUTH_JWKS_URL must be https (http only on localhost)'),
+    ),
     AUTH_SECRET: optional(z.string().min(32)),
     AUTH_ISSUER: optional(z.string().min(1)),
     AUTH_AUDIENCE: optional(z.string().min(1)),

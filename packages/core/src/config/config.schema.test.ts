@@ -47,6 +47,14 @@ describe('loadConfig', () => {
     expect(config.AUTH_AUDIENCE).toBe('latex');
   });
 
+  it('requires an https JWKS URL except on localhost', () => {
+    const pinned = { ...valid, AUTH_ISSUER: 'https://fasorx.example', AUTH_AUDIENCE: 'latex' };
+    const jwks = (url: string) => loadConfig({ ...pinned, AUTH_JWKS_URL: url });
+    expect(() => jwks('http://fasorx.example/jwks.json')).toThrow(/must be https/);
+    expect(() => jwks('ftp://fasorx.example/jwks.json')).toThrow(/must be https/);
+    expect(jwks('http://localhost:8000/jwks.json').AUTH_JWKS_URL).toBeDefined();
+  });
+
   it('leaves the subject graph size automatic unless a count is set', () => {
     expect(loadConfig({ ...valid, SUBJECT_GRAPH_AREAS: '' }).SUBJECT_GRAPH_AREAS).toBeUndefined();
     expect(loadConfig({ ...valid, SUBJECT_GRAPH_AREAS: '10' }).SUBJECT_GRAPH_AREAS).toBe(10);
