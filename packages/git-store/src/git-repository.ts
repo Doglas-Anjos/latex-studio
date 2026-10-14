@@ -41,7 +41,15 @@ export class GitRepository {
   static async init(dir: string): Promise<GitRepository> {
     await fs.promises.mkdir(dir, { recursive: true });
     await git.init({ fs, dir, defaultBranch: 'main' });
+    storedBytesCache.delete(dir); // a size read before the repo existed was 0
     return new GitRepository(dir);
+  }
+
+  /** Commits the index; the history just grew, so its cached size is dropped. */
+  private async commitIndex(message: string, author: Author): Promise<string> {
+    const sha = await git.commit({ fs, dir: this.dir, message, author, committer: author });
+    storedBytesCache.delete(this.dir);
+    return sha;
   }
 
   static open(dir: string): GitRepository {
@@ -133,8 +141,7 @@ export class GitRepository {
       else toAdd.push(filepath);
     }
     await this.add(toAdd);
-    const full = withCoAuthors(message, coAuthors);
-    return git.commit({ fs, dir: this.dir, message: full, author, committer: author });
+    return this.commitIndex(withCoAuthors(message, coAuthors), author);
   }
 
   /**
@@ -290,8 +297,7 @@ export class GitRepository {
     }
     if (toAdd.length + removed === 0) return null;
     await this.add(toAdd);
-    const full = withCoAuthors(message, coAuthors);
-    return git.commit({ fs, dir: this.dir, message: full, author, committer: author });
+    return this.commitIndex(withCoAuthors(message, coAuthors), author);
   }
 
   /** Files that differ between commit `fromSha` (empty tree when null) and the working tree. */

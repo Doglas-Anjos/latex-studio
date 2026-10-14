@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -180,6 +181,17 @@ describe('ProjectsService', () => {
       'Cota de armazenamento da conta excedida (1 MB). Exclua projetos que não usa para liberar espaço.',
   };
   const big = 'x'.repeat(600 * 1024); // each fits the 1 MB project quota, two do not fit 1 MB
+
+  it('counts the history an import adds, with content that does not compress', async () => {
+    const capped = make(1);
+    // ~680 KB of base64 noise: fits as a tree, not with the ~500 KB its commit adds to history
+    // (a history size cached before the repo existed would read 0 here).
+    const noise = randomBytes(500 * 1024).toString('base64');
+    await expect(capped.projects.import(ana, parts('N', { 'n.tex': noise }))).rejects.toMatchObject(
+      over,
+    );
+    expect(await projects.ownedIds(ana.id)).toEqual([]);
+  });
 
   it("caps the owner's storage over all their projects, collaborators' writes included", async () => {
     const capped = make(1);

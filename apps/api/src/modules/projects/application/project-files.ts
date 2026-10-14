@@ -130,12 +130,14 @@ const MEASURE_TTL_MS = 30_000;
 /** usedBytes of project `id` measured now and remembered; minus `replacing` in the result. */
 async function measure(storage: ProjectStorage, id: string, replacing?: string) {
   const files = storage.open(id);
-  // A project whose folder is gone (being deleted right now) holds nothing; it must not turn
-  // every write of its owner into a 500.
+  // A folder not there (a project not created yet, or being deleted, or a file vanishing mid-walk)
+  // counts 0 for this check only: not remembered, and its history size is not read, which would
+  // cache that 0 for 30 s. It must not turn every write of its owner into a 500 either.
   const list = await files.repo.listFiles().catch((e: { code?: string }) => {
-    if (e.code === 'ENOENT') return [];
+    if (e.code === 'ENOENT') return null;
     throw e;
   });
+  if (!list) return 0;
   const bytes = treeBytes(list) + (await files.repo.storedBytes());
   if (measured.size > 10_000) measured.clear();
   measured.set(id, { bytes, at: Date.now() });
