@@ -123,13 +123,36 @@ export const accountQuotaExceeded = (mb?: number) =>
     `Cota de armazenamento da conta excedida (${mb} MB). Exclua projetos que não usa para liberar espaço.`,
   );
 
+/** usedBytes per project id as accountRoom last measured it, read by its siblings' checks. */
+const measured = new Map<string, { bytes: number; at: number }>();
+const MEASURE_TTL_MS = 30_000;
+
+/** usedBytes of project `id` measured now and remembered; minus `replacing` in the result. */
+async function measure(storage: ProjectStorage, id: string, replacing?: string) {
+  const files = storage.open(id);
+  // A project whose folder is gone (being deleted right now) holds nothing; it must not turn
+  // every write of its owner into a 500.
+  const list = await files.repo.listFiles().catch((e: { code?: string }) => {
+    if (e.code === 'ENOENT') return [];
+    throw e;
+  });
+  const bytes = treeBytes(list) + (await files.repo.storedBytes());
+  if (measured.size > 10_000) measured.clear();
+  measured.set(id, { bytes, at: Date.now() });
+  return bytes - treeBytes(list.filter((f) => f.path === replacing));
+}
+
 /**
  * Bytes the owner of `project` may still store under USER_QUOTA_MB (`mb`), counted over every
  * project they own: what collaborators write counts against the owner. Infinity when `mb` is
  * unset. `replacing` is a file of `project` about to be overwritten.
- * ponytail: rescans every owned project on each write (tree walk; storedBytes is cached 30 s),
- * and writes to two projects of one owner can pass at once (the lock is per project). Fine at
- * 50 MB; keep a usage column on users, updated on write, if owners hold many or large projects.
+ * `project` is measured fresh and first; the others come from their last measure, up to 30 s
+ * old, so a write walks one tree instead of all of them. Of two concurrent checks the later
+ * reads the earlier's fresh entry: of writers racing on one account, the last to check after
+ * writing sees every write.
+ * ponytail: the cache is per process, and autosave and history bytes reach it only on the next
+ * measure, so writes through other replicas or within 30 s can overshoot by what the rate limits
+ * allow. Keep a usage column on users, updated on write, if that matters.
  */
 export async function accountRoom(
   projects: ProjectRepository,
@@ -139,16 +162,11 @@ export async function accountRoom(
   replacing?: string,
 ): Promise<number> {
   if (!mb) return Number.POSITIVE_INFINITY;
-  let left = megabytes(mb);
+  let left = megabytes(mb) - (await measure(storage, project.id, replacing));
   for (const id of await projects.ownedIds(project.ownerId)) {
-    // A project whose folder is gone (being deleted right now) holds nothing; it must not turn
-    // every write of its owner into a 500.
-    left -= await usedBytes(storage.open(id), id === project.id ? replacing : undefined).catch(
-      (e: { code?: string }) => {
-        if (e.code === 'ENOENT') return 0;
-        throw e;
-      },
-    );
+    if (id === project.id) continue;
+    const hit = measured.get(id);
+    left -= hit && Date.now() - hit.at < MEASURE_TTL_MS ? hit.bytes : await measure(storage, id);
   }
   return left;
 }
@@ -165,6 +183,10 @@ export async function assertAccountQuota(
   if (incomingBytes > (await accountRoom(projects, storage, mb, project, replacing))) {
     throw accountQuotaExceeded(mb);
   }
+  // Siblings read this entry for 30 s: count what is about to be written (over-counts a replaced
+  // file until the next measure, which errs on the safe side).
+  const hit = measured.get(project.id);
+  if (hit) hit.bytes += incomingBytes;
 }
 
 /**

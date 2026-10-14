@@ -4,13 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Readable } from 'node:stream';
 import type { AppConfig } from '@latex-studio/core';
+import { GitRepository } from '@latex-studio/git-store';
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   PayloadTooLargeException,
 } from '@nestjs/common';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
 import { FilesService } from '../../files/application/files.service';
 import type { User } from '../../users/domain/user';
@@ -198,6 +199,30 @@ describe('ProjectsService', () => {
     await uncapped.files.upload(c, parts('', { 'fig.png': big }));
     await uncapped.projects.import(ana, parts('B', { 'b.tex': big }));
     expect(await projects.ownedIds(ana.id)).toHaveLength(3);
+  });
+
+  it('walks only the written project for the account quota, its siblings come from a cache', async () => {
+    const config = {
+      REPOS_DIR: dir,
+      BUILDS_DIR: join(dir, 'builds'),
+      PROJECT_QUOTA_MB: 1,
+      USER_QUOTA_MB: 1,
+      MAX_PROJECTS_PER_USER: 5,
+    } as AppConfig;
+    const lock = new ProjectLock();
+    const capped = new ProjectsService(projects, storage, lock, config);
+    const files = new FilesService(storage, lock, config, new FakeDocumentSync(), projects);
+    const a = await capped.create(ana, 'A');
+    await capped.create(ana, 'B');
+    const listed = vi.spyOn(GitRepository.prototype, 'listFiles');
+    try {
+      await files.create(a, ana, 'x.tex', 'x');
+      const dirs = listed.mock.contexts.map((repo) => (repo as unknown as { dir: string }).dir);
+      expect(dirs.length).toBeGreaterThan(0);
+      expect(dirs.every((d) => d.endsWith(a.id))).toBe(true);
+    } finally {
+      listed.mockRestore();
+    }
   });
 
   it('serializes mutations per project: two concurrent creates of one path give one 409', async () => {
