@@ -11,7 +11,7 @@ import { RequireAuth } from './guards';
 
 afterEach(cleanup);
 
-it('shows the 401 message instead of redirecting again when the login breaker is open', async () => {
+it('shows what the API client said on 401 and leaves the redirect to it', async () => {
   const identity = {
     enabled: true,
     watch: () => () => {},
@@ -26,8 +26,29 @@ it('shows the 401 message instead of redirecting again when the login breaker is
     new Container().register(IdentityToken, identity).register(AuthServiceToken, auth),
   );
   expect(await screen.findByText('Sessão não confirmada')).toBeTruthy();
-  expect(identity.goToLoginGuarded).toHaveBeenCalled();
+  expect(identity.goToLoginGuarded).not.toHaveBeenCalled();
   expect(identity.goToLogin).not.toHaveBeenCalled();
+});
+
+it('goes straight to login, with no breaker, when FasorX says the session ended', async () => {
+  let signedOut = () => {};
+  const identity = {
+    enabled: true,
+    watch: (cb: () => void) => {
+      signedOut = cb;
+      return () => {};
+    },
+    goToLogin: vi.fn(),
+    goToLoginGuarded: vi.fn(() => true),
+  } as unknown as FasorxIdentity;
+  const auth = { me: vi.fn(() => new Promise(() => {})) } as unknown as AuthService;
+  renderWithApp(
+    <RequireAuth />,
+    new Container().register(IdentityToken, identity).register(AuthServiceToken, auth),
+  );
+  signedOut();
+  expect(identity.goToLogin).toHaveBeenCalled();
+  expect(identity.goToLoginGuarded).not.toHaveBeenCalled();
 });
 
 it('offers a retry when the session cannot be loaded (FasorX or the API down)', async () => {

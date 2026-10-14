@@ -92,11 +92,20 @@ export class ApiClient {
 
   private async send(path: string, init: RequestInit): Promise<Response> {
     const res = await fetch(this.base + path, init);
-    if (res.status === 401 && this.identity.enabled && !this.identity.goToLoginGuarded()) {
-      throw new ApiError(
-        401,
-        'Sua sessão no FasorX está ativa, mas esta aplicação não conseguiu confirmá-la. Tente de novo em instantes.',
-      );
+    if (res.status === 401 && this.identity.enabled) {
+      // No token to send: FasorX itself said there is no session. Its login only sends people
+      // back once they have one, so there is no loop to break: always go.
+      if (!(init.headers as Record<string, string> | undefined)?.Authorization) {
+        this.identity.goToLogin();
+      } else if (!this.identity.goToLoginGuarded()) {
+        // A token FasorX just issued and this API refuses (JWKS down, clock skew): logging in
+        // again brings another one it refuses, so the breaker stops at the second time.
+        throw new ApiError(
+          401,
+          'Sua sessão no FasorX está ativa, mas esta aplicação não conseguiu confirmá-la. Tente de novo em instantes.',
+        );
+      }
+      throw new ApiError(401, 'Entrando…');
     }
     return res;
   }

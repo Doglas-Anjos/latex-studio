@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useMe } from '../auth-hooks';
 import { useService } from '../di/service-provider';
 import { ApiError } from '../services/api-client';
@@ -9,15 +9,13 @@ import { Layout } from './layout';
 export function RequireAuth() {
   const identity = useService(IdentityToken);
   const { data: user, error, isPending, isFetching, refetch } = useMe();
-  // Guarded: a login page that bounces straight back would otherwise loop forever.
-  useEffect(() => identity.watch(() => identity.goToLoginGuarded()), [identity]);
-  const unauthorized = error instanceof ApiError && error.status === 401 && identity.enabled;
-  const [stuck, setStuck] = useState(false);
-  useEffect(() => {
-    if (unauthorized && !identity.goToLoginGuarded()) setStuck(true);
-  }, [unauthorized, identity]);
+  // FasorX says the session ended: straight to its login, no breaker (it only sends people back
+  // once they have a session, so there is no loop; the breaker here read a fresh login as one).
+  useEffect(() => identity.watch(() => identity.goToLogin()), [identity]);
   if (isPending) return <p className="status-note">Carregando…</p>;
-  if (unauthorized) return <p className="status-note">{stuck ? error.message : 'Entrando…'}</p>;
+  // The API client already went to log in ("Entrando…"), or says why it did not.
+  if (error instanceof ApiError && error.status === 401 && identity.enabled)
+    return <p className="status-note">{error.message}</p>;
   // FasorX or the API down for a moment: a retry here beats reloading the page.
   if (error || !user)
     return (
