@@ -90,7 +90,7 @@ Esquema Drizzle em `packages/core/src/database/schema`: usuários, projetos e me
 
 ## Segurança
 
-- **Identidade**: sem login próprio. A aplicação da frente (FasorX) assina um JWT curto, enviado em `Authorization: Bearer`; a API fixa o algoritmo, confere `iss`/`aud`/`exp` e um teto de validade, e cria o usuário na primeira visita. O token fica só em memória no navegador, nunca em URL. Sem verificador configurado, modo local, aceito só quando `APP_URL` é localhost.
+- **Identidade**: sem login próprio. A aplicação da frente (FasorX) assina um JWT curto, enviado em `Authorization: Bearer`; a API fixa o algoritmo, confere `iss`/`aud`/`exp` e um teto de validade, e cria o usuário na primeira visita. O token fica só em memória no navegador, nunca em URL. Sem verificador configurado, modo local, aceito só com `APP_URL` em localhost e fora de `NODE_ENV=production`; nesse modo a API escuta só em loopback.
 - **Rate limit** (`@fastify/rate-limit`): 300/min por IP como base, mais limites por rota (compile, upload, importação).
 - **Autorização** por papel em toda rota de projeto.
 - **Caminhos**: todo caminho vindo do usuário passa por `SafePath` (rejeita `..`, absolutos e symlinks; `realpath` dentro do diretório do projeto).

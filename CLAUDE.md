@@ -27,7 +27,8 @@ Full architecture plan: see `docs/architecture.md`.
 - Zip import: zip-slip check, entry/size caps, drop any `.git/` entry.
 - Compile: `latexmk -no-shell-escape`, timeout, memory and pid limits; no internet egress, but TeX runs as the worker uid on the internal network (reaches Postgres/Redis).
 - No login of its own: the application in front (FasorX) signs a short JWT; `IdentityGuard` verifies it (`jose`, algorithm pinned by config, `iss`/`aud`, max lifetime) and a `ProjectRoleGuard` checks the role. Rate limits on compile and upload.
-- Local mode (no verifier) is only accepted when `APP_URL` is localhost; the config schema enforces it.
+- Local mode (no verifier) is only accepted when `APP_URL` is localhost and `NODE_ENV` is not production
+  (the config schema enforces it); the API then listens on loopback only.
 - WebSocket upgrades bypass Nest guards: the Hocuspocus `onAuthenticate` hook must verify the bearer token (provider `token`) and the `Origin` header itself.
 - Downloads go through fetch with the bearer header; never put the token in a URL.
 - Secrets only via env; `.env` is gitignored; `.env.example` lists every variable.

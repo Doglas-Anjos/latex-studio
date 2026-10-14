@@ -16,3 +16,4 @@ Thumbs.db
 .worktrees/
 tmp-*.png
 .claude/settings.local.json
+.claude/worktrees/
