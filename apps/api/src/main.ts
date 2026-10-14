@@ -100,7 +100,11 @@ async function bootstrap() {
       });
     });
 
-  await app.listen(config.API_PORT, '0.0.0.0');
+  // Local mode trusts any request addressed to localhost, so it must not be reachable from the
+  // network at all: loopback only ('localhost' binds 127.0.0.1 and ::1), which also leaves a
+  // proxy in another container (Caddy) unable to reach it.
+  const verifier = config.AUTH_JWKS_URL || config.AUTH_SECRET;
+  await app.listen(config.API_PORT, verifier ? '0.0.0.0' : 'localhost');
 }
 
 void bootstrap();

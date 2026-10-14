@@ -40,11 +40,13 @@ const optionalCount = z.preprocess(
 /**
  * Identity comes from the application in front (FasorX) as a signed JWT in `Authorization`.
  * Without a verifier (neither AUTH_JWKS_URL nor AUTH_SECRET) the API runs in local mode: every
- * request is the local user. That is only allowed when APP_URL is localhost, so a published
- * install cannot be left open by forgetting a variable.
+ * request is the local user. That is only allowed when APP_URL is localhost and NODE_ENV is not
+ * production, so a published install cannot be left open by forgetting a variable (a reverse
+ * proxy on the same host would otherwise hand it to anyone: nginx sends `Host: localhost`).
  */
 const envSchema = baseSchema
   .extend({
+    NODE_ENV: optional(z.string()),
     APP_URL: z.url(),
     API_PORT: z.coerce.number().int().positive().default(3000),
     AUTH_JWKS_URL: optional(z.url()),
@@ -62,9 +64,16 @@ const envSchema = baseSchema
     SUBJECT_GRAPH_AREAS: optionalCount,
     SUBJECT_GRAPH_TERMS: optionalCount,
   })
-  .refine((c) => c.AUTH_JWKS_URL || c.AUTH_SECRET || new URL(c.APP_URL).hostname === 'localhost', {
-    message: 'AUTH_JWKS_URL or AUTH_SECRET is required unless APP_URL is localhost',
-  })
+  .refine(
+    (c) =>
+      c.AUTH_JWKS_URL ||
+      c.AUTH_SECRET ||
+      (new URL(c.APP_URL).hostname === 'localhost' && c.NODE_ENV !== 'production'),
+    {
+      message:
+        'AUTH_JWKS_URL or AUTH_SECRET is required unless APP_URL is localhost and NODE_ENV is not production',
+    },
+  )
   // The same key signs tokens for every app of that issuer: pin who signs and for whom.
   .refine((c) => !(c.AUTH_JWKS_URL || c.AUTH_SECRET) || (c.AUTH_ISSUER && c.AUTH_AUDIENCE), {
     message: 'AUTH_ISSUER and AUTH_AUDIENCE are required with a verifier',
