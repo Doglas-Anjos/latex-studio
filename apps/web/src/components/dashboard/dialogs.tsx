@@ -287,7 +287,10 @@ export function RemoveDialog({
 function errorText(e: Error) {
   const status = (e as { status?: number }).status;
   if (status === 409) return 'Limite de projetos atingido';
-  if (status === 413) return 'Cota de armazenamento excedida';
+  // The account quota's own message says how to free space; other 413s (project quota, upload
+  // size) come in English from the API.
+  if (status === 413)
+    return e.message.startsWith('Cota ') ? e.message : 'Cota de armazenamento excedida';
   if (status === 400) return `Requisição inválida: ${e.message}`;
   return e.message;
 }
