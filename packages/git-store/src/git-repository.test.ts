@@ -105,6 +105,10 @@ it('blames lines like git blame, with null for uncommitted lines', async () => {
   expect(Object.keys(commits).sort()).toEqual([c1, c2, c3].sort());
   expect(commits[c3]?.author.name).toBe('Bruno');
   expect(commits[c1]?.author.name).toBe('Ana');
+
+  // A new HEAD replaces the cached history of the file instead of serving the old one.
+  const c4 = (await repo.commitAll('c4', ana)) as string;
+  expect((await repo.blame('m.tex')).lines.at(-1)).toEqual({ from: 5, to: 5, sha: c4 });
 });
 
 it('commitPaths commits only the given paths with co-author trailers', async () => {

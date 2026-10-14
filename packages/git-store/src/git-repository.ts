@@ -14,20 +14,15 @@ export type Blame = {
 const MAX_BLAME_CHARS = 1024 * 1024;
 /** One deadline for all the diffs of a blame request; the API is single-threaded. */
 const BLAME_DIFF_BUDGET_MS = 1000;
-/** Commits + texts per `${head}:${path}`, the costly part that does not depend on the working tree. */
-const blameCache = new Map<string, Promise<{ oids: string[]; texts: string[] }>>();
+type BlameHistory = { oids: string[]; texts: string[] };
+/** Texts kept across all cached blames; one blame can hold up to 100 versions of 1 MB. */
+const MAX_CACHED_BLAME_CHARS = 64 * 1024 * 1024;
+/**
+ * Commits + texts per `${dir}:${path}` at `head`, the costly part that does not depend on the
+ * working tree. One entry per file (a new HEAD replaces it), newest kept within the char budget.
+ */
+const blameCache = new Map<string, { head: string; chars: number; value: Promise<BlameHistory> }>();
 const storedBytesCache = new Map<string, { bytes: number; at: number }>();
-const remember = <T>(cache: Map<string, Promise<T>>, key: string, make: () => Promise<T>) => {
-  const hit = cache.get(key);
-  if (hit) return hit;
-  if (cache.size >= 200) cache.clear();
-  const value = make().catch((e) => {
-    cache.delete(key);
-    throw e;
-  });
-  cache.set(key, value);
-  return value;
-};
 const SYMLINK_MODE = 0o120000;
 
 const dec = new TextDecoder();
@@ -299,27 +294,7 @@ export class GitRepository {
       throw new Error('File too large to blame');
     }
     const current = dec.decode(await this.readFile(path));
-    const head = (await this.head()) ?? '';
-    const { oids, texts } = await remember(blameCache, `${this.dir}:${head}:${path}`, async () => {
-      const cache = {};
-      // force:false stops at the file's creation; a never-committed file has no history at all.
-      const log = await git
-        .log({ fs, dir: this.dir, filepath: path, depth: maxCommits, cache })
-        .catch((e: { code?: string }) => {
-          if (e.code === 'NotFoundError') return [];
-          throw e;
-        });
-      const texts: string[] = [];
-      for (const c of log) {
-        const blob = await git
-          .readBlob({ fs, dir: this.dir, oid: c.oid, filepath: path, cache })
-          .then((r) => r.blob)
-          .catch(() => null);
-        if (blob && blob.length > MAX_BLAME_CHARS) throw new Error('File too large to blame');
-        texts.push(blob ? dec.decode(blob) : '');
-      }
-      return { oids: log.map((c) => c.oid), texts };
-    });
+    const { oids, texts } = await this.blameHistory(path, maxCommits);
     const commits = await this.commitsByOid(oids);
     const deadline = Date.now() + BLAME_DIFF_BUDGET_MS;
     const owner: Array<string | null> = Array(countLines(current)).fill(null);
@@ -382,6 +357,52 @@ export class GitRepository {
       if (c) used[sha] = c;
     }
     return { commits: used, lines };
+  }
+
+  private async blameHistory(path: string, maxCommits: number): Promise<BlameHistory> {
+    const key = `${this.dir}:${path}`;
+    const head = (await this.head()) ?? '';
+    const hit = blameCache.get(key);
+    const entry =
+      hit?.head === head ? hit : { head, chars: 0, value: this.readHistory(path, maxCommits) };
+    blameCache.delete(key); // (re)inserted as the most recent
+    blameCache.set(key, entry);
+    if (entry === hit) return entry.value;
+    try {
+      const history = await entry.value;
+      entry.chars = history.texts.reduce((n, t) => n + t.length, 0);
+      // Most recent first; whatever does not fit is dropped, this entry included.
+      let total = 0;
+      for (const [k, e] of [...blameCache].reverse()) {
+        if (total + e.chars > MAX_CACHED_BLAME_CHARS) blameCache.delete(k);
+        else total += e.chars;
+      }
+      return history;
+    } catch (e) {
+      if (blameCache.get(key) === entry) blameCache.delete(key);
+      throw e;
+    }
+  }
+
+  private async readHistory(path: string, maxCommits: number): Promise<BlameHistory> {
+    const cache = {};
+    // force:false stops at the file's creation; a never-committed file has no history at all.
+    const log = await git
+      .log({ fs, dir: this.dir, filepath: path, depth: maxCommits, cache })
+      .catch((e: { code?: string }) => {
+        if (e.code === 'NotFoundError') return [];
+        throw e;
+      });
+    const texts: string[] = [];
+    for (const c of log) {
+      const blob = await git
+        .readBlob({ fs, dir: this.dir, oid: c.oid, filepath: path, cache })
+        .then((r) => r.blob)
+        .catch(() => null);
+      if (blob && blob.length > MAX_BLAME_CHARS) throw new Error('File too large to blame');
+      texts.push(blob ? dec.decode(blob) : '');
+    }
+    return { oids: log.map((c) => c.oid), texts };
   }
 
   private async commitsByOid(oids: string[]): Promise<Map<string, Blame['commits'][string]>> {
