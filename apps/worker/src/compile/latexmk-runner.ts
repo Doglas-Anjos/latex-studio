@@ -164,8 +164,8 @@ export class LatexmkRunner {
 }
 
 /**
- * Wraps the command in `prlimit --as=<bytes>` so latexmk and every TeX child share one address-space
- * cap (COMPILE_MEMORY_MB). Linux only; prlimit does not exist on Windows/macOS dev, so there the
+ * Wraps the command in `prlimit --as=<bytes>` so latexmk and every TeX child inherit an
+ * address-space cap of COMPILE_MEMORY_MB each (per process; the container mem_limit bounds the sum). Linux only; prlimit does not exist on Windows/macOS dev, so there the
  * command runs unwrapped. prlimit itself is found via PATH, like the wrapped command.
  */
 export function withMemoryLimit(

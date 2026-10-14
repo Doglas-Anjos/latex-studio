@@ -206,6 +206,21 @@ describe.skipIf(!latexmkAvailable)('LaTeX compile regressions', () => {
     if (fixture === 'bibtex') expect(existsSync(join(dir, 'out', 'main.ind'))).toBe(true);
   });
 
+  // latexmk used to hand bib names to kpsewhich through a shell (`open "$cmd|"`), so `$(...)` in a
+  // \bibliography name ran as the worker. NO_SHELL must keep it a plain (missing) file name.
+  it('never runs shell syntax from a bibliography name', async () => {
+    const dir = await project('bibtex', (d) =>
+      writeFile(
+        join(d, 'main.tex'),
+        '\\documentclass{article}\n\\begin{document}\nx\\cite{knuth}\n' +
+          '\\bibliographystyle{plain}\n\\bibliography{a$(>pwned)}\n\\end{document}\n',
+      ),
+    );
+    await compile(dir, 'pdflatex', { haltOnError: false });
+    expect(existsSync(join(dir, 'pwned'))).toBe(false);
+    expect(existsSync(join(dir, 'out', 'pwned'))).toBe(false);
+  });
+
   // Was broken on MiKTeX when draft went through -usepretex (backslashes stripped).
   it('compiles in draft mode, keeping the main file name for the outputs', async () => {
     const r = await compile(await project('glue'), 'pdflatex', { draft: true });

@@ -120,6 +120,8 @@ export class Sandbox implements OnApplicationBootstrap {
   ): { file: string; args: string[]; env: Record<string, string | undefined> } {
     if (!this.active) return { file: cmd, args, env };
     // The outer process only needs PATH to find bwrap; everything else is set inside the sandbox.
+    // Never forward process.env here: bwrap's own env is readable inside as /proc/1/environ, so
+    // DATABASE_URL/REDIS_URL would leak to TeX.
     return {
       file: 'bwrap',
       args: [...bwrapArgs(workDir, env), '--', cmd, ...args],
