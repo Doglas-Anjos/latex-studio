@@ -261,7 +261,11 @@ export class GitRepository {
     const toAdd: string[] = [];
     let removed = 0;
     for (const filepath of paths) {
-      const content = await fs.promises.readFile(join(this.dir, filepath)).catch(() => null);
+      // Only a missing file is a deletion; any other error (EMFILE, EACCES) must not remove it.
+      const content = await fs.promises.readFile(join(this.dir, filepath)).catch((e) => {
+        if (e.code === 'ENOENT' || e.code === 'ENOTDIR') return null;
+        throw e;
+      });
       const inHead = head ? await this.blobOid(head, filepath, cache) : null;
       const now = content ? (await git.hashBlob({ object: content })).oid : null;
       if (now === inHead) continue;

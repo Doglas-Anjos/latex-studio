@@ -138,6 +138,12 @@ it('commitPaths commits only the given paths with co-author trailers', async () 
   expect(head?.author).toEqual(bruno);
   expect(head?.message).toBe('Update a.tex\n\nCo-authored-by: Ana <ana@example.com>');
   expect(await repo.workingChanges(head?.sha ?? null)).toEqual([{ path: 'b.tex', type: 'modify' }]);
+
+  // A read error other than "missing" fails the commit instead of recording a deletion.
+  await repo.deleteFile('a.tex');
+  await repo.writeFile('a.tex/x', '');
+  await expect(repo.commitPaths(['a.tex'], 'oops', bruno)).rejects.toMatchObject({ code: 'EISDIR' });
+  expect((await repo.log(1))[0]?.sha).toBe(head?.sha);
 });
 
 it('fileLog lists only the commits that changed a given file', async () => {
