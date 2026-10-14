@@ -15,4 +15,9 @@ describe('isSuperadmin', () => {
     expect(isSuperadmin('local@localhost', cfg(undefined))).toBe(true);
     expect(isSuperadmin('anyone@uni.edu', cfg(''))).toBe(false);
   });
+
+  it('ignores the local e-mail when a verifier is configured (a token can claim it)', () => {
+    const verified = { AUTH_SECRET: 's'.repeat(32) } as never;
+    expect(isSuperadmin('Local@Localhost', verified)).toBe(false);
+  });
 });
