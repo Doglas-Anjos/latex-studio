@@ -50,8 +50,9 @@ export class HocuspocusDocumentSync implements DocumentSync {
 
   /** Minimal prefix/suffix diff, so positions outside the changed span (comment anchors) survive. */
   async replaceText(projectId: string, path: string, text: string): Promise<void> {
-    // Over the doc cap (an upload, a restore): drop the doc instead; loading it is refused too.
-    if (text.length > MAX_DOC_CHARS) return this.forget(projectId, path);
+    // Over the doc cap (an upload, a restore): drop the doc instead; loading it is refused too
+    // (in bytes, like `load`, so multi-byte text cannot slip past and then outgrow the state cap).
+    if (Buffer.byteLength(text) > MAX_DOC_CHARS) return this.forget(projectId, path);
     const doc = this.hocuspocus.documents.get(`${projectId}/${path}`);
     if (doc) return patchText(doc, text);
     // Not open: patch the saved state rather than dropping it, so a client that reconnects with

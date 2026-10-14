@@ -119,6 +119,9 @@ export class CollabService {
    */
   store(projectId: string, path: string, doc: Y.Doc): Promise<number> {
     return this.lock.run(projectId, async () => {
+      // Dropped while waiting (an upload/restore over the cap, a rename or delete): a destroyed doc
+      // still encodes its old text, which would overwrite what that turn just wrote.
+      if (doc.isDestroyed) return 0;
       // Snapshot both the instant this turn starts, before any await: a store queued behind a
       // `commitFile` (or another store) must persist what the doc holds right now, never a value
       // captured earlier while waiting its turn, which could by now be older than what an earlier

@@ -151,4 +151,22 @@ describe('CollabService', () => {
     Y.applyUpdate(loaded, (await collab.load(projectId, 'main.tex')) as Uint8Array);
     expect(loaded.getText('content').toString()).toBe('AB');
   });
+
+  it('skips a store whose doc was dropped while it waited for the lock', async () => {
+    const doc = new Y.Doc();
+    doc.getText('content').insert(0, 'old text');
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    // An upload holds the lock, writes the new file and drops the doc (over the size cap).
+    const upload = lock.run(projectId, async () => {
+      await gate;
+      await storage.open(projectId).write('main.tex', 'uploaded');
+      doc.destroy();
+    });
+    const storeDone = collab.store(projectId, 'main.tex', doc);
+    release();
+    await upload;
+    expect(await storeDone).toBe(0);
+    expect(await readFile(join(dir, projectId, 'main.tex'), 'utf8')).toBe('uploaded');
+  });
 });
