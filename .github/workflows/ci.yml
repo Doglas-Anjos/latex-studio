@@ -93,11 +93,24 @@ jobs:
       APP_HOST: latex.fasorx.com.br
       FASORX: https://fasorx.com.br
     steps:
+      # Runs queue one at a time but not in order: a run for an older commit that reaches this
+      # job last must not redeploy older code.
+      - name: Skip if main moved on
+        id: head
+        run: |
+          latest=$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | cut -f1)
+          if [ "$latest" != "$GITHUB_SHA" ]; then
+            echo "::notice::main is at $latest now; its own run publishes it."
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.head.outputs.stale != 'true'
         with:
           persist-credentials: false
 
       - name: Prepare SSH
+        if: steps.head.outputs.stale != 'true'
         env:
           KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
@@ -116,6 +129,7 @@ jobs:
             { echo "::error::SSH_KNOWN_HOSTS has no entry for this server."; exit 1; }
 
       - name: Write the server .env
+        if: steps.head.outputs.stale != 'true'
         env:
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
@@ -127,7 +141,8 @@ jobs:
             [[ "${!v}" =~ ^[A-Za-z0-9]{24,}$ ]] ||
               { echo "::error::$v must be 24+ letters/digits (openssl rand -hex 32)."; exit 1; }
           done
-          [ -n "$SUPER_ADMIN_EMAIL" ] || { echo "::error::Missing the SUPER_ADMIN_EMAIL secret."; exit 1; }
+          [[ "$SUPER_ADMIN_EMAIL" =~ ^[A-Za-z0-9._%+@,-]+$ ]] ||
+            { echo "::error::SUPER_ADMIN_EMAIL must be e-mails separated by commas, no spaces."; exit 1; }
           umask 077
           cat > /tmp/latex-studio.env <<EOF
           NODE_ENV=production
@@ -154,19 +169,23 @@ jobs:
           EOF
 
       - name: Send and publish
+        if: steps.head.outputs.stale != 'true'
         env:
           TARGET: ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}
           PORT: ${{ secrets.VPS_PORT }}
         run: |
           git archive --format=tar.gz -o /tmp/latex-studio.tgz HEAD
+          # Only the known_hosts entry is trusted, and nothing ever waits for a prompt.
+          opts=(-i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes -o BatchMode=yes)
           # The .env goes as a file, never as a remote command argument that `ps` would show.
-          scp -P "$PORT" -i ~/.ssh/id_deploy /tmp/latex-studio.tgz /tmp/latex-studio.env \
+          scp -P "$PORT" "${opts[@]}" /tmp/latex-studio.tgz /tmp/latex-studio.env \
             scripts/deploy-fasorx.sh "$TARGET:/tmp/"
           shred -u /tmp/latex-studio.env
-          ssh -p "$PORT" -i ~/.ssh/id_deploy "$TARGET" bash -s <<'REMOTE'
+          ssh -p "$PORT" "${opts[@]}" "$TARGET" bash -s <<'REMOTE'
           set -e
           mkdir -p /srv/latex-studio
-          install -m 600 /tmp/latex-studio.env /srv/latex-studio/.env
+          # .env.next: the script makes it the new .env, so a rollback keeps the previous one.
+          install -m 600 /tmp/latex-studio.env /srv/latex-studio/.env.next
           shred -u /tmp/latex-studio.env
           trap 'rm -f /tmp/deploy-fasorx.sh' EXIT
           bash /tmp/deploy-fasorx.sh /tmp/latex-studio.tgz

@@ -1,8 +1,11 @@
 {
     # Proxies in front whose X-Forwarded-For is believed. Default: none (Caddy faces clients).
-    # Behind the FasorX host Caddy, docker-compose.fasorx.yml sets private_ranges.
+    # Behind the FasorX host Caddy, docker-compose.fasorx.yml sets private_ranges; that proxy must
+    # replace the header (header_up X-Forwarded-For {client_ip}). Strict reads it right to left,
+    # so an entry the client sent itself is never taken as its address.
     servers {
         trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1/32}
+        trusted_proxies_strict
     }
 }
 
