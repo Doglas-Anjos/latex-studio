@@ -403,7 +403,8 @@ export class GitRepository {
     if (entry === hit) return entry.value;
     try {
       const history = await entry.value;
-      entry.chars = history.texts.reduce((n, t) => n + t.length, 0);
+      // Plus a per-entry overhead, so empty histories (never-committed files) still count.
+      entry.chars = history.texts.reduce((n, t) => n + t.length, 1024 + 64 * history.oids.length);
       // Most recent first; whatever does not fit is dropped, this entry included.
       let total = 0;
       for (const [k, e] of [...blameCache].reverse()) {
@@ -428,11 +429,11 @@ export class GitRepository {
       });
     const texts: string[] = [];
     for (const c of log) {
-      const blob = await git
-        .readBlob({ fs, dir: this.dir, oid: c.oid, filepath: path, cache })
-        .then((r) => r.blob)
-        .catch(() => null);
-      if (blob && blob.length > MAX_BLAME_CHARS) throw new Error('File too large to blame');
+      // Capped while inflating, so an oversized old version is never held whole.
+      const blob = await this.readFileAt(c.oid, path, MAX_BLAME_CHARS).catch((e: Error) => {
+        if (e.message === 'File too large') throw new Error('File too large to blame');
+        return null;
+      });
       texts.push(blob ? dec.decode(blob) : '');
     }
     return { oids: log.map((c) => c.oid), texts };

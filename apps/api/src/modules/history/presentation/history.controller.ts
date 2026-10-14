@@ -75,6 +75,8 @@ export class HistoryController {
   }
 
   @Get('file')
+  // Each read may hold up to MAX_UPLOAD_MB in memory.
+  @RouteConfig({ rateLimit: { max: 60, timeWindow: '1 minute' } })
   @RequireProjectRole('viewer')
   @Header('X-Content-Type-Options', 'nosniff')
   @Header('Content-Security-Policy', 'sandbox')

@@ -116,7 +116,12 @@ export class HistoryService {
       // Open docs may hold edits younger than the 2-10s store debounce.
       if (!paths) await this.sync.flushProject(project.id);
       for (const path of paths ?? []) await this.sync.flush(project.id, path);
-      const sha = await commitAs(this.projects, files, project.id, user, message, paths ?? null);
+      const sha = await commitAs(this.projects, files, project.id, user, message, paths ?? null)
+        // A selected path that is now a folder is the request's fault, not a server error.
+        .catch((e: { code?: string }) => {
+          if (e.code === 'EISDIR') throw new BadRequestException('Not a file');
+          throw e;
+        });
       if (!sha) throw new ConflictException('Nothing to commit');
       return { sha };
     });
