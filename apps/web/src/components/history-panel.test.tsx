@@ -159,6 +159,29 @@ describe('HistoryPanel', () => {
       await waitFor(() => expect(service.fileLog).toHaveBeenCalledWith('p1', 'main.tex'));
     });
 
+    it('asks for confirmation before discarding unsaved changes', async () => {
+      const service = {
+        log: vi.fn().mockResolvedValue(log),
+        fileLog: vi.fn().mockResolvedValue(fileLog),
+        changes: vi.fn().mockResolvedValue([]),
+        restore: vi.fn().mockResolvedValue(undefined),
+        status: vi.fn().mockResolvedValue({
+          baseline: { sha: 'y', message: 'Update main.tex', date: new Date().toISOString() },
+          changes: [{ path: 'main.tex', type: 'modify' }],
+        }),
+      } as unknown as HistoryService;
+      renderWithApp(
+        <HistoryPanel projectId="p1" canEdit path="main.tex" />,
+        new Container().register(HistoryServiceToken, service),
+      );
+      await userEvent.click(screen.getByRole('button', { name: 'Arquivo atual' }));
+      await userEvent.click(await screen.findByRole('button', { name: 'Descartar' }));
+      expect(service.restore).not.toHaveBeenCalled();
+      const confirmDialog = screen.getByRole('dialog', { name: 'Restaurar arquivo' });
+      await userEvent.click(within(confirmDialog).getByRole('button', { name: 'Restaurar' }));
+      await waitFor(() => expect(service.restore).toHaveBeenCalledWith('p1', 'y', 'main.tex'));
+    });
+
     it('opens a diff against the current draft and against the adjacent revision', async () => {
       const service = {
         log: vi.fn().mockResolvedValue(log),

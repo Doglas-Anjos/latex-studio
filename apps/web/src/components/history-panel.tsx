@@ -364,7 +364,10 @@ export function HistoryPanel({
               {canEdit && fileChange.type === 'modify' && status?.baseline && (
                 <Button
                   variant="danger"
-                  onClick={() => restore.mutate({ sha: status.baseline?.sha ?? '', path })}
+                  onClick={() => {
+                    setRestoreTarget({ sha: status.baseline?.sha ?? '', path });
+                    restoreDialog.current?.showModal();
+                  }}
                 >
                   Descartar
                 </Button>
