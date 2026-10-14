@@ -35,6 +35,10 @@ No `.env`, antes de subir:
 
 O Caddy obtém TLS automaticamente para `APP_DOMAIN`. Quem pode entrar é decidido pelo FasorX; a primeira visita cria a conta aqui. Para convidar alguém para um projeto, a pessoa precisa ter aberto o app ao menos uma vez.
 
+### Publicação no servidor do FasorX
+
+A instância do FasorX (`latex.fasorx.com.br`) é publicada pelo job `publish` do CI a cada push verde na `main`: ele gera o `.env` do servidor a partir dos segredos do ambiente `producao` do GitHub (nada fica em arquivo versionado) e roda [scripts/deploy-fasorx.sh](scripts/deploy-fasorx.sh), que constrói, sobe, confere a saúde e volta à versão anterior se algo falhar. O Caddy interno fica só em `127.0.0.1:3010` ([docker-compose.fasorx.yml](docker-compose.fasorx.yml)); TLS e domínio são do Caddy do servidor. O job fica desligado até a variável de repositório `PUBLISH_TARGET` valer `fasorx`; os segredos necessários estão no comentário do job em [.github/workflows/ci.yml](.github/workflows/ci.yml).
+
 ### Contrato com o FasorX
 
 - O navegador faz `POST {VITE_FASORX_URL}/api/token/{VITE_FASORX_APP}` com o cookie de sessão do FasorX e recebe `{ token, validade, pessoa, sair }`; sem sessão vai para `{VITE_FASORX_URL}/entrar/?volta={VITE_FASORX_APP}`.
