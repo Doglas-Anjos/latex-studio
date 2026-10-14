@@ -48,12 +48,18 @@ const OPEN_ARG = /[\s*]{0,64}\{/y;
 const BARE_ARG = /\s{0,64}([^\s{}[\]\\%]{1,1024})/y;
 const MAX_ARG = 1024;
 
-/** Absolute, `~`, a `..` segment, a pipe, or a backslash (Windows separator or an unknown macro). */
+/**
+ * Absolute, `~`, a `..` segment, a backslash (Windows separator or unknown macro), a shell
+ * metacharacter (pipe, `$`, backtick — kpsewhich/pandoc can pass names to a shell), or a remote
+ * URL (`http://internal-host/...` => SSRF through pandoc's `--resource-path`).
+ */
 const unsafePath = (arg: string): boolean =>
   arg
     .replace(/[{}"]/g, '') // TeX drops grouping braces, pandoc drops quotes
     .split(',') // \bibliography{a,b}, \includeonly{a,b}
-    .some((p) => /^\s*([/~]|[A-Za-z]:)|[\\|]|(^|\/)\s*\.\.\s*(\/|$)/.test(p));
+    .some((p) =>
+      /^\s*([/~]|[A-Za-z]:|[A-Za-z][A-Za-z0-9+.-]*:\/\/)|[\\|$`]|(^|\/)\s*\.\.\s*(\/|$)/.test(p),
+    );
 
 /** End of the brace group opened just before `from`, or -1 if it is unbalanced or too long. */
 function closeBrace(text: string, from: number): number {
@@ -114,7 +120,7 @@ export function findUnsafeInclude(source: string): string | undefined {
 }
 
 /** All files under `dir`, as `/`-separated paths relative to it. */
-async function listTree(dir: string): Promise<string[]> {
+export async function listTree(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { recursive: true, withFileTypes: true });
   return entries
     .filter((e) => e.isFile())
@@ -125,10 +131,17 @@ async function listTree(dir: string): Promise<string[]> {
     );
 }
 
-export async function assertNoUnsafeIncludes(dir: string, files: string[]): Promise<void> {
+export async function assertNoUnsafeIncludes(
+  dir: string,
+  files: string[],
+  // Compile relies on the sandbox + kpathsea, not on this lexical scan, so a legitimately large
+  // source must still compile; export/wordcount feed pandoc/texcount, where an unscanned file is a
+  // real risk, so there a too-large file fails the job.
+  opts: { skipLarge?: boolean } = {},
+): Promise<void> {
   for (const file of files.filter((f) => /\.(tex|sty|cls|bib)$/i.test(f))) {
-    // Unscanned files must not reach pandoc/texcount, so a big one fails the job.
     if ((await stat(join(dir, file))).size > MAX_SCAN_BYTES) {
+      if (opts.skipLarge) continue;
       throw new Error(`${file}: too large to check for unsafe includes (max 1 MB)`);
     }
     const cmd = findUnsafeInclude(await readFile(join(dir, file), 'utf8'));
@@ -258,6 +271,10 @@ export class ToolsProcessor extends WorkerHost implements OnApplicationBootstrap
       await pruneOld(dir, EXPORT_TTL_MS);
       const file = `${job.id}.${format}`;
       const bib = files.find((f) => f.endsWith('.bib'));
+      // No `--sandbox`: it blocks pandoc's own writer data files, so docx export fails outright
+      // ("Could not find data file .../docx/[Content_Types].xml"). SSRF via
+      // `\includegraphics{http://...}` is instead stopped by assertNoUnsafeIncludes (remote URLs
+      // are rejected above) and by the bwrap sandbox having no network.
       // Output into the snapshot (the only writable path in the sandbox), then copy it out.
       const args = [
         '-s',

@@ -66,6 +66,10 @@ it('refuses absolute and parent paths in input-like commands', async () => {
   await expect(assertNoUnsafeIncludes(dir, ['a.tex', 'b.tex'])).rejects.toThrow(/b\.tex/);
   await writeFile(join(dir, 'big.tex'), 'x'.repeat(1024 * 1024 + 1));
   await expect(assertNoUnsafeIncludes(dir, ['big.tex'])).rejects.toThrow(/too large/);
+  // Compile skips oversized files instead of failing (the sandbox is the real guard there).
+  await expect(
+    assertNoUnsafeIncludes(dir, ['big.tex'], { skipLarge: true }),
+  ).resolves.toBeUndefined();
   await rm(dir, { recursive: true, force: true });
 });
 
@@ -79,6 +83,10 @@ describe('findUnsafeInclude', () => {
     String.raw`\import{../other/}{main}`,
     String.raw`\bibliography{refs,/etc/passwd}`,
     String.raw`\input{"|cat /etc/passwd"}`,
+    String.raw`\bibliography{a$(id>pwned)}`,
+    '\\input{a`id`}',
+    String.raw`\includegraphics{http://169.254.169.254/latest/meta-data}`,
+    String.raw`\includegraphics{https://internal-host/x.png}`,
     String.raw`\input{{}/etc/passwd}`,
     String.raw`\input{~/x}`,
     String.raw`\input{sub\..\x}`,
