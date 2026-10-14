@@ -67,7 +67,14 @@ export function StatusBar({
       return queryClient.invalidateQueries({ queryKey: ['history', projectId] });
     },
     onError: (e: Error) => {
-      setNote(e.message === 'Nothing to commit' ? 'Nada para salvar' : 'Falha ao salvar o arquivo');
+      // A full account is not lost work (autosave kept the text): say which it is.
+      setNote(
+        e.message === 'Nothing to commit'
+          ? 'Nada para salvar'
+          : e.message.startsWith('Cota ')
+            ? e.message
+            : 'Falha ao salvar o arquivo',
+      );
     },
   });
   // The mutation object changes every render; a ref keeps the listener bound once per path.
