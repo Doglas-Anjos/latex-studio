@@ -249,10 +249,13 @@ export function CommentsPanel({
                   ev.preventDefault();
                   const text = drafts[c.id]?.trim();
                   if (!text) return;
-                  // Cleared once saved: a failed reply keeps its text for another try.
-                  run.mutate(() => service.reply(projectId, c.id, text), {
-                    onSuccess: () => setDrafts((d) => ({ ...d, [c.id]: '' })),
-                  });
+                  // Cleared once saved: a failed reply keeps its text for another try. Inside the
+                  // action, since a per-call onSuccess is dropped if another mutate starts first.
+                  run.mutate(() =>
+                    service
+                      .reply(projectId, c.id, text)
+                      .then(() => setDrafts((d) => ({ ...d, [c.id]: '' }))),
+                  );
                 }}
               >
                 <input

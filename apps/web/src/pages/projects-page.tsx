@@ -68,7 +68,7 @@ export function ProjectsPage() {
   const search = useDebounced(query.trim());
   const filtered = filter !== 'all' || search !== '';
   const cursor = cursors.at(-1) ?? null;
-  const { data, error, isPending } = useQuery({
+  const { data, error, isPending, isPlaceholderData } = useQuery({
     queryKey: ['projects', 'list', filter, search, cursor],
     queryFn: () => projects.list({ limit: PAGE_SIZE, filter, search, cursor }),
     placeholderData: keepPreviousData,
@@ -204,8 +204,10 @@ export function ProjectsPage() {
           <Pagination
             page={cursors.length}
             total={data?.total}
-            hasPrevious={!isFirstPage}
-            hasNext={!!nextCursor}
+            // While the next page loads, the shown cursor is the old page's: a second click
+            // would push it twice.
+            hasPrevious={!isFirstPage && !isPlaceholderData}
+            hasNext={!!nextCursor && !isPlaceholderData}
             onPrevious={() => setCursors((c) => c.slice(0, -1))}
             onNext={() => nextCursor && setCursors((c) => [...c, nextCursor])}
           />
