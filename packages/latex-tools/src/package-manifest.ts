@@ -14,14 +14,18 @@ const HEADER =
 export const PACKAGE_NAME = /^[A-Za-z0-9._-]{1,100}$/;
 /**
  * The characters package options may use; they are written verbatim into `\usepackage[...]`, so
- * no brackets (they end the argument), `\`, `%`, `#` or line breaks. Braces are allowed
+ * no brackets (they end the argument), `%`, `#` or line breaks. Macros are fine (`font=\small`):
+ * whoever edits the manifest can already write TeX in main.tex. Braces are allowed
  * (`margin={2cm,3cm}`) but must balance: see validOptions, which the manifest enforces.
  */
-export const PACKAGE_OPTIONS = /^[^[\]\\%#\r\n]{0,200}$/;
+export const PACKAGE_OPTIONS = /^[^[\]%#\r\n]{0,200}$/;
 
-/** Final `{`/`}` depth of `s`, or negative once a `}` closes more than was opened. */
+/** Final `{`/`}` depth of `s` (`\{`, `\}` are not groups), or negative once a `}` closes too many. */
 const braceDepth = (s: string) =>
-  [...s].reduce((d, c) => (d < 0 ? d : c === '{' ? d + 1 : c === '}' ? d - 1 : d), 0);
+  [...s.replace(/\\./g, '')].reduce(
+    (d, c) => (d < 0 ? d : c === '{' ? d + 1 : c === '}' ? d - 1 : d),
+    0,
+  );
 
 export const validOptions = (options: string) =>
   PACKAGE_OPTIONS.test(options) && braceDepth(options) === 0;

@@ -42,12 +42,17 @@ describe('extractUsepackages', () => {
     const kept = [
       '\\usepackage{styles/custom}',
       '\\usepackage{\\mypkg, amsmath}',
-      '\\usepackage[font=\\small]{caption}',
       '\\usepackage[a={b]{c}',
     ];
-    const src = [...kept, '\\usepackage[margin={2cm,3cm}]{geometry}', '\\usepackage{hyperref}'];
+    const src = [
+      ...kept,
+      '\\usepackage[font=\\small]{caption}',
+      '\\usepackage[margin={2cm,3cm}]{geometry}',
+      '\\usepackage{hyperref}',
+    ];
     const { packages, remaining } = extractUsepackages(src.join('\n'));
     expect(packages).toEqual([
+      { name: 'caption', options: 'font=\\small' },
       { name: 'geometry', options: 'margin={2cm,3cm}' },
       { name: 'hyperref' },
     ]);
