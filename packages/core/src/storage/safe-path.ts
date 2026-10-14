@@ -2,13 +2,15 @@ import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 
 // Letters, marks and digits of any script, plus `._ -()+`. Everything else stays out: separators
-// and their lookalikes (∕ ／ ．), `\`, `:` (NTFS streams), `~` (8.3 names), `$` (CONIN$) and every
-// control, format or bidi character (\p{C}).
-const SEGMENT = /^[\p{L}\p{M}\p{N}._ \-()+]+$/u;
+// and their lookalikes (∕ ／ ．), `\`, `:` (NTFS streams), `~` (8.3 names), `$` (CONIN$), every
+// control, format or bidi character (\p{C}), invisible letters/marks (Hangul fillers, variation
+// selectors: \p{DI}) and a leading combining mark.
+const SEGMENT = /^(?!\p{M})[\p{L}\p{M}\p{N}._ \-()+]+$/u;
+const INVISIBLE = /\p{DI}/u;
 // Windows strips trailing dots/spaces and maps device names to devices; `.git*` covers the repo
 // dir and git config files (.gitignore, .gitattributes, .gitmodules) in any case.
 const FORBIDDEN = /^(\.git|(con|prn|aux|nul|com[0-9]|lpt[0-9])( *\..*)?$)|[. ]$/i;
-const valid = (s: string) => SEGMENT.test(s) && !FORBIDDEN.test(s);
+const valid = (s: string) => SEGMENT.test(s) && !INVISIBLE.test(s) && !FORBIDDEN.test(s);
 
 /** Validates user-supplied relative paths and confines them to a root directory. */
 export class SafePath {

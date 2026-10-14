@@ -26,9 +26,8 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ ...valid, APP_URL: 'https://latex.example.com' })).toThrow(
       /AUTH_JWKS_URL or AUTH_SECRET/,
     );
-    expect(() => loadConfig({ ...valid, NODE_ENV: 'production' })).toThrow(
-      /AUTH_JWKS_URL or AUTH_SECRET/,
-    );
+    for (const NODE_ENV of ['production', 'Production'])
+      expect(() => loadConfig({ ...valid, NODE_ENV })).toThrow(/AUTH_JWKS_URL or AUTH_SECRET/);
     const env = { ...valid, APP_URL: 'https://latex.example.com', AUTH_SECRET: 's'.repeat(32) };
     expect(() => loadConfig(env)).toThrow(/AUTH_ISSUER and AUTH_AUDIENCE/);
     const full = { ...env, AUTH_ISSUER: 'https://fasorx.example', AUTH_AUDIENCE: 'latex' };

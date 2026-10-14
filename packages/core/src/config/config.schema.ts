@@ -74,7 +74,7 @@ const envSchema = baseSchema
     (c) =>
       c.AUTH_JWKS_URL ||
       c.AUTH_SECRET ||
-      (new URL(c.APP_URL).hostname === 'localhost' && c.NODE_ENV !== 'production'),
+      (new URL(c.APP_URL).hostname === 'localhost' && c.NODE_ENV?.toLowerCase() !== 'production'),
     {
       message:
         'AUTH_JWKS_URL or AUTH_SECRET is required unless APP_URL is localhost and NODE_ENV is not production',

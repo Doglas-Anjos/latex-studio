@@ -57,6 +57,11 @@ describe('SafePath.resolve', () => {
     'a\u200bb',
     'a\u00a0b',
     'a\u2028b',
+    'a\u3164.tex',
+    '\u3164',
+    '.g\u034fit',
+    '.g\ufe0fit',
+    '\u0301a.tex',
     '\u00e7'.repeat(101),
   ])('rejects %j', (p) => expect(() => safe.resolve(p)).toThrow(/Invalid path/));
 
