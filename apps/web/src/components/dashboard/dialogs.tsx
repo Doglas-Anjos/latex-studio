@@ -3,6 +3,7 @@ import { Copy, FolderPlus, Trash2, Upload } from 'lucide-react';
 import { type FormEvent, type RefObject, useId, useState } from 'react';
 import { useService } from '../../di/service-provider';
 import { ProjectServiceToken } from '../../services/project.service';
+import { toast } from '../../toast-store';
 import { Button } from '../button';
 import { Dialog } from '../dialog';
 import { Dropzone } from '../dropzone';
@@ -30,6 +31,7 @@ export function CreateDialog({
       setName('');
       onDone(p.id);
     },
+    onError: (e) => toast(errorText(e)),
   });
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -54,7 +56,6 @@ export function CreateDialog({
     >
       <Form id={formId} onSubmit={submit}>
         <Form.Field label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
-        {create.error && <Form.Error>{errorText(create.error)}</Form.Error>}
       </Form>
     </Dialog>
   );
@@ -76,7 +77,6 @@ export function ImportDialog({
   const formId = useId();
   const [name, setName] = useState('');
   const [picked, setPicked] = useState<File[]>([]);
-  const [zipError, setZipError] = useState<string | null>(null);
   const imported = useMutation({
     mutationFn: () => {
       const first = picked[0];
@@ -96,15 +96,15 @@ export function ImportDialog({
       setPicked([]);
       onDone(p.id);
     },
+    onError: (e) => toast(errorText(e)),
   });
   const pickZip = (dropped: File[]) => {
     const first = dropped[0];
     if (first && !/\.zip$/i.test(first.name)) {
-      setZipError('Selecione um arquivo .zip.');
+      toast('Selecione um arquivo .zip.');
       setPicked([]);
       return;
     }
-    setZipError(null);
     setPicked(first ? [first] : []);
   };
   const submit = (e: FormEvent) => {
@@ -119,6 +119,7 @@ export function ImportDialog({
       kicker="Novo projeto"
       description="Envie um arquivo .zip ou selecione uma pasta do seu computador."
       pending={imported.isPending}
+      wide="md"
       footer={
         <div className="actions">
           <Dialog.Cancel />
@@ -146,7 +147,6 @@ export function ImportDialog({
               onClick={() => {
                 setMode(m);
                 setPicked([]);
-                setZipError(null);
               }}
             >
               {m === 'zip' ? 'Arquivo .zip' : 'Pasta'}
@@ -175,8 +175,6 @@ export function ImportDialog({
             onFiles={setPicked}
           />
         )}
-        {zipError && <Form.Error>{zipError}</Form.Error>}
-        {!zipError && imported.error && <Form.Error>{errorText(imported.error)}</Form.Error>}
       </Form>
     </Dialog>
   );
@@ -204,6 +202,7 @@ export function CopyDialog({
       dialogRef.current?.close();
       onDone(p.id);
     },
+    onError: (e) => toast(errorText(e)),
   });
   // `project` changes before the dialog repaints (showModal is called synchronously
   // right after setState); reset the prefilled name here instead of via a remount key.
@@ -236,7 +235,6 @@ export function CopyDialog({
     >
       <Form id={formId} onSubmit={submit}>
         <Form.Field label="Nome" value={name} onChange={(e) => setName(e.target.value)} required />
-        {copy.error && <Form.Error>{errorText(copy.error)}</Form.Error>}
       </Form>
     </Dialog>
   );
@@ -260,6 +258,7 @@ export function RemoveDialog({
       dialogRef.current?.close();
       onDone();
     },
+    onError: (e) => toast(errorText(e)),
   });
   return (
     <Dialog
@@ -278,19 +277,21 @@ export function RemoveDialog({
           </Button>
         </div>
       }
-    >
-      {remove.error && <Form.Error>{errorText(remove.error)}</Form.Error>}
-    </Dialog>
+    />
   );
 }
 
 function errorText(e: Error) {
   const status = (e as { status?: number }).status;
   if (status === 409) return 'Limite de projetos atingido';
-  // The account quota's own message says how to free space; other 413s (project quota, upload
-  // size) come in English from the API.
-  if (status === 413)
-    return e.message.startsWith('Cota ') ? e.message : 'Cota de armazenamento excedida';
+  // The account quota's own message says how to free space; the others come in English from the
+  // API: a file over the upload limit ("request file too large", "File too large") or the
+  // project quota.
+  if (status === 413) {
+    if (e.message.startsWith('Cota ')) return e.message;
+    if (/too large/i.test(e.message)) return 'Arquivo maior que o limite de envio por arquivo.';
+    return 'Cota de armazenamento excedida';
+  }
   if (status === 400) return `Requisição inválida: ${e.message}`;
   return e.message;
 }

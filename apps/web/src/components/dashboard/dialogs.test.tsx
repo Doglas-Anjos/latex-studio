@@ -11,6 +11,7 @@ import {
   ProjectServiceToken,
 } from '../../services/project.service';
 import { renderWithApp } from '../../test/render';
+import { useToasts } from '../../toast-store';
 import { ImportDialog } from './dialogs';
 
 const project: Project = {
@@ -65,7 +66,10 @@ describe('ImportDialog', () => {
     const file = new File(['content'], 'notes.txt', { type: 'text/plain' });
     fireEvent.drop(zone, { dataTransfer: { files: [file] } });
 
-    expect(screen.getByText('Selecione um arquivo .zip.')).toBeTruthy();
+    // Shown as a toast, not inside the dialog.
+    expect(useToasts.getState().toasts.map((t) => t.message)).toContain(
+      'Selecione um arquivo .zip.',
+    );
     expect(screen.queryByText('notes.txt')).toBeNull();
     expect(importMock).not.toHaveBeenCalled();
   });

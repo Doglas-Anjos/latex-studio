@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router';
+import { Toaster } from './components/toaster';
 import { Container } from './di/container';
 import { ServiceProvider } from './di/service-provider';
 import { router } from './routes';
@@ -61,6 +62,7 @@ createRoot(root).render(
     <ServiceProvider container={container}>
       <QueryClientProvider client={queryClient}>
         <RouterProvider router={router} />
+        <Toaster />
       </QueryClientProvider>
     </ServiceProvider>
   </StrictMode>,
