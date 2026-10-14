@@ -20,7 +20,8 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [moved, setMoved] = useState<number | null>(null);
-  const { data } = useQuery({ queryKey: manifestKey, queryFn: () => service.get(projectId) });
+  const manifest = useQuery({ queryKey: manifestKey, queryFn: () => service.get(projectId) });
+  const { data } = manifest;
   const { data: usage } = useQuery({
     queryKey: ['packages', projectId, 'usage'],
     queryFn: () => service.usage(projectId),
@@ -52,7 +53,11 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
   });
 
   const list = [...(data ?? [])].sort((a, b) => a.order - b.order);
-  const commit = (next: PackageEntry[]) => save.mutate(next.map((e, order) => ({ ...e, order })));
+  // Until the manifest loads (or when it fails to: an old file the rules now refuse), saving would
+  // overwrite it with just this change.
+  const commit = (next: PackageEntry[]) => {
+    if (data) save.mutate(next.map((e, order) => ({ ...e, order })));
+  };
   const patch = (i: number, change: Partial<PackageEntry>) =>
     commit(list.map((e, j) => (j === i ? { ...e, ...change } : e)));
   const move = (i: number, by: number) => {
@@ -100,7 +105,7 @@ export function PackagesPanel({ projectId, canEdit }: { projectId: string; canEd
     { key: 'off', label: 'Desligados', count: list.length - onCount },
     { key: 'detected', label: 'Detectados', count: detected.length },
   ];
-  const error = save.error ?? migrate.error;
+  const error = manifest.error ?? save.error ?? migrate.error;
 
   return (
     <section className="pkg" aria-label="Bibliotecas">
