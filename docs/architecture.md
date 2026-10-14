@@ -43,7 +43,7 @@ docker-compose.yml, docker-compose.dev.yml, Caddyfile, .env.example
 .github/workflows/  CI (lint, typecheck, test, imagens + Trivy, gitleaks) e CodeQL
 ```
 
-Dados persistentes (volumes): working tree + `.git` de cada projeto, builds (PDF, log, synctex), Postgres e Redis.
+Dados persistentes (volumes): working tree + `.git` de cada projeto, builds (PDF, log, synctex), Postgres e os certificados do Caddy. O Redis é efêmero (sem volume, `--save ""`).
 
 ## Camadas
 
@@ -70,18 +70,18 @@ Esquema Drizzle em `packages/core/src/database/schema`: usuários, projetos e me
 - Binários (imagens, PDFs) não passam pelo Yjs: upload direto para o disco.
 
 ### Gerenciador de bibliotecas
-- `latex-packages.json` versionado na raiz do projeto: `[{ name, options, enabled, order, note }]`.
-- A API regenera `latex-packages.tex` (só os habilitados, na ordem) a cada alteração; o `main.tex` inclui `\input{latex-packages}` após `\documentclass`. O zip exportado compila em qualquer lugar sem a plataforma.
+- `latex-packages.json` versionado na raiz do projeto: `[{ name, options, enabled, order }]`.
+- A API regenera `latex-packages.tex` a cada alteração: os habilitados na ordem (pulando os que o código já carrega) e, para os desligados, linhas `\def ver@<pacote>.sty` que tornam qualquer `\usepackage` posterior um no-op; o `main.tex` inclui `\input{latex-packages}` após `\documentclass`. O zip exportado compila em qualquer lugar sem a plataforma.
 - Na importação, `latex-tools` detecta `\usepackage` no preâmbulo e oferece migrar para o gerenciador.
 
 ### Comentários
-Âncoras por `Y.RelativePosition` (sobrevivem a edições alheias), com fallback por commit + trecho citado. Papel `reviewer` só lê e comenta. Entrega em tempo real pelo mesmo WebSocket.
+Âncoras por `Y.RelativePosition` (sobrevivem a edições alheias), com fallback por commit + trecho citado. Papel `reviewer` só lê e comenta. Os comentários trafegam por REST (TanStack Query).
 
 ### Fila de compilação
 - `POST /projects/:id/compile` recusa (409) se o projeto já tem uma compilação ativa, limita as pendentes por usuário e tem rate limit de 10/min.
 - O worker copia um snapshot do working tree e roda `latexmk -no-shell-escape` sem shell, com timeout, num grupo de processos que é morto por inteiro.
 - Container do worker (ver `docker-compose.yml`): rede `internal` sem saída para a internet (mas com Postgres e Redis), `read_only`, `tmpfs /tmp`, `init`, `cap_drop: ALL`, `no-new-privileges`, `pids_limit`, `mem_limit`. Limitação conhecida: o TeX roda com o mesmo uid do worker; execução de código no TeX alcançaria Redis/Postgres.
-- Saída: PDF + log + synctex; o log é parseado em erros/avisos por `latex-tools`; o status é enviado ao cliente por WebSocket.
+- Saída: PDF + log + synctex; o log é parseado em erros/avisos por `latex-tools`; o cliente consulta o status a cada 1,5 s enquanto há build ativo.
 - A fila `tools` atende `export` (pandoc), `wordcount` (texcount) e `format` (latexindent).
 
 ### Importação e exportação
