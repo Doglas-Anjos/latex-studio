@@ -1,14 +1,4 @@
-import {
-  copyFile,
-  mkdir,
-  mkdtemp,
-  readdir,
-  readFile,
-  rm,
-  stat,
-  unlink,
-  writeFile,
-} from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -303,6 +293,8 @@ export class ToolsProcessor extends WorkerHost implements OnApplicationBootstrap
 async function pruneOld(dir: string, ttl: number): Promise<void> {
   for (const name of await readdir(dir)) {
     const path = join(dir, name);
-    if (Date.now() - (await stat(path)).mtimeMs > ttl) await unlink(path);
+    // Another job (or the API, after a failed enqueue) may remove a file between readdir and here.
+    const stats = await stat(path).catch(() => null);
+    if (stats && Date.now() - stats.mtimeMs > ttl) await rm(path, { force: true });
   }
 }
