@@ -80,9 +80,11 @@ export class JoseTokenVerifier implements TokenVerifier {
         .replace(/\p{Cc}/gu, '')
         .trim()
         .slice(0, max);
+    // `sub` is the account key: cleaning could merge two subjects into one account, so refuse it.
+    if (clean(sub, 200) !== sub) return null;
     const identity = {
       issuer: String(this.config.AUTH_ISSUER).replace(/\/$/, ''),
-      subject: clean(sub, 200),
+      subject: sub,
       email: clean(email, 254).toLowerCase(),
       name: clean(name, 100),
     };

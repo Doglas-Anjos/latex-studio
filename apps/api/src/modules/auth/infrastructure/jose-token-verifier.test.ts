@@ -43,6 +43,9 @@ describe('JoseTokenVerifier', () => {
     expect(await verifier.verify(await sign({ email: undefined }))).toBeNull();
     expect(await verifier.verify(await sign({ iss: undefined }))).toBeNull();
     expect(await verifier.verify(await sign({ sub: 42 }))).toBeNull();
+    for (const sub of ['', ' u-1', 'u-1\u0000', 'u'.repeat(201)]) {
+      expect(await verifier.verify(await sign({ sub }))).toBeNull();
+    }
     expect(await verifier.verify(await sign({}, '2h'))).toBeNull();
     expect(await verifier.verify('not-a-jwt')).toBeNull();
   });
