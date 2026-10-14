@@ -166,7 +166,7 @@ jobs:
           VITE_FASORX_APP=latex
           REPOS_DIR=/data/repos
           BUILDS_DIR=/data/builds
-          USER_QUOTA_MB=50
+          USER_QUOTA_MB=500
           EOF
 
       - name: Send and publish
