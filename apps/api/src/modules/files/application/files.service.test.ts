@@ -98,6 +98,30 @@ describe('FilesService', () => {
     expect(sync.calls).not.toContain('replace same.tex');
   });
 
+  it("refuses an update or a new folder that the owner's account cannot hold", async () => {
+    const projects = new FakeProjects();
+    const owned = await projects.create({ id: project.id, name: 'P' }, ana.id);
+    const other = await projects.create(
+      { id: '00000000-0000-4000-8000-0000000000bc', name: 'Q' },
+      ana.id,
+    );
+    const config = {
+      REPOS_DIR: dir,
+      BUILDS_DIR: join(dir, 'b'),
+      PROJECT_QUOTA_MB: 10,
+      USER_QUOTA_MB: 1,
+    } as AppConfig;
+    const capped = new FilesService(storage, new ProjectLock(), config, sync, projects);
+    // Ana's other project holds 700 KB of her 1 MB.
+    await (await storage.init(other.id)).write('fill.bin', new Uint8Array(700 * 1024));
+    await capped.create(owned, ana, 'a.tex', 'small');
+    const over = /^Cota de armazenamento/;
+    await expect(capped.update(owned, ana, 'a.tex', 'x'.repeat(400 * 1024))).rejects.toThrow(over);
+    await storage.open(project.id).write('fig.png', new Uint8Array(400 * 1024));
+    await expect(capped.createFolder(owned, ana, 'dir')).rejects.toThrow(over);
+    expect(await storage.open(project.id).isFile('dir/.keep')).toBe(false);
+  });
+
   it('charges each file at least 4 KiB, so empty files cannot fill the disk for free', async () => {
     const empty = Object.fromEntries(Array.from({ length: 300 }, (_, i) => [`e${i}.tex`, '']));
     // 300 × 4 KiB is over the 1 MB quota; the files written before the refusal are removed.

@@ -18,7 +18,7 @@ import { FilesService } from '../../files/application/files.service';
 import type { User } from '../../users/domain/user';
 import { FsProjectStorage } from '../infrastructure/fs-project-storage';
 import { FakeProjects } from '../testing/fake-project.repository';
-import type { UploadPart } from './project-files';
+import { accountRoom, type UploadPart } from './project-files';
 import { ProjectLock } from './project-lock';
 import { ProjectsService } from './projects.service';
 
@@ -234,6 +234,23 @@ describe('ProjectsService', () => {
     const init = vi.spyOn(storage, 'init');
     const exporter = new ExportService(storage, capped.projects, {} as never, capped.config);
     await expect(exporter.copy(a, ana)).rejects.toMatchObject(over);
+    expect(init).not.toHaveBeenCalled();
+    expect(await projects.ownedIds(ana.id)).toEqual([a.id]);
+  });
+
+  it('refuses a blank project that does not fit, before writing once the account is full', async () => {
+    const capped = make(1);
+    const a = await capped.projects.create(ana, 'A');
+    // Leaves 6000 bytes (measuring A fresh): not enough for the three starter files, 4 KiB each.
+    const fill = (await accountRoom(projects, storage, 1, a)) - 6000;
+    await storage.open(a.id).write('fill.bin', new Uint8Array(fill));
+    expect(await accountRoom(projects, storage, 1, a)).toBe(6000);
+    await expect(capped.projects.create(ana, 'B')).rejects.toMatchObject(over);
+
+    await storage.open(a.id).write('more.bin', new Uint8Array(8000));
+    expect(await accountRoom(projects, storage, 1, a)).toBeLessThan(0);
+    const init = vi.spyOn(storage, 'init');
+    await expect(capped.projects.create(ana, 'C')).rejects.toMatchObject(over);
     expect(init).not.toHaveBeenCalled();
     expect(await projects.ownedIds(ana.id)).toEqual([a.id]);
   });
