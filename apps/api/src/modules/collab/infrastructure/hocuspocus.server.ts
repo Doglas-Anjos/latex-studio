@@ -1,12 +1,10 @@
 import { Hocuspocus } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import type { User } from '../../users/domain/user';
-import type { CollabService } from '../application/collab.service';
+import { type CollabService, MAX_DOC_CHARS } from '../application/collab.service';
 
 export const HOCUSPOCUS = Symbol('HOCUSPOCUS');
 
-/** A single message is capped by the socket; this caps what an editor can grow a doc to. */
-const MAX_DOC_CHARS = 8 * 1024 * 1024;
 const MAX_PRESENCE_BYTES = 4096;
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -27,7 +25,7 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
       return { user: session.user };
     },
     // The doc is held in this process and re-encoded on every save: refuse to grow it further.
-    // Throwing closes only this connection.
+    // A single message is capped by the socket. Throwing closes only this connection.
     async beforeHandleMessage({ document }) {
       if (document.getText('content').length > MAX_DOC_CHARS) {
         throw new Error('Document too large');

@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppConfig } from '@latex-studio/core';
+import { PayloadTooLargeException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { IdentityService } from '../../auth/application/identity.service';
@@ -12,7 +13,7 @@ import { FsProjectStorage } from '../../projects/infrastructure/fs-project-stora
 import { FakeProjects } from '../../projects/testing/fake-project.repository';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import type { YjsDocRepository } from '../domain/yjs-doc.repository';
-import { CollabService } from './collab.service';
+import { CollabService, MAX_DOC_CHARS } from './collab.service';
 
 const ORIGIN = 'https://latex.example.com';
 
@@ -107,6 +108,10 @@ describe('CollabService', () => {
   it('loads the file when no state is saved, and refuses a missing file', async () => {
     expect(await collab.load(projectId, 'main.tex')).toBe('documentclass{article}');
     await expect(collab.load(projectId, 'missing.tex')).rejects.toThrow();
+    await storage.open(projectId).write('big.tex', 'a'.repeat(MAX_DOC_CHARS + 1));
+    await expect(collab.load(projectId, 'big.tex')).rejects.toBeInstanceOf(
+      PayloadTooLargeException,
+    );
   });
 
   it('stores the state and writes the file without committing it', async () => {

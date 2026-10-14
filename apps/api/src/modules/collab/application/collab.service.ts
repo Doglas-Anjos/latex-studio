@@ -6,6 +6,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  PayloadTooLargeException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { isUUID } from 'class-validator';
@@ -21,6 +22,8 @@ import type { User } from '../../users/domain/user';
 import { YJS_DOC_REPOSITORY, type YjsDocRepository } from '../domain/yjs-doc.repository';
 
 export const TEXT_EXTENSIONS = new Set(['.tex', '.bib', '.sty', '.cls', '.txt', '.md', '.json']);
+/** Largest text a collaborative doc may hold; a file of this many bytes has at most as many chars. */
+export const MAX_DOC_CHARS = 8 * 1024 * 1024;
 
 export interface CollabSession {
   user: User;
@@ -93,8 +96,10 @@ export class CollabService {
     const files = this.storage.open(projectId);
     // isFile refuses folders and a symlinked leaf; resolveExisting a symlinked parent folder.
     if (!(await files.isFile(path))) throw new NotFoundException('File not found');
-    await files.safe.resolveExisting(path);
-    return Buffer.from(await files.repo.readFile(path)).toString('utf8');
+    // readHead also refuses a symlinked parent; one byte past the cap is enough to refuse.
+    const head = await files.readHead(path, MAX_DOC_CHARS + 1);
+    if (head.length > MAX_DOC_CHARS) throw new PayloadTooLargeException('File too large to edit');
+    return head.toString('utf8');
   }
 
   /** Called on every update; the repository throttles the writes. */

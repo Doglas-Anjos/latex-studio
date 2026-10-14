@@ -2,7 +2,7 @@ import type { Hocuspocus } from '@hocuspocus/server';
 import { Inject, Injectable } from '@nestjs/common';
 import * as Y from 'yjs';
 import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/project-storage';
-import type { CollabSession } from '../application/collab.service';
+import { type CollabSession, MAX_DOC_CHARS } from '../application/collab.service';
 import type { DocumentSync } from '../domain/document-sync';
 import { YJS_DOC_REPOSITORY, type YjsDocRepository } from '../domain/yjs-doc.repository';
 import { HOCUSPOCUS } from './hocuspocus.server';
@@ -50,6 +50,8 @@ export class HocuspocusDocumentSync implements DocumentSync {
 
   /** Minimal prefix/suffix diff, so positions outside the changed span (comment anchors) survive. */
   async replaceText(projectId: string, path: string, text: string): Promise<void> {
+    // Over the doc cap (an upload, a restore): drop the doc instead; loading it is refused too.
+    if (text.length > MAX_DOC_CHARS) return this.forget(projectId, path);
     const doc = this.hocuspocus.documents.get(`${projectId}/${path}`);
     if (doc) return patchText(doc, text);
     // Not open: patch the saved state rather than dropping it, so a client that reconnects with

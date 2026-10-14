@@ -2,6 +2,7 @@ import { Document, Hocuspocus } from '@hocuspocus/server';
 import { describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import type { ProjectFiles, ProjectStorage } from '../../projects/domain/project-storage';
+import { MAX_DOC_CHARS } from '../application/collab.service';
 import type { YjsDocRepository } from '../domain/yjs-doc.repository';
 import { HocuspocusDocumentSync } from './hocuspocus-document-sync';
 
@@ -68,6 +69,16 @@ describe('HocuspocusDocumentSync', () => {
     Y.applyUpdate(merged, Y.encodeStateAsUpdate(original));
     Y.applyUpdate(merged, saved.get('p/main.tex') as Uint8Array);
     expect(merged.getText('content').toString()).toBe('hello there world');
+  });
+
+  it('drops the doc instead of patching in a text over the doc cap', async () => {
+    const { hocuspocus, deleted, sync } = setup();
+    const doc = new Document('p/main.tex');
+    hocuspocus.documents.set('p/main.tex', doc);
+    await sync.replaceText('p', 'main.tex', 'a'.repeat(MAX_DOC_CHARS + 1));
+    expect(hocuspocus.documents.has('p/main.tex')).toBe(false);
+    expect(doc.getText('content').length).toBe(0);
+    expect(deleted).toEqual(['p/main.tex']);
   });
 
   it('forget unloads the open doc and drops its saved state', async () => {
