@@ -227,8 +227,9 @@ export class FilesService {
           if (!existed) created.push(path);
         }
         // Again once written: the room above was read before streaming, and uploads into the
-        // owner's other projects (other locks) each saw all of it. See accountRoom.
-        if ((await accountRoom(this.projects, this.storage, mb, project)) < 0) {
+        // owner's other projects (other locks) each saw all of it. See accountRoom. Only when the
+        // upload created files: overwrites alone free nothing on refusal (they stay written).
+        if (created.length && (await accountRoom(this.projects, this.storage, mb, project)) < 0) {
           throw accountQuotaExceeded(mb);
         }
       } catch (e) {
