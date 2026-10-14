@@ -80,7 +80,7 @@ Esquema Drizzle em `packages/core/src/database/schema`: usuários, projetos e me
 ### Fila de compilação
 - `POST /projects/:id/compile` recusa (409) se o projeto já tem uma compilação ativa, limita as pendentes por usuário e tem rate limit de 10/min.
 - O worker copia um snapshot do working tree e roda `latexmk -no-shell-escape` sem shell, com timeout, num grupo de processos que é morto por inteiro.
-- Container do worker (ver `docker-compose.yml`): rede `internal` sem saída para a internet (mas com Postgres e Redis), `read_only`, `tmpfs /tmp`, `init`, `cap_drop: ALL`, `no-new-privileges`, `pids_limit`, `mem_limit`. Limitação conhecida: o TeX roda com o mesmo uid do worker; execução de código no TeX alcançaria Redis/Postgres.
+- Container do worker (ver `docker-compose.yml`): rede `internal` sem saída para a internet (mas com Postgres e Redis), `read_only`, `tmpfs /tmp`, `init`, `cap_drop: ALL`, `no-new-privileges`, `pids_limit`, `mem_limit`. Cada compilação (e pandoc/texcount) roda no bubblewrap (`COMPILE_SANDBOX=require` no compose): sem rede, sem variáveis de ambiente do worker, só a pasta do snapshot montada, e memória limitada por `prlimit` (`COMPILE_MEMORY_MB`). O latexmk roda seus subcomandos sem shell.
 - Saída: PDF + log + synctex; o log é parseado em erros/avisos por `latex-tools`; o cliente consulta o status a cada 1,5 s enquanto há build ativo.
 - A fila `tools` atende `export` (pandoc), `wordcount` (texcount) e `format` (latexindent).
 
