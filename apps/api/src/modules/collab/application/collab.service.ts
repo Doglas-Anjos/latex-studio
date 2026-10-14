@@ -114,8 +114,9 @@ export class CollabService {
   /**
    * Autosave: persists the Yjs state and flushes the text to the working tree. Never commits.
    * Resolves to the state's size in bytes.
-   * ponytail: no quota check on flush (it would list the whole tree every 2 s); the project
-   * quota is enforced on uploads only.
+   * ponytail: no quota check on flush (it would list the whole tree every 2 s), so open docs can
+   * grow past the quotas up to MAX_DOC_CHARS each; HistoryService.commit refuses to commit once
+   * the project or account is over. Check here, throttled, if docs alone fill disks.
    */
   store(projectId: string, path: string, doc: Y.Doc): Promise<number> {
     return this.lock.run(projectId, async () => {

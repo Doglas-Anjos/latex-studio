@@ -45,7 +45,8 @@ describe('HistoryService', () => {
       storage,
       new ProjectLock(),
       sync,
-      { PROJECT_QUOTA_MB: 1, MAX_UPLOAD_MB: 1 },
+      // Room in the project for a file past MAX_UPLOAD_MB.
+      { PROJECT_QUOTA_MB: 2, MAX_UPLOAD_MB: 1 },
       projects,
     );
     await storage.init(project.id);
@@ -80,6 +81,34 @@ describe('HistoryService', () => {
     await expect(service.fileAt(project, big, 'big.bin')).rejects.toBeInstanceOf(
       PayloadTooLargeException,
     );
+  });
+
+  it("refuses a restore that does not fit the owner's account, and any commit once over", async () => {
+    const owned = await projects.create({ id: project.id, name: 'P' }, ana.id);
+    const other = await projects.create(
+      { id: '00000000-0000-4000-8000-0000000000ab', name: 'Q' },
+      ana.id,
+    );
+    const config = { PROJECT_QUOTA_MB: 10, USER_QUOTA_MB: 1, MAX_UPLOAD_MB: 1 };
+    const capped = new HistoryService(storage, new ProjectLock(), sync, config, projects);
+    const files = storage.open(project.id);
+    await files.write('a.tex', 'x'.repeat(400 * 1024));
+    const v1 = (await files.repo.commitAll('v1', ana)) as string;
+    await files.write('a.tex', 'small');
+    await files.repo.commitAll('v2', ana);
+    // Ana's other project holds 700 KB: 400 KB more no longer fits her 1 MB.
+    await (await storage.init(other.id)).write('fill.bin', new Uint8Array(700 * 1024));
+
+    await expect(capped.restore(owned, ana, v1, 'a.tex')).rejects.toThrow(/^Cota de armazenamento/);
+    expect(text(await files.repo.readFile('a.tex'))).toBe('small');
+    // Autosave writes unchecked; past the cap, saving a version is refused.
+    await files.write('a.tex', 'y'.repeat(400 * 1024));
+    await expect(capped.commit(owned, ana, 'v3')).rejects.toThrow(/^Cota de armazenamento/);
+    await expect(capped.commitFile(owned, ana, 'a.tex')).rejects.toThrow(/^Cota de armazenamento/);
+    expect(await capped.log(owned)).toHaveLength(2);
+    // The project quota alone does the same (a server without USER_QUOTA_MB).
+    await files.write('big.bin', new Uint8Array(2 * 1024 * 1024));
+    await expect(service.commit(project, ana, 'v4')).rejects.toThrow('Project quota exceeded');
   });
 
   it('flushes every open doc before a full commit, not before a path commit', async () => {

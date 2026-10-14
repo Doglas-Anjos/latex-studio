@@ -136,6 +136,10 @@ export class HistoryService {
       // Open docs may hold edits younger than the 2-10s store debounce.
       if (!paths) await this.sync.flushProject(project.id);
       for (const path of paths ?? []) await this.sync.flush(project.id, path);
+      // Autosave writes open docs unchecked (CollabService.store): once the project or the account
+      // is over its quota, nothing more goes into history.
+      await assertQuota(files, megabytes(this.config.PROJECT_QUOTA_MB), 0);
+      await assertAccountQuota(this.projects, this.storage, this.config.USER_QUOTA_MB, project, 0);
       const sha = await commitAs(this.projects, files, project.id, user, message, paths ?? null)
         // A selected path that is now a folder is the request's fault, not a server error.
         .catch((e: { code?: string }) => {
