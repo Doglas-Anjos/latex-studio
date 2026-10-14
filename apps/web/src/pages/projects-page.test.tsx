@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, screen, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
@@ -88,13 +88,15 @@ describe('ProjectsPage', () => {
   });
   afterEach(cleanup);
 
-  it('lists projects, newest first, and filters by search', async () => {
-    setup();
+  it('lists projects, newest first, and filters by search with one request per pause', async () => {
+    const service = setup();
     await screen.findByText('Tese');
     expect(bodyRows()).toHaveLength(3);
     expect(within(bodyRows()[0] as HTMLElement).getByText('Relatório')).toBeTruthy();
     await userEvent.type(screen.getByPlaceholderText('Buscar projeto'), 'relatorio');
-    expect(bodyRows()).toHaveLength(1);
+    await waitFor(() => expect(bodyRows()).toHaveLength(1));
+    const searches = vi.mocked(service.list).mock.calls.map(([o]) => o?.search);
+    expect(searches.filter((s) => s !== '')).toEqual(['relatorio']);
     expect(screen.queryByRole('button', { name: 'Continuar projeto Relatório' })).toBeNull();
   });
 

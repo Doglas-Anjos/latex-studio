@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowRight,
@@ -30,6 +30,7 @@ import { InviteDialog, openInvite } from '../components/members-panel';
 import { Menu } from '../components/menu';
 import { ROLE_ICON, RoleBadge } from '../components/role-badge';
 import { useService } from '../di/service-provider';
+import { useDebounced } from '../hooks/use-debounced';
 import {
   type Project,
   type ProjectFilter,
@@ -64,12 +65,13 @@ export function ProjectsPage() {
   const shareRef = useRef<HTMLDialogElement>(null);
   const helpRef = useRef<HTMLDialogElement>(null);
 
-  const search = query.trim();
+  const search = useDebounced(query.trim());
   const filtered = filter !== 'all' || search !== '';
   const cursor = cursors.at(-1) ?? null;
   const { data, error, isPending } = useQuery({
     queryKey: ['projects', 'list', filter, search, cursor],
     queryFn: () => projects.list({ limit: PAGE_SIZE, filter, search, cursor }),
+    placeholderData: keepPreviousData,
   });
   const download = useMutation({ mutationFn: (id: string) => projects.downloadSource(id) });
 

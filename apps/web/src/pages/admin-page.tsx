@@ -1,10 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FolderOpen, Search, ShieldAlert, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useMe } from '../auth-hooks';
 import { Button } from '../components/button';
 import { useService } from '../di/service-provider';
+import { useDebounced } from '../hooks/use-debounced';
 import { AdminServiceToken } from '../services/admin.service';
 import type { User } from '../services/auth.service';
 
@@ -16,10 +17,12 @@ export function AdminPage() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<User | null>(null);
 
+  const term = useDebounced(search.trim());
   const users = useQuery({
-    queryKey: ['admin', 'users', search],
-    queryFn: () => admin.listUsers(search.trim() ? { search: search.trim() } : {}),
+    queryKey: ['admin', 'users', term],
+    queryFn: () => admin.listUsers(term ? { search: term } : {}),
     enabled: me?.isAdmin === true,
+    placeholderData: keepPreviousData,
   });
 
   if (me && !me.isAdmin) {
