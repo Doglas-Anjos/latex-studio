@@ -15,6 +15,13 @@ ARG VITE_FASORX_URL
 ARG VITE_FASORX_APP=latex
 RUN pnpm --filter @latex-studio/web build
 
-FROM caddy:2-alpine
+# The stock caddy image ships a Go toolchain with open CVEs (stdlib, x/net); rebuild
+# the binary on a patched Go. Drop this stage once caddy publishes an image built on it.
+FROM golang:1.27.2-alpine AS caddy
+RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.4.7
+RUN xcaddy build v2.11.7 --output /caddy --replace golang.org/x/net=golang.org/x/net@v0.60.0
+
+FROM caddy:2.11.7-alpine
+COPY --from=caddy /caddy /usr/bin/caddy
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=builder /app/apps/web/dist /srv
