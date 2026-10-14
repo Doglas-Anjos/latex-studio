@@ -586,15 +586,17 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       view.dispatch({ effects: ro.reconfigure(EditorState.readOnly.of(true)) });
       setGone(true);
     };
-    provider.on('authenticationFailed', markGone);
-    // A per-document close (code 1000) also happens on server shutdown; only a vanished file counts.
-    const onClose = ({ event }: { event: { code: number } }) => {
-      if (event.code !== 1000) return;
+    // It also refuses an expired or missing token, and a per-document close (code 1000) also
+    // happens on server shutdown: only a file missing from the list counts. Otherwise the session
+    // and its unsynced edits stay; the provider retries by itself, and a list call without a
+    // session sends the person to log in.
+    const checkGone = () =>
       files
         .list(projectId)
         .then((list) => !list.some((f) => f.path === path) && markGone())
         .catch(() => {});
-    };
+    provider.on('authenticationFailed', checkGone);
+    const onClose = ({ event }: { event: { code: number } }) => event.code === 1000 && checkGone();
     provider.on('close', onClose);
     const unsubscribe = useWorkspaceStore.subscribe((s, prev) => {
       if (s.pendingLine !== null && s.pendingLine !== prev.pendingLine) revealLine(view, path);
@@ -619,7 +621,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       setPopup(null);
       setPopupBody('');
       provider.off('synced', onSynced);
-      provider.off('authenticationFailed', markGone);
+      provider.off('authenticationFailed', checkGone);
       provider.off('close', onClose);
       cancelAnimationFrame(restoreFrame);
       session.parked = {

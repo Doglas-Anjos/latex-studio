@@ -1,11 +1,44 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../di/container';
+import { AuthServiceToken } from '../services/auth.service';
+import { CommentServiceToken } from '../services/comment.service';
 import { type FileService, FileServiceToken } from '../services/file.service';
+import { HistoryServiceToken } from '../services/history.service';
+import { IdentityToken } from '../services/identity';
+import { ReferenceServiceToken } from '../services/reference.service';
+import { SpellcheckServiceToken } from '../services/spellcheck.service';
 import { renderWithApp } from '../test/render';
 import { closeWhenSynced, Editor, markUnsynced, peersFrom } from './editor';
+
+/** Stands in for the websocket provider: tests emit its events by hand. */
+const { providers, FakeProvider } = vi.hoisted(() => {
+  type Handler = (...args: unknown[]) => void;
+  class FakeProvider {
+    awareness = null;
+    hasUnsyncedChanges = false;
+    handlers: { event: string; h: Handler }[] = [];
+    disconnect = vi.fn();
+    destroy = vi.fn();
+    constructor() {
+      providers.push(this);
+    }
+    on(event: string, h: Handler) {
+      this.handlers.push({ event, h });
+    }
+    off(event: string, h: Handler) {
+      this.handlers = this.handlers.filter((x) => x.event !== event || x.h !== h);
+    }
+    emit(event: string, payload: unknown) {
+      for (const x of this.handlers) if (x.event === event) x.h(payload);
+    }
+  }
+  const providers: FakeProvider[] = [];
+  return { providers, FakeProvider };
+});
+vi.mock('@hocuspocus/provider', () => ({ HocuspocusProvider: FakeProvider }));
 
 const ROLE = 'editor' as const;
 
@@ -107,6 +140,37 @@ describe('closeWhenSynced', () => {
     const clean = fakeProvider(false);
     closeWhenSynced(clean as never, { destroy: vi.fn() });
     expect(clean.destroy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('collab editor refused by the server', () => {
+  afterEach(cleanup);
+
+  it('keeps the session while the file is listed (a token problem), freezes once it is gone', async () => {
+    const list = vi.fn().mockResolvedValue([{ path: 'notes.txt', size: 10 }]);
+    const container = new Container()
+      .register(FileServiceToken, { ...fake(), list })
+      .register(CommentServiceToken, { list: vi.fn().mockResolvedValue([]) } as never)
+      .register(IdentityToken, { enabled: false, token: async () => null } as never)
+      .register(HistoryServiceToken, {
+        status: vi.fn().mockResolvedValue({ baseline: null, changes: [] }),
+      } as never)
+      .register(ReferenceServiceToken, {} as never)
+      .register(SpellcheckServiceToken, {} as never)
+      .register(AuthServiceToken, { me: vi.fn().mockResolvedValue({ id: 'u1' }) } as never);
+    renderWithApp(<Editor projectId="p1" path="notes.txt" role={ROLE} />, container);
+    const provider = providers.at(-1) as InstanceType<typeof FakeProvider>;
+
+    act(() => provider.emit('authenticationFailed', { reason: 'permission-denied' }));
+    await waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(provider.disconnect).not.toHaveBeenCalled();
+
+    list.mockResolvedValue([]);
+    act(() => provider.emit('authenticationFailed', { reason: 'permission-denied' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('Arquivo removido ou renomeado');
+    expect(provider.disconnect).toHaveBeenCalled();
   });
 });
 
