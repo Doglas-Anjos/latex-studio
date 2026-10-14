@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import {
+  assertAccountQuota,
   assertQuota,
   checkPath,
   commitAs,
@@ -37,7 +38,10 @@ export class HistoryService {
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
     @Inject(APP_CONFIG)
-    private readonly config: Pick<AppConfig, 'PROJECT_QUOTA_MB' | 'MAX_UPLOAD_MB'>,
+    private readonly config: Pick<
+      AppConfig,
+      'PROJECT_QUOTA_MB' | 'USER_QUOTA_MB' | 'MAX_UPLOAD_MB'
+    >,
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
   ) {}
 
@@ -143,12 +147,9 @@ export class HistoryService {
     const content = await this.fileAt(project, sha, path);
     return this.lock.run(project.id, async () => {
       const files = this.storage.open(project.id);
-      await assertQuota(
-        files,
-        this.config.PROJECT_QUOTA_MB * 1024 * 1024,
-        content.byteLength,
-        path,
-      );
+      await assertQuota(files, megabytes(this.config.PROJECT_QUOTA_MB), content.byteLength, path);
+      const mb = this.config.USER_QUOTA_MB;
+      await assertAccountQuota(this.projects, this.storage, mb, project, content.byteLength, path);
       await files.write(path, content);
       const message = `Restore ${path} from ${sha.slice(0, 7)}`;
       const created = await commitAs(

@@ -82,8 +82,8 @@ export class FakeProjects implements ProjectRepository {
   async roleOf(projectId: string, userId: string) {
     return this.members.find((m) => m.projectId === projectId && m.userId === userId)?.role ?? null;
   }
-  async countForUser(userId: string) {
-    return this.rows.filter((p) => p.ownerId === userId).length;
+  async ownedIds(userId: string) {
+    return this.rows.filter((p) => p.ownerId === userId).map((p) => p.id);
   }
   async delete(id: string) {
     this.rows = this.rows.filter((p) => p.id !== id);

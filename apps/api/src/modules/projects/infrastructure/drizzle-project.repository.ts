@@ -127,12 +127,12 @@ export class DrizzleProjectRepository implements ProjectRepository {
     return row?.role ?? null;
   }
 
-  async countForUser(userId: string): Promise<number> {
-    const [row] = await this.db
-      .select({ n: count() })
+  async ownedIds(userId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: projects.id })
       .from(projects)
       .where(eq(projects.ownerId, userId));
-    return row?.n ?? 0;
+    return rows.map((r) => r.id);
   }
 
   async update(id: string, patch: ProjectPatch): Promise<Project> {

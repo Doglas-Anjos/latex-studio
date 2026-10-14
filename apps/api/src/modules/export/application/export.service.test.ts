@@ -60,7 +60,7 @@ describe('ExportService', () => {
     await files.write('chap/a.tex', 'a');
     const rows: Array<{ id: string; name: string; mainFile?: string }> = [];
     const repo = {
-      countForUser: async () => 0,
+      ownedIds: async () => [],
       create: async (p: { id: string; name: string; mainFile?: string }) => {
         rows.push(p);
         return { ...p, ownerId: 'u1' } as Project;

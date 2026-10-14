@@ -51,8 +51,8 @@ export interface ProjectRepository {
   /** Stable keyset order: last modification descending, then ID descending. */
   listPageForUser(userId: string, options: ProjectListOptions): Promise<ProjectListPage>;
   roleOf(projectId: string, userId: string): Promise<ProjectRole | null>;
-  /** Projects owned by the user. */
-  countForUser(userId: string): Promise<number>;
+  /** IDs of the projects the user owns. */
+  ownedIds(userId: string): Promise<string[]>;
   delete(id: string): Promise<void>;
   /** Remembers who edited a file collaboratively, so the next commit of it names them. */
   recordEdit(projectId: string, path: string, userId: string): Promise<void>;

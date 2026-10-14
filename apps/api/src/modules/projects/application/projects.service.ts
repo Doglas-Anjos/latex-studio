@@ -33,12 +33,14 @@ import {
 } from '../domain/project.repository';
 import { PROJECT_STORAGE, type ProjectFiles, type ProjectStorage } from '../domain/project-storage';
 import {
+  assertAccountQuota,
   author,
   checkPath,
   isGitPath,
   limitBytes,
   megabytes,
   type UploadPart,
+  usedBytes,
 } from './project-files';
 import { ProjectLock } from './project-lock';
 import { extractZip } from './zip-import';
@@ -108,6 +110,7 @@ export class ProjectsService {
     try {
       const files = await this.storage.init(id);
       await files.repo.commitAll(await seed(files), author(owner));
+      await this.assertFitsAccount(owner, id, files);
       return await this.projects.create({ id, name, ...(mainFile && { mainFile }) }, owner.id);
     } catch (e) {
       await this.storage.remove(id);
@@ -161,6 +164,7 @@ export class ProjectsService {
         if (!name || !files) throw new BadRequestException('Send a "name" and at least one file');
         const { mainFile, engine } = await finishImport(files);
         await files.repo.commitAll('Import', author(owner));
+        await this.assertFitsAccount(owner, id, files);
         return await this.projects.create(
           { id, name, mainFile, ...(engine && { engine }) },
           owner.id,
@@ -214,8 +218,20 @@ export class ProjectsService {
     await this.audit?.record(actor.id, 'project.delete', project.id, { name: project.name });
   }
 
+  /**
+   * 413 unless the new project `id`, written but not yet a row, fits in the owner's account quota.
+   * Checked after writing: an import streams under PROJECT_QUOTA_MB and a copy is no larger than
+   * its source, so what is written before the refusal is bounded, and the caller removes it.
+   */
+  private async assertFitsAccount(owner: User, id: string, files: ProjectFiles) {
+    const mb = this.config.USER_QUOTA_MB;
+    if (!mb) return;
+    const project = { id, ownerId: owner.id };
+    await assertAccountQuota(this.projects, this.storage, mb, project, await usedBytes(files));
+  }
+
   private async assertProjectCap(owner: User) {
-    if ((await this.projects.countForUser(owner.id)) >= this.config.MAX_PROJECTS_PER_USER) {
+    if ((await this.projects.ownedIds(owner.id)).length >= this.config.MAX_PROJECTS_PER_USER) {
       throw new ConflictException('Project limit reached');
     }
   }

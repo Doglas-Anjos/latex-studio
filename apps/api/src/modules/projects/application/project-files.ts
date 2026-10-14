@@ -2,8 +2,9 @@ import type { Readable } from 'node:stream';
 import type { Author } from '@latex-studio/git-store';
 import { BadRequestException, PayloadTooLargeException } from '@nestjs/common';
 import type { User } from '../../users/domain/user';
+import type { Project } from '../domain/project';
 import type { ProjectRepository } from '../domain/project.repository';
-import type { ProjectFiles } from '../domain/project-storage';
+import type { ProjectFiles, ProjectStorage } from '../domain/project-storage';
 
 /** One multipart part, as yielded by `@fastify/multipart`'s `request.parts()`. */
 export type UploadPart =
@@ -90,23 +91,64 @@ export async function pathExists(files: ProjectFiles, path: string): Promise<boo
   }
 }
 
-/**
- * 413 unless `incomingBytes` more fit in the quota (the working tree is the usage). The size of
- * `replacing`, a file about to be overwritten, is not counted.
- */
+/** Working tree (except `replacing`, a file about to be overwritten) plus history bytes. */
+export async function usedBytes(files: ProjectFiles, replacing?: string): Promise<number> {
+  const tree = (await files.repo.listFiles())
+    .filter((f) => f.path !== replacing)
+    .reduce((sum, f) => sum + f.size, 0);
+  // History too: every save adds objects, and a quota on the working tree alone never fills.
+  return tree + (await files.repo.storedBytes());
+}
+
+/** 413 unless `incomingBytes` more fit in the project quota (see usedBytes). */
 export async function assertQuota(
   files: ProjectFiles,
   quotaBytes: number,
   incomingBytes: number,
   replacing?: string,
 ) {
-  const used = (await files.repo.listFiles())
-    .filter((f) => f.path !== replacing)
-    .reduce((sum, f) => sum + f.size, 0);
-  // History too: every save adds objects, and a quota on the working tree alone never fills.
-  const history = await files.repo.storedBytes();
-  if (used + history + incomingBytes > quotaBytes) {
+  if ((await usedBytes(files, replacing)) + incomingBytes > quotaBytes) {
     throw new PayloadTooLargeException(QUOTA_EXCEEDED);
+  }
+}
+
+export const accountQuotaExceeded = (mb?: number) =>
+  new PayloadTooLargeException(`Cota de armazenamento da conta excedida (${mb} MB)`);
+
+/**
+ * Bytes the owner of `project` may still store under USER_QUOTA_MB (`mb`), counted over every
+ * project they own: what collaborators write counts against the owner. Infinity when `mb` is
+ * unset. `replacing` is a file of `project` about to be overwritten.
+ * ponytail: rescans every owned project on each write (tree walk; storedBytes is cached 30 s),
+ * and writes to two projects of one owner can pass at once (the lock is per project). Fine at
+ * 50 MB; keep a usage column on users, updated on write, if owners hold many or large projects.
+ */
+export async function accountRoom(
+  projects: ProjectRepository,
+  storage: ProjectStorage,
+  mb: number | undefined,
+  project: Pick<Project, 'id' | 'ownerId'>,
+  replacing?: string,
+): Promise<number> {
+  if (!mb) return Number.POSITIVE_INFINITY;
+  let left = megabytes(mb);
+  for (const id of await projects.ownedIds(project.ownerId)) {
+    left -= await usedBytes(storage.open(id), id === project.id ? replacing : undefined);
+  }
+  return left;
+}
+
+/** 413 unless `incomingBytes` more fit in the owner's account quota (see accountRoom). */
+export async function assertAccountQuota(
+  projects: ProjectRepository,
+  storage: ProjectStorage,
+  mb: number | undefined,
+  project: Pick<Project, 'id' | 'ownerId'>,
+  incomingBytes: number,
+  replacing?: string,
+) {
+  if (incomingBytes > (await accountRoom(projects, storage, mb, project, replacing))) {
+    throw accountQuotaExceeded(mb);
   }
 }
 

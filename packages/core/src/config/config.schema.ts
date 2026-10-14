@@ -15,6 +15,11 @@ const baseSchema = z.object({
   COMPILE_MEMORY_MB: z.coerce.number().int().positive().default(1024),
   MAX_UPLOAD_MB: z.coerce.number().positive().default(50),
   PROJECT_QUOTA_MB: z.coerce.number().positive().default(500),
+  // Sum over every project a user owns; empty or unset = no per-user cap.
+  USER_QUOTA_MB: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.coerce.number().positive().optional(),
+  ),
   MAX_PROJECTS_PER_USER: z.coerce.number().int().positive().default(50),
   // LuaTeX's io.input/io.output and os.getenv bypass kpathsea's paranoid mode, so a document can
   // read and write any file the worker can (other projects, /proc/<worker>/environ). Only for a

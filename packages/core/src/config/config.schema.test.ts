@@ -44,6 +44,8 @@ describe('loadConfig', () => {
       AUTH_AUDIENCE: 'latex',
     });
     expect(config.AUTH_AUDIENCE).toBe('latex');
+    expect(loadConfig({ ...valid, USER_QUOTA_MB: '' }).USER_QUOTA_MB).toBeUndefined();
+    expect(loadConfig({ ...valid, USER_QUOTA_MB: '50' }).USER_QUOTA_MB).toBe(50);
   });
 
   it('requires an https JWKS URL except on localhost', () => {

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PassThrough } from 'node:stream';
+import { PassThrough, Readable } from 'node:stream';
 import type { AppConfig } from '@latex-studio/core';
 import {
   BadRequestException,
@@ -16,8 +16,19 @@ import { FilesService } from '../../files/application/files.service';
 import type { User } from '../../users/domain/user';
 import { FsProjectStorage } from '../infrastructure/fs-project-storage';
 import { FakeProjects } from '../testing/fake-project.repository';
+import type { UploadPart } from './project-files';
 import { ProjectLock } from './project-lock';
 import { ProjectsService } from './projects.service';
+
+/** A `name` field (read by import, ignored by upload), then one part per file. */
+async function* parts(name: string, files: Record<string, string>): AsyncIterable<UploadPart> {
+  yield { type: 'field', fieldname: 'name', value: name };
+  for (const [filename, content] of Object.entries(files)) {
+    const buffer = Buffer.from(content);
+    const file = Readable.from([buffer]);
+    yield { type: 'file', fieldname: 'files', filename, file, toBuffer: async () => buffer };
+  }
+}
 
 const user = (id: string, name: string): User => ({
   id,
@@ -146,6 +157,43 @@ describe('ProjectsService', () => {
     );
     expect(existsSync(join(dir, project.id, 'big.tex'))).toBe(false);
     expect(await storage.open(project.id).repo.log()).toHaveLength(1);
+  });
+
+  it("caps the owner's storage over all their projects, collaborators' writes included", async () => {
+    const base = {
+      REPOS_DIR: dir,
+      BUILDS_DIR: join(dir, 'builds'),
+      PROJECT_QUOTA_MB: 1,
+      MAX_PROJECTS_PER_USER: 5,
+    } as AppConfig;
+    const make = (config: AppConfig) => {
+      const lock = new ProjectLock();
+      const files = new FilesService(storage, lock, config, new FakeDocumentSync(), projects);
+      return { projects: new ProjectsService(projects, storage, lock, config), files };
+    };
+    const capped = make({ ...base, USER_QUOTA_MB: 1 });
+    const uncapped = make(base);
+    const over = { status: 413, message: 'Cota de armazenamento da conta excedida (1 MB)' };
+    const big = 'x'.repeat(600 * 1024); // each fits the 1 MB project quota, two do not fit 1 MB
+
+    const a = await capped.projects.create(ana, 'A');
+    await capped.files.create(a, ana, 'a.tex', big);
+    // A second project that would push Ana past 1 MB is refused; without the cap it passes.
+    await expect(capped.projects.import(ana, parts('B', { 'b.tex': big }))).rejects.toMatchObject(
+      over,
+    );
+    expect(await projects.ownedIds(ana.id)).toEqual([a.id]);
+
+    // Bob owns nothing: his writes to Ana's project count against Ana.
+    const c = await capped.projects.create(ana, 'C');
+    await projects.setMember(c.id, bob.id, 'editor');
+    await expect(capped.files.create(c, bob, 'c.tex', big)).rejects.toMatchObject(over);
+    await expect(capped.files.upload(c, parts('', { 'fig.png': big }))).rejects.toMatchObject(over);
+    expect(await storage.open(c.id).isFile('fig.png')).toBe(false);
+
+    await uncapped.files.upload(c, parts('', { 'fig.png': big }));
+    await uncapped.projects.import(ana, parts('B', { 'b.tex': big }));
+    expect(await projects.ownedIds(ana.id)).toHaveLength(3);
   });
 
   it('serializes mutations per project: two concurrent creates of one path give one 409', async () => {

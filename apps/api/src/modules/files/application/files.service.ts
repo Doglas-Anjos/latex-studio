@@ -12,6 +12,9 @@ import {
 import { TEXT_EXTENSIONS } from '../../collab/application/collab.service';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import {
+  accountQuotaExceeded,
+  accountRoom,
+  assertAccountQuota,
   assertQuota,
   author,
   checkPath,
@@ -76,6 +79,11 @@ export class FilesService {
     return megabytes(this.config.PROJECT_QUOTA_MB);
   }
 
+  private assertAccount(project: Project, incoming: number, replacing?: string) {
+    const mb = this.config.USER_QUOTA_MB;
+    return assertAccountQuota(this.projects, this.storage, mb, project, incoming, replacing);
+  }
+
   list(project: Project): Promise<Array<{ path: string; size: number }>> {
     return this.storage.open(project.id).repo.listFiles();
   }
@@ -96,6 +104,7 @@ export class FilesService {
       const files = this.storage.open(project.id);
       if (await pathExists(files, path)) throw new ConflictException(`${path} already exists`);
       await assertQuota(files, this.quota, Buffer.byteLength(content));
+      await this.assertAccount(project, Buffer.byteLength(content));
       await files.write(path, content);
       await files.repo.commitPaths([path], `Create ${path}`, author(user));
     });
@@ -107,6 +116,7 @@ export class FilesService {
       checkPath(files, path);
       if (!(await files.isFile(path))) throw new NotFoundException('File not found');
       await assertQuota(files, this.quota, Buffer.byteLength(content), path);
+      await this.assertAccount(project, Buffer.byteLength(content), path);
       await files.write(path, content);
       await commitAs(this.projects, files, project.id, user, `Update ${path}`, [path]);
       await this.sync.replaceText(project.id, path, content);
@@ -156,6 +166,7 @@ export class FilesService {
       const files = this.storage.open(project.id);
       if (await pathExists(files, path)) throw new ConflictException(`${path} already exists`);
       await assertQuota(files, this.quota, 0);
+      await this.assertAccount(project, 0);
       // Git keeps no empty folders. Not `.gitkeep`: SafePath refuses every `.git*` name.
       await files.write(`${path}/${FOLDER_KEEP}`, '');
       await files.repo.commitPaths(
@@ -180,6 +191,8 @@ export class FilesService {
       const sizes = new Map(listed.map((f) => [f.path, f.size]));
       const used = listed.reduce((sum, f) => sum + f.size, 0) + (await files.repo.storedBytes());
       const budget = { left: this.quota - used };
+      const mb = this.config.USER_QUOTA_MB;
+      const account = { left: await accountRoom(this.projects, this.storage, mb, project) };
       let folder = '';
       const written = new Map<string, UploadedFile['change']>();
       const created: string[] = [];
@@ -205,7 +218,10 @@ export class FilesService {
               ? sha256(await files.repo.readFile(path))
               : null;
           const hash = createHash('sha256');
-          await files.writeStream(path, hashing(limitBytes(part.file, budget), hash));
+          const limited = limitBytes(limitBytes(part.file, budget), account, () =>
+            accountQuotaExceeded(mb),
+          );
+          await files.writeStream(path, hashing(limited, hash));
           written.set(path, !existed ? 'add' : before === hash.digest('hex') ? 'same' : 'modify');
           if (!existed) created.push(path);
         }
