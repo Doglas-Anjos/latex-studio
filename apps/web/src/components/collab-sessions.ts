@@ -14,21 +14,24 @@ export function markUnsynced(provider: object, dirty: boolean) {
 }
 
 type Closable = Pick<HocuspocusProvider, 'hasUnsyncedChanges' | 'on' | 'destroy'>;
-/** Destroys provider and doc once the last local edit reached the server, or after 5 s. */
+/**
+ * Destroys provider and doc once the last local edit reached the server. Until then the session
+ * lives on, reconnecting by itself, and keeps the beforeunload guard: there is no local copy (no
+ * y-indexeddb), so giving up would lose edits typed while offline. A doc the server refuses (file
+ * gone or too large, session ended) can never take them: that ends it too.
+ */
 export function closeWhenSynced(provider: Closable, doc: Pick<Y.Doc, 'destroy'>) {
   let done = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
   const finish = () => {
     if (done) return;
     done = true;
-    clearTimeout(timer);
     markUnsynced(provider, false);
     provider.destroy();
     doc.destroy();
   };
   if (!provider.hasUnsyncedChanges) return finish();
   provider.on('unsyncedChanges', ({ number }: { number: number }) => number === 0 && finish());
-  timer = setTimeout(finish, 5000);
+  provider.on('authenticationFailed', finish);
 }
 
 /**

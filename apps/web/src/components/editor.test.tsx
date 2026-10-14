@@ -63,13 +63,16 @@ describe('closeWhenSynced', () => {
   afterEach(() => vi.useRealTimers());
 
   function fakeProvider(unsynced: boolean) {
-    const handlers: ((e: { number: number }) => void)[] = [];
+    const handlers: { event: string; h: (e: { number: number }) => void }[] = [];
     return {
       hasUnsyncedChanges: unsynced,
-      on: vi.fn((_: string, h: (e: { number: number }) => void) => handlers.push(h)),
+      on: vi.fn((event: string, h: (e: { number: number }) => void) => handlers.push({ event, h })),
       destroy: vi.fn(),
       emit: (number: number) => {
-        for (const h of handlers) h({ number });
+        for (const x of handlers) if (x.event === 'unsyncedChanges') x.h({ number });
+      },
+      refuse: () => {
+        for (const x of handlers) if (x.event === 'authenticationFailed') x.h({ number: 0 });
       },
     };
   }
@@ -88,16 +91,18 @@ describe('closeWhenSynced', () => {
     expect(unload()).toBe(false);
   });
 
-  it('gives up after 5 s and destroys at once when nothing is pending', () => {
+  it('keeps offline edits however long it takes, ends on refusal or when nothing is pending', () => {
     vi.useFakeTimers();
-    const stuck = fakeProvider(true);
-    closeWhenSynced(stuck as never, { destroy: vi.fn() });
-    vi.advanceTimersByTime(4999);
-    expect(stuck.destroy).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1);
-    expect(stuck.destroy).toHaveBeenCalledTimes(1);
-    stuck.emit(0);
-    expect(stuck.destroy).toHaveBeenCalledTimes(1);
+    const offline = fakeProvider(true);
+    markUnsynced(offline, true);
+    closeWhenSynced(offline as never, { destroy: vi.fn() });
+    vi.advanceTimersByTime(60 * 60_000);
+    expect(offline.destroy).not.toHaveBeenCalled();
+    expect(window.dispatchEvent(new Event('beforeunload', { cancelable: true }))).toBe(false);
+    offline.refuse();
+    expect(offline.destroy).toHaveBeenCalledTimes(1);
+    offline.emit(0);
+    expect(offline.destroy).toHaveBeenCalledTimes(1);
 
     const clean = fakeProvider(false);
     closeWhenSynced(clean as never, { destroy: vi.fn() });

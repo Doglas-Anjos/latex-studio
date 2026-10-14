@@ -31,13 +31,7 @@ import { SpellcheckServiceToken } from '../services/spellcheck.service';
 import { useSettingsStore } from '../settings-store';
 import { type CommentDraft, type Peer, useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
-import {
-  type CollabSession,
-  closeWhenSynced,
-  dropSession,
-  isOpenSession,
-  openSession,
-} from './collab-sessions';
+import { type CollabSession, dropSession, isOpenSession, openSession } from './collab-sessions';
 import { commentGutter } from './comment-gutter';
 import { CommentMenu } from './comment-menu';
 import { blameGutter, blameVisible, setBlame } from './editor-blame';
@@ -643,9 +637,12 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       // and a silent socket is dropped and reconnected every 30 s.
       provider.awareness?.setLocalState({});
       view.destroy();
-      // A vanished file's session was dropped: its connection ends with the view. Open tabs keep
-      // theirs; closing the tab ends it once the last edit has synced.
-      if (!isOpenSession(session)) closeWhenSynced(provider, doc);
+      // A vanished file's session was dropped (disconnected, nothing left to sync): it ends with
+      // the view. Open tabs keep theirs; closing the tab ends it once the last edit has synced.
+      if (!isOpenSession(session)) {
+        provider.destroy();
+        doc.destroy();
+      }
     };
   }, [projectId, path, readOnly, canComment, identity.token, files, queryClient, spellchecker]);
 
