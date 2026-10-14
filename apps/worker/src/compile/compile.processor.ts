@@ -107,9 +107,6 @@ export class CompileProcessor extends WorkerHost implements OnApplicationBootstr
             .catch(() => [])
         )[0]?.sha ?? null;
       new SafePath(tmp).resolve(build.mainFile); // throws on `..`, absolute or odd names
-      // Defence in depth only (the sandbox + kpathsea paranoid mode are the real guards): reject a
-      // source that reads an absolute/parent/remote path. Large files are skipped, not failed, so
-      // a big legitimate document still compiles.
       await assertNoUnsafeIncludes(tmp, await listTree(tmp), { skipLarge: true });
 
       // "Stop compilation": the API flips the row to cancelled; poll it and kill latexmk.

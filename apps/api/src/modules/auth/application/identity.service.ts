@@ -44,9 +44,8 @@ export class IdentityService {
       return this.local;
     }
     if (!token) return null;
-    const now = Date.now() / 1000;
-    const hit = this.cache.get(token);
-    if (hit && hit.expiresAt > now) return hit.user;
+    const cached = this.cachedUser(token);
+    if (cached) return cached;
     const verified = await this.verifier.verify(token);
     if (!verified) return null;
     const user = await this.users.upsert(verified.identity);

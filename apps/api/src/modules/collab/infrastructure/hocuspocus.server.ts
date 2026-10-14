@@ -87,8 +87,7 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
         // from disk with new item ids, and a client still holding the old doc merges both copies.
         await collab.saveState(projectId, path, document);
       } else Y.applyUpdate(document, loaded);
-      const bytes = typeof loaded === 'string' ? Buffer.byteLength(loaded) : loaded.byteLength;
-      stateBytes.set(document, bytes);
+      stateBytes.set(document, Buffer.byteLength(loaded));
     },
     // Server-side changes (restore, format, initial load) carry no user; a throw here would
     // bring the whole API down as an unhandled rejection, so this hook never throws.

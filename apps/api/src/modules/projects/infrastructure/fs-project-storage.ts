@@ -3,6 +3,7 @@ import { createWriteStream } from 'node:fs';
 import { lstat, mkdir, open, realpath, rename, rm } from 'node:fs/promises';
 import { dirname, join, sep } from 'node:path';
 import { Readable } from 'node:stream';
+import { buffer } from 'node:stream/consumers';
 import { pipeline } from 'node:stream/promises';
 import { APP_CONFIG, type AppConfig, SafePath } from '@latex-studio/core';
 import { GitRepository } from '@latex-studio/git-store';
@@ -73,20 +74,9 @@ export class FsProjectStorage implements ProjectStorage {
         return stats?.isFile() ?? false;
       },
       async readHead(path, maxBytes) {
+        // The stream reads to the cap or EOF (looping over short reads) and closes the handle.
         const handle = await open(await safe.resolveExisting(path), 'r');
-        try {
-          // Sized to the file (not the cap), and looped: one read may return fewer bytes.
-          const buffer = Buffer.alloc(Math.min((await handle.stat()).size, maxBytes));
-          let read = 0;
-          while (read < buffer.length) {
-            const { bytesRead } = await handle.read(buffer, read, buffer.length - read, read);
-            if (bytesRead === 0) break;
-            read += bytesRead;
-          }
-          return buffer.subarray(0, read);
-        } finally {
-          await handle.close();
-        }
+        return buffer(handle.createReadStream({ end: maxBytes - 1 }));
       },
       async readStream(path) {
         const handle = await open(await safe.resolveExisting(path), 'r');

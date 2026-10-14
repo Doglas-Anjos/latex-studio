@@ -43,9 +43,10 @@ export function extractUsepackages(
         list.some((n) => keep.has(n) || moved.has(n))
       )
         return m;
-      for (const name of list) moved.add(name);
-      for (const name of list)
+      for (const name of list) {
+        moved.add(name);
         packages.push(options ? { name, options: options.trim() } : { name });
+      }
       return '';
     });
     if (stripped !== code && stripped.trim() === '' && comment === '') continue;

@@ -14,7 +14,7 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
-import { commitAs } from '../../projects/application/project-files';
+import { commitAs, MAX_SCAN_BYTES, readSources } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
 import {
@@ -31,7 +31,6 @@ import type { User } from '../../users/domain/user';
 const MANIFEST = 'latex-packages.json';
 const MAX_MANIFEST_BYTES = 256 * 1024;
 const TEX = 'latex-packages.tex';
-const MAX_SCAN_BYTES = 1024 * 1024;
 
 export type PackageUsage = { name: string; options?: string; path: string; line: number };
 
@@ -149,15 +148,10 @@ export class PackagesService {
    */
   private async scan(files: ProjectFiles): Promise<PackageUsage[]> {
     const usage: PackageUsage[] = [];
-    // ponytail: files past the 4 MB total are not scanned (like ReferencesService), so a package
-    // loaded only there shows as unused; the parse runs on the API event loop.
-    let budget = 4 * MAX_SCAN_BYTES;
-    for (const f of await files.repo.listFiles()) {
-      if (f.path === TEX || f.size > MAX_SCAN_BYTES || !/\.(tex|sty|cls)$/.test(f.path)) continue;
-      if (f.size > budget) continue;
-      budget -= f.size;
-      const source = Buffer.from(await files.repo.readFile(f.path)).toString('utf8');
-      for (const u of findUsepackages(source)) usage.push({ ...u, path: f.path });
+    // A package loaded only in a file past readSources' budget shows as unused.
+    for (const [path, source] of await readSources(files, /\.(tex|sty|cls)$/)) {
+      if (path === TEX) continue;
+      for (const u of findUsepackages(source)) usage.push({ ...u, path });
     }
     return usage;
   }

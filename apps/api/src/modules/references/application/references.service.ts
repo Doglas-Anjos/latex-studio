@@ -19,6 +19,7 @@ import {
   subjectGraph,
 } from '@latex-studio/latex-tools';
 import { Inject, Injectable } from '@nestjs/common';
+import { readSources } from '../../projects/application/project-files';
 import type { Project } from '../../projects/domain/project';
 import {
   PROJECT_STORAGE,
@@ -26,11 +27,8 @@ import {
   type ProjectStorage,
 } from '../../projects/domain/project-storage';
 
-const MAX_SCAN_BYTES = 1024 * 1024;
-// ponytail: the parsers run on the API's event loop (shared with Hocuspocus); they are linear, but a
-// hostile 4 MB still costs ~1 s on the subject graph. Files past the total are skipped in listing
-// order; move the scans to a worker thread if real projects outgrow it.
-const MAX_TOTAL_BYTES = 4 * 1024 * 1024;
+// The parsers run on the API's event loop (shared with Hocuspocus); they are linear, but a hostile
+// 4 MB still costs ~1 s on the subject graph, hence readSources' budget.
 const MAX_AREA_PROJECTS = 500;
 
 export type RefLocation = { key: string; path: string; line: number };
@@ -110,25 +108,13 @@ export class ReferencesService {
     return graph;
   }
 
-  /** The project's files matching `re`, each up to 1 MB and MAX_TOTAL_BYTES in all. */
-  private async read(files: ProjectFiles, re: RegExp): Promise<Map<string, string>> {
-    const sources = new Map<string, string>();
-    let budget = MAX_TOTAL_BYTES;
-    for (const f of await files.repo.listFiles()) {
-      if (f.size > MAX_SCAN_BYTES || f.size > budget || !re.test(f.path)) continue;
-      budget -= f.size;
-      sources.set(f.path, Buffer.from(await files.repo.readFile(f.path)).toString('utf8'));
-    }
-    return sources;
-  }
-
   /**
    * Reads every .tex and returns them in reading order — the `\input`/`\include` chain from the
    * main file, then any unreached file. `body(path)` blanks the main file's preamble; `seen` holds
    * the files reached from the main file's body.
    */
   private async readOrdered(files: ProjectFiles) {
-    const sources = await this.read(files, /\.tex$/i);
+    const sources = await readSources(files, /\.tex$/i);
     const main = findMainFile(sources);
     const body = (path: string) =>
       path === main ? bodyOnly(sources.get(path) as string) : (sources.get(path) as string);
@@ -182,7 +168,7 @@ export class ReferencesService {
   private async scan(files: ProjectFiles): Promise<ReferenceIndex> {
     const labels: RefLocation[] = [];
     const citeKeys: RefLocation[] = [];
-    for (const [path, source] of await this.read(files, /\.(tex|bib)$/i)) {
+    for (const [path, source] of await readSources(files, /\.(tex|bib)$/i)) {
       if (/\.tex$/i.test(path)) {
         for (const d of findLabels(source)) labels.push({ ...d, path });
         for (const d of findBibItems(source)) citeKeys.push({ ...d, path });

@@ -44,6 +44,25 @@ export const megabytes = (mb: number) => mb * 1024 * 1024;
 
 const QUOTA_EXCEEDED = 'Project quota exceeded';
 
+/** Per-file cap for the source scans (references, packages) that parse on the API event loop. */
+export const MAX_SCAN_BYTES = 1024 * 1024;
+
+/**
+ * The project's files matching `re`, each up to MAX_SCAN_BYTES and 4 MB in all.
+ * ponytail: files past the budget are skipped (in listing order); move the parsers to a worker
+ * thread if large projects need every file scanned.
+ */
+export async function readSources(files: ProjectFiles, re: RegExp): Promise<Map<string, string>> {
+  const sources = new Map<string, string>();
+  let budget = 4 * MAX_SCAN_BYTES;
+  for (const f of await files.repo.listFiles()) {
+    if (f.size > MAX_SCAN_BYTES || f.size > budget || !re.test(f.path)) continue;
+    budget -= f.size;
+    sources.set(f.path, Buffer.from(await files.repo.readFile(f.path)).toString('utf8'));
+  }
+  return sources;
+}
+
 /** `.git`, `.gitignore`, ... anywhere in the path: SafePath rejects these, imports skip them. */
 export const isGitPath = (path: string) =>
   path.split('/').some((s) => s.toLowerCase().startsWith('.git'));

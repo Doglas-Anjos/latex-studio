@@ -3,11 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "license": "AGPL-3.0-only",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Doglas-Anjos/latex-studio.git",
-    "directory": "packages/git-store"
-  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
