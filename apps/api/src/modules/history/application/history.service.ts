@@ -9,7 +9,12 @@ import {
   PayloadTooLargeException,
 } from '@nestjs/common';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
-import { assertQuota, checkPath, commitAs } from '../../projects/application/project-files';
+import {
+  assertQuota,
+  checkPath,
+  commitAs,
+  megabytes,
+} from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
 import type { Project } from '../../projects/domain/project';
 import {
@@ -31,7 +36,8 @@ export class HistoryService {
     @Inject(PROJECT_STORAGE) private readonly storage: ProjectStorage,
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(DOCUMENT_SYNC) private readonly sync: DocumentSync,
-    @Inject(APP_CONFIG) private readonly config: Pick<AppConfig, 'PROJECT_QUOTA_MB'>,
+    @Inject(APP_CONFIG)
+    private readonly config: Pick<AppConfig, 'PROJECT_QUOTA_MB' | 'MAX_UPLOAD_MB'>,
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
   ) {}
 
@@ -57,7 +63,12 @@ export class HistoryService {
     checkSha(sha);
     const files = this.storage.open(project.id);
     checkPath(files, path);
-    const content = await files.repo.readFileAt(sha, path);
+    // Nothing bigger than an upload enters the tree, so every version stays readable.
+    const max = this.config.MAX_UPLOAD_MB;
+    const content = await files.repo.readFileAt(sha, path, megabytes(max)).catch((e: Error) => {
+      if (e.message === 'File too large') throw new PayloadTooLargeException(`File over ${max} MB`);
+      throw e;
+    });
     if (!content) throw new NotFoundException('File not found in that commit');
     return content;
   }

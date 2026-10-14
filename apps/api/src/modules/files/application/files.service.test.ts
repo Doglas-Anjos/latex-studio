@@ -108,8 +108,8 @@ describe('FilesService', () => {
     const repo = storage.open(project.id).repo;
     const head = (await repo.head()) as string;
     expect(await repo.workingChanges(head)).toEqual([{ path: 'other.tex', type: 'modify' }]);
-    expect(await repo.readFileAt(head, 'moved/b.tex')).not.toBeNull();
-    expect(await repo.readFileAt(head, 'dir/b.tex')).toBeNull();
-    expect(await repo.readFileAt(head, 'a.tex')).toBeNull();
+    expect(await repo.readFileAt(head, 'moved/b.tex', 10)).not.toBeNull();
+    expect(await repo.readFileAt(head, 'dir/b.tex', 10)).toBeNull();
+    expect(await repo.readFileAt(head, 'a.tex', 10)).toBeNull();
   });
 });

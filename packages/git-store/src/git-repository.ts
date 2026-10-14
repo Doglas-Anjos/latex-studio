@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import { dirname, join } from 'node:path';
+import { promisify } from 'node:util';
+import { inflate } from 'node:zlib';
 import { diffLines } from 'diff';
 import git, { TREE, WORKDIR } from 'isomorphic-git';
 
@@ -26,6 +28,7 @@ const storedBytesCache = new Map<string, { bytes: number; at: number }>();
 const SYMLINK_MODE = 0o120000;
 
 const dec = new TextDecoder();
+const inflateAsync = promisify(inflate);
 const countLines = (s: string) => s.split('\n').length - (s === '' || s.endsWith('\n') ? 1 : 0);
 const withCoAuthors = (message: string, coAuthors: Author[]) =>
   coAuthors.length
@@ -168,10 +171,23 @@ export class GitRepository {
     }));
   }
 
-  /** `path` as of commit `sha`; null when it is missing or a folder there. */
-  async readFileAt(sha: string, path: string): Promise<Uint8Array | null> {
+  /**
+   * `path` as of commit `sha`; null when it is missing or a folder there. Throws
+   * 'File too large' past `maxBytes`, found while inflating: an oversized blob is never held whole.
+   */
+  async readFileAt(sha: string, path: string, maxBytes: number): Promise<Uint8Array | null> {
     const oid = await this.blobOid(sha, path);
-    return oid ? (await git.readBlob({ fs, dir: this.dir, oid })).blob : null;
+    if (!oid) return null;
+    const { object, format } = await git.readObject({ fs, dir: this.dir, oid, format: 'deflated' });
+    let blob = object as Uint8Array; // packed objects come back already inflated
+    if (format === 'deflated') {
+      const wrapped = await inflateAsync(blob, { maxOutputLength: maxBytes + 64 }).catch((e) => {
+        throw e.code === 'ERR_BUFFER_TOO_LARGE' ? new Error('File too large') : e;
+      });
+      blob = wrapped.subarray(wrapped.indexOf(0) + 1); // after the `blob <size>\0` header
+    }
+    if (blob.length > maxBytes) throw new Error('File too large');
+    return blob;
   }
 
   async changedFiles(

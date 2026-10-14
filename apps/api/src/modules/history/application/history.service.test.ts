@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppConfig } from '@latex-studio/core';
-import { BadRequestException, ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, PayloadTooLargeException } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { IdentityService } from '../../auth/application/identity.service';
 import { CollabService } from '../../collab/application/collab.service';
@@ -45,7 +45,7 @@ describe('HistoryService', () => {
       storage,
       new ProjectLock(),
       sync,
-      { PROJECT_QUOTA_MB: 1 },
+      { PROJECT_QUOTA_MB: 1, MAX_UPLOAD_MB: 1 },
       projects,
     );
     await storage.init(project.id);
@@ -73,6 +73,13 @@ describe('HistoryService', () => {
     expect(sync.texts.get('a.tex')).toBe('one');
     expect(text(await service.fileAt(project, sha, 'a.tex'))).toBe('one');
     expect(await service.log(project)).toHaveLength(3);
+
+    // Over MAX_UPLOAD_MB: refused, not inflated whole.
+    await files.write('big.bin', new Uint8Array(1024 * 1024 + 1));
+    const big = (await service.commit(project, ana, 'big')).sha;
+    await expect(service.fileAt(project, big, 'big.bin')).rejects.toBeInstanceOf(
+      PayloadTooLargeException,
+    );
   });
 
   it('flushes every open doc before a full commit, not before a path commit', async () => {
@@ -212,7 +219,13 @@ describe('HistoryService.commitFile against the real collaborative stack', () =>
     );
     hocuspocus = createHocuspocus(collab);
     const sync = new HocuspocusDocumentSync(hocuspocus, docsRepo, storage);
-    service = new HistoryService(storage, lock, sync, { PROJECT_QUOTA_MB: 1 }, projects);
+    service = new HistoryService(
+      storage,
+      lock,
+      sync,
+      { PROJECT_QUOTA_MB: 1, MAX_UPLOAD_MB: 1 },
+      projects,
+    );
   });
 
   afterEach(async () => {

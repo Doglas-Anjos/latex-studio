@@ -42,10 +42,11 @@ it('commits, logs, diffs and reads history', async () => {
   expect(changes).toHaveLength(3);
 
   expect(
-    new TextDecoder().decode((await repo.readFileAt(first as string, 'main.tex')) as Uint8Array),
+    new TextDecoder().decode((await repo.readFileAt(first as string, 'main.tex', 2)) as Uint8Array),
   ).toBe('v1');
-  expect(await repo.readFileAt(first as string, 'nope.tex')).toBeNull();
-  expect(await repo.readFileAt(second as string, 'sub/dir')).toBeNull(); // a folder
+  await expect(repo.readFileAt(first as string, 'main.tex', 1)).rejects.toThrow('File too large');
+  expect(await repo.readFileAt(first as string, 'nope.tex', 2)).toBeNull();
+  expect(await repo.readFileAt(second as string, 'sub/dir', 2)).toBeNull(); // a folder
 
   await repo.rename('main.tex', 'moved/main.tex');
   expect((await repo.listFiles()).map((f) => f.path).sort()).toEqual([
@@ -143,7 +144,9 @@ it('commitPaths commits only the given paths with co-author trailers', async () 
   // A read error other than "missing" fails the commit instead of recording a deletion.
   await repo.deleteFile('a.tex');
   await repo.writeFile('a.tex/x', '');
-  await expect(repo.commitPaths(['a.tex'], 'oops', bruno)).rejects.toMatchObject({ code: 'EISDIR' });
+  await expect(repo.commitPaths(['a.tex'], 'oops', bruno)).rejects.toMatchObject({
+    code: 'EISDIR',
+  });
   expect((await repo.log(1))[0]?.sha).toBe(head?.sha);
 });
 
