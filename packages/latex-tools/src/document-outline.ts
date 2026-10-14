@@ -9,9 +9,12 @@ const EQ_SOURCE_CAP = 2000;
 const TITLE_SCAN_CAP = 2000;
 // \caption (not \captionsetup/\captionof); the arg is read with balanced braces so \cite{} inside survives.
 const CAPTION = /\\caption\*?(?![a-zA-Z])/;
-const LABEL1 = /\\label\s*\{([^}]{0,500})\}/;
+// No `\` in the key: a scan from one `\label{` then never runs past the next one.
+const LABEL1 = /\\label\s*\{([^}\\]{0,500})\}/;
+const LABELS = /\\label\s*\{[^}\\]{0,500}\}/g;
 const INCLUDEGRAPHICS = /\\includegraphics\s*(?:\[[^\]]{0,300}\]\s*)?\{([^}]{0,400})\}/;
-const TABULAR = /\\begin\{tabular\}[\s\S]{0,8000}?\\end\{tabular\}/;
+const BEGIN_TABULAR = '\\begin{tabular}';
+const END_TABULAR = '\\end{tabular}';
 const NEWACRONYM =
   /\\newacronym\s*(?:\[[^\]]{0,200}\]\s*)?\{([^}]{0,100})\}\s*\{([^}]{0,100})\}\s*\{([^}]{0,500})\}/g;
 const EQ_ENVS = ['equation', 'align', 'gather', 'multline', 'dmath'];
@@ -108,7 +111,10 @@ export function findFigures(source: string): Figure[] {
 export function findTables(source: string): DocTable[] {
   return envBlocks(source, 'table').map(({ body, line }) => {
     const label = LABEL1.exec(body)?.[1]?.trim();
-    const tab = TABULAR.exec(body)?.[0];
+    // indexOf, not a lazy regex: one pass instead of up to TABLE_SOURCE_CAP steps per \begin.
+    const b = body.indexOf(BEGIN_TABULAR);
+    const e = b < 0 ? -1 : body.indexOf(END_TABULAR, b);
+    const tab = e < 0 ? undefined : body.slice(b, e + END_TABULAR.length);
     return {
       caption: (bracedArg(body, CAPTION) ?? '').trim(),
       ...(label ? { label } : {}),
@@ -130,7 +136,7 @@ export function findEquations(source: string): Equation[] {
   for (const env of EQ_ENVS) {
     for (const { body, line } of envBlocks(source, env)) {
       const label = LABEL1.exec(body)?.[1]?.trim();
-      const tex = forKatex(env, body.replace(/\\label\s*\{[^}]{0,500}\}/g, '').trim());
+      const tex = forKatex(env, body.replace(LABELS, '').trim());
       if (tex && tex.length <= EQ_SOURCE_CAP)
         out.push({ ...(label ? { label } : {}), source: tex, line });
     }

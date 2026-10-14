@@ -26,14 +26,19 @@ describe('findSections', () => {
   });
 });
 
+const EQ_BEGINS = ['figure', 'table', 'equation', 'align', 'gather', 'multline', 'dmath'];
+
 describe('outline scanners on hostile input', () => {
   it('stay linear on 200 KB of unclosed commands and environments', () => {
-    const big = (unit: string) => unit.repeat(200_000 / unit.length);
+    const big = (unit: string, size = 200_000) => unit.repeat(size / unit.length);
+    const envs = EQ_BEGINS.map((e) => `\\begin{${e}}`).join('');
     const runs: [string, () => unknown][] = [
       ['sections', () => findSections(big('\\section{'))],
       ['figures', () => findFigures(big('\\begin{figure}'))],
       ['tables', () => findTables(big('\\begin{table}\\caption{'))],
+      ['tabulars', () => findTables(`\\begin{table}${big('\\begin{tabular}', 1_000_000)}`)],
       ['equations', () => findEquations(big('\\begin{equation}x\n'))],
+      ['labels', () => findEquations(`${envs}${big('\\label{', 1_000_000)}`)],
       ['acronyms', () => findAcronyms(`\\newacronym${' '.repeat(200_000)}`)],
     ];
     for (const [name, run] of runs) {
