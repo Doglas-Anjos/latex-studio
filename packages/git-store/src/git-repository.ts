@@ -129,10 +129,27 @@ export class GitRepository {
       if (workdir === 0) await git.remove({ fs, dir: this.dir, filepath });
       else toAdd.push(filepath);
     }
-    // One add for all: each call rewrites the whole index.
-    if (toAdd.length) await git.add({ fs, dir: this.dir, filepath: toAdd });
+    await this.add(toAdd);
     const full = withCoAuthors(message, coAuthors);
     return git.commit({ fs, dir: this.dir, message: full, author, committer: author });
+  }
+
+  /**
+   * `git.add` reads and deflates all the files it is given at once, and each call rewrites the
+   * whole index: batches of up to 64 files or 32 MB keep both bounded.
+   */
+  private async add(paths: string[]): Promise<void> {
+    let batch: string[] = [];
+    let bytes = 0;
+    for (const [i, filepath] of paths.entries()) {
+      batch.push(filepath);
+      bytes += (await fs.promises.stat(join(this.dir, filepath))).size;
+      if (bytes >= 32 * 1024 * 1024 || batch.length === 64 || i === paths.length - 1) {
+        await git.add({ fs, dir: this.dir, filepath: batch });
+        batch = [];
+        bytes = 0;
+      }
+    }
   }
 
   async log(
@@ -255,8 +272,7 @@ export class GitRepository {
       }
     }
     if (toAdd.length + removed === 0) return null;
-    // One add for all: each call rewrites the whole index.
-    if (toAdd.length) await git.add({ fs, dir: this.dir, filepath: toAdd });
+    await this.add(toAdd);
     const full = withCoAuthors(message, coAuthors);
     return git.commit({ fs, dir: this.dir, message: full, author, committer: author });
   }

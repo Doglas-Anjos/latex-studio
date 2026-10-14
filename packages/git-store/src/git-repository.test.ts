@@ -111,6 +111,15 @@ it('blames lines like git blame, with null for uncommitted lines', async () => {
   expect((await repo.blame('m.tex')).lines.at(-1)).toEqual({ from: 5, to: 5, sha: c4 });
 });
 
+it('commitAll adds every file across batches', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'git-store-'));
+  dirs.push(dir);
+  const repo = await GitRepository.init(dir);
+  for (let i = 0; i < 130; i++) await repo.writeFile(`f${i}.tex`, `${i}`);
+  const sha = await repo.commitAll('all', { name: 'Ana', email: 'ana@example.com' });
+  expect(await repo.workingChanges(sha)).toEqual([]);
+});
+
 it('commitPaths commits only the given paths with co-author trailers', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'git-store-'));
   dirs.push(dir);
