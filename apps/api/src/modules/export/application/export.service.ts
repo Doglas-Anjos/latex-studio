@@ -1,5 +1,6 @@
-import { readdir, readFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, relative, sep } from 'node:path';
 import type { Readable } from 'node:stream';
 import {
   APP_CONFIG,
@@ -94,10 +95,20 @@ export class ExportService {
     return this.enqueue({ projectId: project.id, kind: 'export', format });
   }
 
-  requestFormat(project: Project, path: string, text: string): Promise<{ jobId: string }> {
+  async requestFormat(project: Project, path: string, text: string): Promise<{ jobId: string }> {
     checkPath(this.storage.open(project.id), path);
+    // Up to 1 MB of text: in Redis (64 MB, noeviction) a few dozen waiting jobs would fill it, so
+    // it waits on disk next to the result. The worker deletes it once read.
+    const input = `${randomUUID()}.in`;
+    const file = this.builds.resolve(`${project.id}/format/${input}`);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, text);
+    const data = { projectId: project.id, kind: 'format', path, input } as const;
     // Results are up to 1 MB each: kept just long enough for the client to poll them.
-    return this.enqueue({ projectId: project.id, kind: 'format', path, text }, { age: 120 });
+    return this.enqueue(data, { age: 120 }).catch(async (e) => {
+      await rm(file, { force: true });
+      throw e;
+    });
   }
 
   async jobStatus(project: Project, jobId: string): Promise<JobStatus> {

@@ -11,7 +11,8 @@ export type ExportFormat = 'docx' | 'md' | 'html';
 export type ToolJobData =
   | { projectId: string; kind: 'wordcount' }
   | { projectId: string; kind: 'export'; format: ExportFormat }
-  | { projectId: string; kind: 'format'; path: string; text: string };
+  /** `input`: file in BUILDS_DIR/<projectId>/format/ holding the text (never Redis: up to 1 MB). */
+  | { projectId: string; kind: 'format'; path: string; input: string };
 
 /** BullMQ `ConnectionOptions`; core does not depend on bullmq, so the shape is spelled out. */
 export type QueueConnection = {

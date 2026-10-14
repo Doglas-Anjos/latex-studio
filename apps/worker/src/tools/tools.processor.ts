@@ -233,7 +233,10 @@ export class ToolsProcessor extends WorkerHost implements OnApplicationBootstrap
     if (job.data.kind === 'format') {
       // Up to 1 MB: a return value would be copied into Redis (job hash and events stream), so
       // it goes to disk and the API reads it back when the client polls the job.
-      const text = await formatText(job.data.path, job.data.text, this.sandbox);
+      // The API leaves the live text in a file, not in the job data that Redis holds.
+      const input = this.builds.resolve(`${job.data.projectId}/format/${job.data.input}`);
+      const source = await readFile(input, 'utf8').finally(() => rm(input, { force: true }));
+      const text = await formatText(job.data.path, source, this.sandbox);
       const dir = this.builds.resolve(`${job.data.projectId}/format`);
       await mkdir(dir, { recursive: true });
       await pruneOld(dir, FORMAT_TTL_MS);

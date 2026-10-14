@@ -1,5 +1,5 @@
 import { execFile, spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -137,14 +137,21 @@ describe('format', () => {
     );
   });
   afterAll(() => rm(builds, { recursive: true, force: true }));
-  const format = (path: string, text = '\\item x\n') =>
-    proc.process({ id: '9', data: { projectId: 'p1', kind: 'format', path, text } } as Job<never>);
+  // The API writes the submitted text to a file and passes its name.
+  const input = () => join(builds, 'p1', 'format', '9.in');
+  const format = async (path: string, text = '\\item x\n') => {
+    await mkdir(join(builds, 'p1', 'format'), { recursive: true });
+    await writeFile(input(), text);
+    const data = { projectId: 'p1', kind: 'format', path, input: '9.in' };
+    return proc.process({ id: '9', data } as Job<never>);
+  };
 
   it('runs latexindent on the submitted text and writes the result to disk', async () => {
     runSpy.mockResolvedValueOnce({ stdout: 'formatted', stderr: '' });
     // Not the text itself: BullMQ copies return values into Redis.
     await expect(format('sub/a.tex')).resolves.toEqual({ file: '9.txt' });
     expect(await readFile(join(builds, 'p1', 'format', '9.txt'), 'utf8')).toBe('formatted');
+    await expect(readFile(input())).rejects.toThrow(/ENOENT/); // the input is consumed
     const [cmd, args, opts] = runSpy.mock.calls.at(-1) as [
       string,
       string[],

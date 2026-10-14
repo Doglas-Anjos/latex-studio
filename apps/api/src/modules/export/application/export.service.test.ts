@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AppConfig } from '@latex-studio/core';
@@ -138,8 +138,16 @@ describe('ExportService', () => {
     await expect(exporter.requestFormat(project, 'chap/a.tex', 'x')).resolves.toEqual({
       jobId: '7',
     });
-    expect(added).toEqual([{ projectId: 'p1', kind: 'format', path: 'chap/a.tex', text: 'x' }]);
-    expect(() => exporter.requestFormat(project, '../x.tex', 'x')).toThrow('Invalid path');
+    // The text waits on disk for the worker; Redis only gets its file name.
+    const [data] = added as Array<{ input: string }>;
+    expect(data).toEqual({
+      projectId: 'p1',
+      kind: 'format',
+      path: 'chap/a.tex',
+      input: data?.input,
+    });
+    expect(await readFile(join(dir, 'p1', 'format', data?.input as string), 'utf8')).toBe('x');
+    await expect(exporter.requestFormat(project, '../x.tex', 'x')).rejects.toThrow('Invalid path');
   });
 
   it('slugifies names', () => {
