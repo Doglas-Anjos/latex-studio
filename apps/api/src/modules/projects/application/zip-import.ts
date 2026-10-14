@@ -16,13 +16,14 @@ const invalidArchive = (e: unknown) =>
 /**
  * Extracts `zip` into the project. Everything that can be checked from the central directory
  * (entry count, declared sizes, paths) is checked before anything is written. No file may be
- * larger than `maxFileBytes`, as with uploads.
+ * larger than `maxFileBytes`, as with uploads. Past `quotaBytes` it throws `tooLarge()`.
  */
 export async function extractZip(
   zip: Buffer,
   files: ProjectFiles,
   quotaBytes: number,
   maxFileBytes: number,
+  tooLarge: () => Error = () => new BadRequestException('Archive exceeds the project quota'),
 ) {
   let archive: ZipFile;
   try {
@@ -50,9 +51,7 @@ export async function extractZip(
           throw new PayloadTooLargeException(`File too large: ${name}`);
         }
         declared += entry.uncompressedSize;
-        if (declared > quotaBytes) {
-          throw new BadRequestException('Archive exceeds the project quota');
-        }
+        if (declared > quotaBytes) throw tooLarge();
         entries.push({ entry, name });
       }
     } catch (e) {
@@ -69,7 +68,6 @@ export async function extractZip(
 
     // Declared sizes can lie; count the bytes actually inflated as well.
     const budget = { left: quotaBytes };
-    const tooLarge = () => new BadRequestException('Archive exceeds the project quota');
     for (const { entry, path } of items) {
       try {
         const stream = await archive.openReadStreamPromise(entry);

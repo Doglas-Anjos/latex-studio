@@ -36,6 +36,7 @@ import { PROJECT_STORAGE, type ProjectFiles, type ProjectStorage } from '../doma
 import {
   accountQuotaExceeded,
   accountRoom,
+  assertAccountQuota,
   author,
   checkPath,
   isGitPath,
@@ -98,16 +99,20 @@ export class ProjectsService {
 
   /**
    * The repository is written and committed before the row exists, so no row lacks a repo.
-   * `seed` fills the working tree and returns the commit message.
+   * `seed` fills the working tree with about `bytes` and returns the commit message; an account
+   * without room for those is refused before anything is written.
    */
   async createWith(
     owner: User,
     name: string,
     seed: (files: ProjectFiles) => Promise<string>,
     mainFile?: string,
+    bytes = 0,
   ): Promise<Project> {
     await this.assertProjectCap(owner);
     const id = randomUUID();
+    const mb = this.config.USER_QUOTA_MB;
+    await assertAccountQuota(this.projects, this.storage, mb, { id, ownerId: owner.id }, bytes);
     try {
       const files = await this.storage.init(id);
       await files.repo.commitAll(await seed(files), author(owner));
@@ -127,7 +132,12 @@ export class ProjectsService {
     const id = randomUUID();
     return this.lock.run(id, async () => {
       const quota = megabytes(this.config.PROJECT_QUOTA_MB);
-      const budget = { left: quota };
+      const mb = this.config.USER_QUOTA_MB;
+      // Within the account's room too: an owner over the cap writes nothing before the 413
+      // (insertWithinQuota still decides, with the history this import adds).
+      const room = await accountRoom(this.projects, this.storage, mb, { id, ownerId: owner.id });
+      const budget = { left: Math.min(quota, room) };
+      const tooLarge = room < quota ? () => accountQuotaExceeded(mb) : undefined;
       let name: string | null = null;
       let files: ProjectFiles | undefined;
       let mode: 'archive' | 'files' | undefined;
@@ -145,7 +155,7 @@ export class ProjectsService {
           if (part.fieldname === 'archive' && !mode) {
             mode = 'archive';
             const maxFile = megabytes(this.config.MAX_UPLOAD_MB);
-            await extractZip(await part.toBuffer(), files, quota, maxFile);
+            await extractZip(await part.toBuffer(), files, budget.left, maxFile, tooLarge);
           } else if (part.fieldname === 'files' && mode !== 'archive') {
             mode = 'files';
             // NFC like the zip import: macOS sends decomposed names, which SafePath refuses.
@@ -156,7 +166,7 @@ export class ProjectsService {
               continue;
             }
             checkPath(files, path);
-            await files.writeStream(path, limitBytes(part.file, budget));
+            await files.writeStream(path, limitBytes(part.file, budget, tooLarge));
           } else {
             throw new BadRequestException('Send one "archive" or several "files"');
           }

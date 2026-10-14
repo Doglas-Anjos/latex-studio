@@ -15,7 +15,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Queue } from 'bullmq';
 import { ZipFile } from 'yazl';
-import { checkPath } from '../../projects/application/project-files';
+import { checkPath, treeBytes } from '../../projects/application/project-files';
 import { ProjectsService } from '../../projects/application/projects.service';
 import { type Project, parseProjectName } from '../../projects/domain/project';
 import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/project-storage';
@@ -74,16 +74,18 @@ export class ExportService {
     const copyName = parseProjectName(name ?? `Copy of ${project.name}`);
     if (!copyName) throw new BadRequestException('Invalid project name');
     const from = this.storage.open(project.id);
+    const sources = await from.repo.listFiles();
     return this.projects.createWith(
       user,
       copyName,
       async (to) => {
-        for (const { path } of await from.repo.listFiles()) {
+        for (const { path } of sources) {
           await to.writeStream(path, (await from.readStream(path)).stream);
         }
         return `Copy of ${project.name}`;
       },
       project.mainFile,
+      treeBytes(sources),
     );
   }
 

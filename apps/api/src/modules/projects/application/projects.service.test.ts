@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
+import { ExportService } from '../../export/application/export.service';
 import { FilesService } from '../../files/application/files.service';
 import type { User } from '../../users/domain/user';
 import { FsProjectStorage } from '../infrastructure/fs-project-storage';
@@ -160,26 +161,29 @@ describe('ProjectsService', () => {
     expect(await storage.open(project.id).repo.log()).toHaveLength(1);
   });
 
-  it("caps the owner's storage over all their projects, collaborators' writes included", async () => {
-    const base = {
+  /** Services over the shared fake repository and storage: 1 MB per project, `USER_QUOTA_MB`. */
+  const make = (USER_QUOTA_MB?: number) => {
+    const config = {
       REPOS_DIR: dir,
       BUILDS_DIR: join(dir, 'builds'),
       PROJECT_QUOTA_MB: 1,
       MAX_PROJECTS_PER_USER: 5,
+      USER_QUOTA_MB,
     } as AppConfig;
-    const make = (config: AppConfig) => {
-      const lock = new ProjectLock();
-      const files = new FilesService(storage, lock, config, new FakeDocumentSync(), projects);
-      return { projects: new ProjectsService(projects, storage, lock, config), files };
-    };
-    const capped = make({ ...base, USER_QUOTA_MB: 1 });
-    const uncapped = make(base);
-    const over = {
-      status: 413,
-      message:
-        'Cota de armazenamento da conta excedida (1 MB). Exclua projetos que não usa para liberar espaço.',
-    };
-    const big = 'x'.repeat(600 * 1024); // each fits the 1 MB project quota, two do not fit 1 MB
+    const lock = new ProjectLock();
+    const files = new FilesService(storage, lock, config, new FakeDocumentSync(), projects);
+    return { config, projects: new ProjectsService(projects, storage, lock, config), files };
+  };
+  const over = {
+    status: 413,
+    message:
+      'Cota de armazenamento da conta excedida (1 MB). Exclua projetos que não usa para liberar espaço.',
+  };
+  const big = 'x'.repeat(600 * 1024); // each fits the 1 MB project quota, two do not fit 1 MB
+
+  it("caps the owner's storage over all their projects, collaborators' writes included", async () => {
+    const capped = make(1);
+    const uncapped = make();
 
     const a = await capped.projects.create(ana, 'A');
     await capped.files.create(a, ana, 'a.tex', big);
@@ -201,30 +205,53 @@ describe('ProjectsService', () => {
     expect(await projects.ownedIds(ana.id)).toHaveLength(3);
   });
 
+  it('bounds an import by the room left in the account, and refuses a copy before writing', async () => {
+    const capped = make(1);
+    const a = await capped.projects.create(ana, 'A');
+    await capped.files.create(a, ana, 'a.tex', big);
+
+    // 1000 KB fits the 1 MB project quota, not the ~400 KB left: refused long before the end.
+    let pulled = 0;
+    async function* chunks() {
+      for (; pulled < 10; pulled++) yield Buffer.alloc(100 * 1024);
+    }
+    async function* upload(): AsyncIterable<UploadPart> {
+      yield { type: 'field', fieldname: 'name', value: 'B' };
+      const file = chunks() as unknown as Readable;
+      yield {
+        type: 'file',
+        fieldname: 'files',
+        filename: 'b.bin',
+        file,
+        toBuffer: async () => {
+          throw new Error('not read whole');
+        },
+      };
+    }
+    await expect(capped.projects.import(ana, upload())).rejects.toMatchObject(over);
+    expect(pulled).toBeLessThan(6);
+
+    const init = vi.spyOn(storage, 'init');
+    const exporter = new ExportService(storage, capped.projects, {} as never, capped.config);
+    await expect(exporter.copy(a, ana)).rejects.toMatchObject(over);
+    expect(init).not.toHaveBeenCalled();
+    expect(await projects.ownedIds(ana.id)).toEqual([a.id]);
+  });
+
   it('re-checks the account after writing: concurrent writes that fit alone do not all pass', async () => {
-    const config = {
-      REPOS_DIR: dir,
-      BUILDS_DIR: join(dir, 'builds'),
-      PROJECT_QUOTA_MB: 1,
-      USER_QUOTA_MB: 1,
-      MAX_PROJECTS_PER_USER: 5,
-    } as AppConfig;
-    const lock = new ProjectLock();
-    const capped = new ProjectsService(projects, storage, lock, config);
-    const files = new FilesService(storage, lock, config, new FakeDocumentSync(), projects);
-    const big = 'x'.repeat(600 * 1024); // one fits the 1 MB account, two do not
+    const capped = make(1);
     const refused = (results: PromiseSettledResult<unknown>[]) =>
       results.filter((r) => r.status === 'rejected').map((r) => (r.reason as Error).message);
 
     // Uploads into two projects of one owner: each read the whole room before streaming.
-    const a = await capped.create(ana, 'A');
-    const b = await capped.create(ana, 'B');
+    const a = await capped.projects.create(ana, 'A');
+    const b = await capped.projects.create(ana, 'B');
     const uploads = await Promise.allSettled([
-      files.upload(a, parts('', { 'a.png': big })),
-      files.upload(b, parts('', { 'b.png': big })),
+      capped.files.upload(a, parts('', { 'a.png': big })),
+      capped.files.upload(b, parts('', { 'b.png': big })),
     ]);
     expect(refused(uploads)).not.toHaveLength(0);
-    expect(refused(uploads).every((m) => m.startsWith('Cota de armazenamento'))).toBe(true);
+    expect(refused(uploads).every((m) => m === over.message)).toBe(true);
     const kept = await Promise.all([
       storage.open(a.id).isFile('a.png'),
       storage.open(b.id).isFile('b.png'),
@@ -244,29 +271,20 @@ describe('ProjectsService', () => {
       return insert(project, ownerId);
     };
     const imports = await Promise.allSettled([
-      capped.import(bob, parts('C', { 'c.tex': big })),
-      capped.import(bob, parts('D', { 'd.tex': big })),
+      capped.projects.import(bob, parts('C', { 'c.tex': big })),
+      capped.projects.import(bob, parts('D', { 'd.tex': big })),
     ]);
     expect(refused(imports)).not.toHaveLength(0);
     expect((await projects.ownedIds(bob.id)).length).toBeLessThanOrEqual(1);
   });
 
   it('walks only the written project for the account quota, its siblings come from a cache', async () => {
-    const config = {
-      REPOS_DIR: dir,
-      BUILDS_DIR: join(dir, 'builds'),
-      PROJECT_QUOTA_MB: 1,
-      USER_QUOTA_MB: 1,
-      MAX_PROJECTS_PER_USER: 5,
-    } as AppConfig;
-    const lock = new ProjectLock();
-    const capped = new ProjectsService(projects, storage, lock, config);
-    const files = new FilesService(storage, lock, config, new FakeDocumentSync(), projects);
-    const a = await capped.create(ana, 'A');
-    await capped.create(ana, 'B');
+    const capped = make(1);
+    const a = await capped.projects.create(ana, 'A');
+    await capped.projects.create(ana, 'B');
     const listed = vi.spyOn(GitRepository.prototype, 'listFiles');
     try {
-      await files.create(a, ana, 'x.tex', 'x');
+      await capped.files.create(a, ana, 'x.tex', 'x');
       const dirs = listed.mock.contexts.map((repo) => (repo as unknown as { dir: string }).dir);
       expect(dirs.length).toBeGreaterThan(0);
       expect(dirs.every((d) => d.endsWith(a.id))).toBe(true);
