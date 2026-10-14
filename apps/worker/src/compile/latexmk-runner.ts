@@ -25,6 +25,19 @@ const ENGINE_FLAGS: Record<Engine, string[]> = {
 const WINDOWS = process.platform === 'win32';
 /** Written into the throwaway snapshot only; never part of the project. */
 const DRAFT_WRAPPER = 'latex-studio-draft.tex';
+/**
+ * latexmk passes every command (pdflatex, bibtex, biber, makeindex) and every kpsewhich lookup to
+ * /bin/sh as one string, with file names it read from the .aux/.log/.fls wrapped in "..." — and
+ * the document controls those names. This `-e` code swaps its two shell sinks (`Run` and
+ * `kpsewhich`) for list-form calls that split the string the same way (latexmk's own
+ * parse_quotes) but never start a shell. It stops the run if a latexmk upgrade renames them.
+ * No quotes or backslashes in it: MiKTeX's latexmk wrapper mangles them on the command line.
+ */
+export const NO_SHELL =
+  'no warnings q(redefine); ' +
+  'defined &Run && defined &kpsewhich && defined &parse_quotes or die q(latexmk internals changed); ' +
+  '*Run = sub { my @a = parse_quotes($_[0]); (0, system { $a[0] } @a) }; ' +
+  '*kpsewhich = sub { open(my $f, q(-|), q(kpsewhich), @_) or return (); chomp(my @l = <$f>); @l };';
 
 /**
  * Runs latexmk without a shell, with a wall-clock timeout and a minimal environment.
@@ -71,6 +84,8 @@ export class LatexmkRunner {
       ...ENGINE_FLAGS[engine],
       // A project-supplied .latexmkrc would run as Perl inside the worker.
       '-norc',
+      '-e',
+      NO_SHELL,
       '-interaction=nonstopmode',
       // "Try to compile despite errors" (Overleaf's default): -f makes latexmk run every pass even
       // when one exits non-zero, so a document whose first pass errors still yields a PDF — e.g.

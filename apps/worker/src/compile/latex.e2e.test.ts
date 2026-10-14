@@ -195,6 +195,17 @@ describe.skipIf(!latexmkAvailable)('LaTeX compile regressions', () => {
     expect(r.errors.length).toBeGreaterThan(0);
   });
 
+  // latexmk runs bibtex/biber/makeindex through the no-shell `Run` from NO_SHELL; if that override
+  // broke, the citation would stay undefined and the .bbl/.ind would be missing.
+  it.each(['bibtex', 'biber'])('resolves citations with %s (and makeindex)', async (fixture) => {
+    const dir = await project(fixture);
+    const r = await compile(dir, 'pdflatex');
+    expect(r.status).toBe('succeeded');
+    expect(r.log).not.toMatch(/Citation `knuth' (on page \d+ )?undefined/);
+    expect(existsSync(join(dir, 'out', 'main.bbl'))).toBe(true);
+    if (fixture === 'bibtex') expect(existsSync(join(dir, 'out', 'main.ind'))).toBe(true);
+  });
+
   // Was broken on MiKTeX when draft went through -usepretex (backslashes stripped).
   it('compiles in draft mode, keeping the main file name for the outputs', async () => {
     const r = await compile(await project('glue'), 'pdflatex', { draft: true });

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { WorkerConfig } from '@latex-studio/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { LatexmkRunner } from './latexmk-runner';
+import { LatexmkRunner, NO_SHELL } from './latexmk-runner';
 import { Sandbox } from './sandbox';
 
 const latexmkAvailable = (() => {
@@ -117,5 +117,10 @@ describe('LatexmkRunner', () => {
     expect(captures[0]).not.toContain('-halt-on-error');
     expect(captures[1]).toContain('-halt-on-error');
     expect(captures[1]).not.toContain('-f');
+    // latexmk must never hand names from the .aux/.log to /bin/sh (see NO_SHELL).
+    for (const args of captures) {
+      expect(args[args.indexOf('-e') + 1]).toBe(NO_SHELL);
+      expect(args).toEqual(expect.arrayContaining(['-norc', '-no-shell-escape']));
+    }
   });
 });
