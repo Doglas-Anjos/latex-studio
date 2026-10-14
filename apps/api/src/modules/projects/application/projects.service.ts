@@ -15,6 +15,7 @@ import {
   Injectable,
   NotFoundException,
   Optional,
+  PayloadTooLargeException,
 } from '@nestjs/common';
 import { AuditService } from '../../audit/audit.service';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
@@ -118,7 +119,7 @@ export class ProjectsService {
       await files.repo.commitAll(await seed(files), author(owner));
       return await this.insertWithinQuota(owner, { id, name, ...(mainFile && { mainFile }) });
     } catch (e) {
-      await this.storage.remove(id);
+      if (!(e as { rowKept?: boolean }).rowKept) await this.storage.remove(id);
       throw e;
     }
   }
@@ -137,7 +138,12 @@ export class ProjectsService {
       // (insertWithinQuota still decides, with the history this import adds).
       const room = await accountRoom(this.projects, this.storage, mb, { id, ownerId: owner.id });
       const budget = { left: Math.min(quota, room) };
-      const tooLarge = room < quota ? () => accountQuotaExceeded(mb) : undefined;
+      // A file over MAX_UPLOAD_MB keeps its own message; only the budget means the account is full.
+      const tooLarge =
+        room < quota
+          ? (m?: string) =>
+              m === 'File too large' ? new PayloadTooLargeException(m) : accountQuotaExceeded(mb)
+          : undefined;
       let name: string | null = null;
       let files: ProjectFiles | undefined;
       let mode: 'archive' | 'files' | undefined;
@@ -181,7 +187,7 @@ export class ProjectsService {
           ...(engine && { engine }),
         });
       } catch (e) {
-        await this.storage.remove(id);
+        if (!(e as { rowKept?: boolean }).rowKept) await this.storage.remove(id);
         throw e;
       }
     });
@@ -243,7 +249,9 @@ export class ProjectsService {
       }
       return row;
     } catch (e) {
-      await this.projects.delete(row.id);
+      // If the row cannot go, the caller must keep the folder it names (`rowKept`): a project
+      // without its repository is worse than one over the quota.
+      await this.projects.delete(row.id).catch(() => Object.assign(e as object, { rowKept: true }));
       throw e;
     }
   }
