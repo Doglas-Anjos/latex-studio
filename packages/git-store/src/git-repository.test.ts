@@ -150,4 +150,10 @@ it('fileLog lists only the commits that changed a given file', async () => {
     'first',
   ]);
   expect(await repo.fileLog('nope.tex')).toEqual([]);
+
+  await repo.writeFile('sub/c.tex', 'c');
+  await repo.commitAll('fifth', author);
+  expect((await repo.fileLog('sub/c.tex')).map((c) => c.message)).toEqual(['fifth']);
+  expect(await repo.fileLog('sub')).toEqual([]); // a folder
+  expect(await repo.fileLog('a.tex/x')).toEqual([]); // a file where a folder should be
 });

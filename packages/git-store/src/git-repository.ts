@@ -198,16 +198,33 @@ export class GitRepository {
     limit = 50,
   ): Promise<Array<{ sha: string; message: string; author: Author; date: Date }>> {
     const commits = await this.log(limit);
-    const blobOid = (sha: string) =>
-      git.readBlob({ fs, dir: this.dir, oid: sha, filepath: path }).then(
-        (r) => r.oid,
-        (e: { code?: string }) => {
-          if (e.code === 'NotFoundError') return null;
-          throw e;
-        },
-      );
-    const oids = await Promise.all(commits.map((c) => blobOid(c.sha)));
+    const cache = {};
+    const oids: Array<string | null> = [];
+    for (const c of commits) oids.push(await this.blobOid(c.sha, path, cache));
     return commits.filter((_, i) => oids[i] !== (oids[i + 1] ?? null));
+  }
+
+  /**
+   * Oid of the file at `path` in commit `sha`, or null when absent or not a file. Reads only the
+   * trees: `readBlob` would inflate the whole file just to report its oid.
+   */
+  private async blobOid(sha: string, path: string, cache = {}): Promise<string | null> {
+    const slash = path.lastIndexOf('/');
+    try {
+      const { tree } = await git.readTree({
+        fs,
+        dir: this.dir,
+        oid: sha,
+        filepath: path.slice(0, Math.max(slash, 0)),
+        cache,
+      });
+      return tree.find((e) => e.path === path.slice(slash + 1) && e.type === 'blob')?.oid ?? null;
+    } catch (e) {
+      // No such folder, or a file where the path needs a folder.
+      const code = (e as { code?: string }).code;
+      if (code === 'NotFoundError' || code === 'ObjectTypeError') return null;
+      throw e;
+    }
   }
 
   /** HEAD's sha, or null for an empty repo. */
@@ -228,16 +245,12 @@ export class GitRepository {
     // Content hashes, not statusMatrix: its mtime+size shortcut misses a same-size edit made in
     // the same second, which is exactly what Ctrl+S right after typing produces.
     const head = await this.head();
+    const cache = {};
     const toAdd: string[] = [];
     let removed = 0;
     for (const filepath of paths) {
       const content = await fs.promises.readFile(join(this.dir, filepath)).catch(() => null);
-      const inHead = head
-        ? await git
-            .readBlob({ fs, dir: this.dir, oid: head, filepath })
-            .then((r) => r.oid)
-            .catch(() => null)
-        : null;
+      const inHead = head ? await this.blobOid(head, filepath, cache) : null;
       const now = content ? (await git.hashBlob({ object: content })).oid : null;
       if (now === inHead) continue;
       if (content !== null) toAdd.push(filepath);
