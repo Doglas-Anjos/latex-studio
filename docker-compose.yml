@@ -105,8 +105,8 @@ services:
       COMPILE_TIMEOUT_MS: ${COMPILE_TIMEOUT_MS:-180000}
       COMPILE_MEMORY_MB: ${COMPILE_MEMORY_MB:-1024}
       # Default to a hard requirement so the worker refuses to start without the bubblewrap sandbox
-      # (bwrap works under this service's cap_drop/no-new-privileges; see sandbox.ts). An operator on
-      # a kernel without unprivileged user namespaces can set COMPILE_SANDBOX=auto in .env.
+      # (see security_opt below). An operator on a kernel without unprivileged user namespaces can
+      # set COMPILE_SANDBOX=auto in .env.
       COMPILE_SANDBOX: ${COMPILE_SANDBOX:-require}
       COMPILE_ALLOW_LUALATEX: ${COMPILE_ALLOW_LUALATEX:-false}
     logging: *default-logging
@@ -125,8 +125,18 @@ services:
     read_only: true
     tmpfs:
       - /tmp:size=1g
+    # Each compile runs inside bubblewrap (user, pid, net and mount namespaces; no env; only its
+    # snapshot), the boundary around untrusted TeX. On a Linux host Docker's own seccomp profile,
+    # AppArmor docker-default and the masked /proc paths each stop bubblewrap from building that
+    # sandbox, so the worker drops them; it stays non-root, cap_drop ALL, no-new-privileges,
+    # read-only. ponytail: unconfined seccomp/AppArmor widen the kernel surface the sandbox can
+    # reach; upgrade path: Docker's default seccomp profile plus unshare/mount/pivot_root, and an
+    # AppArmor profile allowing bubblewrap's mounts.
     security_opt:
       - no-new-privileges:true
+      - seccomp=unconfined
+      - apparmor=unconfined
+      - systempaths=unconfined
     cap_drop:
       - ALL
     networks:
