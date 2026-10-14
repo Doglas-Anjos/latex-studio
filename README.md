@@ -67,6 +67,8 @@ A capacidade de processamento tem duas alavancas independentes:
 
 As duas alavancas são lidas no boot: depois de mudar, reinicie os workers (`docker compose up -d` recria quem mudou). Como referência, uma VPS de 2 vCPU/4 GB atende ~100 usuários com os padrões.
 
+Cotas de armazenamento: `PROJECT_QUOTA_MB` por projeto e, opcional, `USER_QUOTA_MB` somando todos os projetos de cada dono (o que colaboradores gravam conta para o dono); vazio = sem teto por usuário.
+
 Backup noturno (dump do Postgres + tar dos repositórios): `./scripts/backup.sh /srv/backups` via cron.
 
 ## Desenvolvimento
