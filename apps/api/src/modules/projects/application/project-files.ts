@@ -133,7 +133,14 @@ export async function accountRoom(
   if (!mb) return Number.POSITIVE_INFINITY;
   let left = megabytes(mb);
   for (const id of await projects.ownedIds(project.ownerId)) {
-    left -= await usedBytes(storage.open(id), id === project.id ? replacing : undefined);
+    // A project whose folder is gone (being deleted right now) holds nothing; it must not turn
+    // every write of its owner into a 500.
+    left -= await usedBytes(storage.open(id), id === project.id ? replacing : undefined).catch(
+      (e: { code?: string }) => {
+        if (e.code === 'ENOENT') return 0;
+        throw e;
+      },
+    );
   }
   return left;
 }
