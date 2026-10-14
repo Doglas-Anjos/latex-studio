@@ -6,20 +6,31 @@ updates:
       interval: weekly
       day: monday
       time: "03:00"
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
 
   - package-ecosystem: github-actions
     directory: "/"
+    open-pull-requests-limit: 10
     schedule:
       interval: weekly
       day: monday
       time: "03:00"
+    groups:
+      actions:
+        patterns: ["*"]
 
+  # Node majors are bumped once, by hand, across all three images.
   - package-ecosystem: docker
     directory: "/docker/api"
     schedule:
       interval: weekly
       day: monday
       time: "03:00"
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker
     directory: "/docker/texlive"
@@ -27,6 +38,9 @@ updates:
       interval: weekly
       day: monday
       time: "03:00"
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: docker
     directory: "/docker/web"
@@ -34,3 +48,6 @@ updates:
       interval: weekly
       day: monday
       time: "03:00"
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
