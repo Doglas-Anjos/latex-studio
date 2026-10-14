@@ -249,8 +249,10 @@ export function CommentsPanel({
                   ev.preventDefault();
                   const text = drafts[c.id]?.trim();
                   if (!text) return;
-                  run.mutate(() => service.reply(projectId, c.id, text));
-                  setDrafts({ ...drafts, [c.id]: '' });
+                  // Cleared once saved: a failed reply keeps its text for another try.
+                  run.mutate(() => service.reply(projectId, c.id, text), {
+                    onSuccess: () => setDrafts((d) => ({ ...d, [c.id]: '' })),
+                  });
                 }}
               >
                 <input
@@ -281,7 +283,12 @@ export function CommentsPanel({
               {canDelete(c.author?.id) && (
                 <Button
                   variant="ghost"
-                  onClick={() => run.mutate(() => service.remove(projectId, c.id))}
+                  onClick={() => {
+                    // The whole thread goes, other people's replies included.
+                    const replies = c.replies.length ? ` e ${c.replies.length} resposta(s)` : '';
+                    if (confirm(`Excluir este comentário${replies}? Isso não pode ser desfeito.`))
+                      run.mutate(() => service.remove(projectId, c.id));
+                  }}
                 >
                   Excluir
                 </Button>

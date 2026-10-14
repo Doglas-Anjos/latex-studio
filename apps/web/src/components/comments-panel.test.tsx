@@ -71,6 +71,32 @@ describe('CommentsPanel', () => {
     await waitFor(() => expect(service.setResolved).toHaveBeenCalledWith('p1', 'c1', true));
   });
 
+  it('asks before deleting a thread and keeps a reply that failed to send', async () => {
+    const service: CommentService = {
+      ...emptyService(),
+      list: vi.fn().mockResolvedValue([comment]),
+      remove: vi.fn().mockResolvedValue(undefined),
+      reply: vi.fn().mockRejectedValue(new Error('offline')),
+    };
+    renderWithApp(
+      <CommentsPanel projectId="p1" path="main.tex" role={ROLE} />,
+      new Container()
+        .register(CommentServiceToken, service)
+        .register(AuthServiceToken, authFor('u1')),
+    );
+    const reply = (await screen.findByLabelText('Responder')) as HTMLInputElement;
+    await userEvent.type(reply, 'concordo{Enter}');
+    expect(await screen.findByText('offline')).toBeTruthy();
+    expect(reply.value).toBe('concordo');
+
+    const ask = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true);
+    await userEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+    expect(service.remove).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+    await waitFor(() => expect(service.remove).toHaveBeenCalledWith('p1', 'c1'));
+    ask.mockRestore();
+  });
+
   it('without a draft, explains how to start one and disables submit', async () => {
     const service = emptyService();
     renderWithApp(
