@@ -98,6 +98,13 @@ describe('FilesService', () => {
     expect(sync.calls).not.toContain('replace same.tex');
   });
 
+  it('charges each file at least 4 KiB, so empty files cannot fill the disk for free', async () => {
+    const empty = Object.fromEntries(Array.from({ length: 300 }, (_, i) => [`e${i}.tex`, '']));
+    // 300 × 4 KiB is over the 1 MB quota; the files written before the refusal are removed.
+    await expect(service.upload(project, parts(empty))).rejects.toMatchObject({ status: 413 });
+    expect(await storage.open(project.id).repo.listFiles()).toEqual([]);
+  });
+
   it('forgets the docs of renamed and deleted files', async () => {
     await service.create(project, ana, 'a.tex', 'a');
     await service.create(project, ana, 'dir/b.tex', 'b');

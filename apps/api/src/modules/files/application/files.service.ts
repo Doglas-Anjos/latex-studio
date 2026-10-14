@@ -22,6 +22,7 @@ import {
   limitBytes,
   megabytes,
   pathExists,
+  treeBytes,
   type UploadPart,
 } from '../../projects/application/project-files';
 import { ProjectLock } from '../../projects/application/project-lock';
@@ -189,7 +190,7 @@ export class FilesService {
       const files = this.storage.open(project.id);
       const listed = await files.repo.listFiles();
       const sizes = new Map(listed.map((f) => [f.path, f.size]));
-      const used = listed.reduce((sum, f) => sum + f.size, 0) + (await files.repo.storedBytes());
+      const used = treeBytes(listed) + (await files.repo.storedBytes());
       const budget = { left: this.quota - used };
       const mb = this.config.USER_QUOTA_MB;
       const account = { left: await accountRoom(this.projects, this.storage, mb, project) };

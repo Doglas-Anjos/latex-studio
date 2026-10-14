@@ -91,11 +91,16 @@ export async function pathExists(files: ProjectFiles, path: string): Promise<boo
   }
 }
 
+/** A file takes at least a disk block: empty files must not be free to create by the thousand. */
+const MIN_FILE_BYTES = 4096;
+
+/** What the files of a listing count toward the quotas. */
+export const treeBytes = (list: Array<{ size: number }>) =>
+  list.reduce((sum, f) => sum + Math.max(f.size, MIN_FILE_BYTES), 0);
+
 /** Working tree (except `replacing`, a file about to be overwritten) plus history bytes. */
 export async function usedBytes(files: ProjectFiles, replacing?: string): Promise<number> {
-  const tree = (await files.repo.listFiles())
-    .filter((f) => f.path !== replacing)
-    .reduce((sum, f) => sum + f.size, 0);
+  const tree = treeBytes((await files.repo.listFiles()).filter((f) => f.path !== replacing));
   // History too: every save adds objects, and a quota on the working tree alone never fills.
   return tree + (await files.repo.storedBytes());
 }
@@ -164,14 +169,16 @@ export async function assertAccountQuota(
 
 /**
  * Passes chunks through and throws `tooLarge(message)` once `budget.left` bytes are exceeded
- * (413 by default).
+ * (413 by default). The file costs at least MIN_FILE_BYTES, as in treeBytes.
  */
 export async function* limitBytes(
   source: AsyncIterable<Uint8Array>,
   budget: { left: number },
   tooLarge: (message: string) => Error = (m) => new PayloadTooLargeException(m),
 ) {
+  let bytes = 0;
   for await (const chunk of source) {
+    bytes += chunk.length;
     budget.left -= chunk.length;
     if (budget.left < 0) throw tooLarge(QUOTA_EXCEEDED);
     yield chunk;
@@ -179,4 +186,7 @@ export async function* limitBytes(
   // Over MAX_UPLOAD_MB, busboy ends the stream normally with `truncated` set and multipart only
   // raises its error on the next part; fail here so the truncated file is never renamed in.
   if ((source as { truncated?: boolean }).truncated) throw tooLarge('File too large');
+  // Before the rename too: an empty file has no chunk to count.
+  budget.left -= Math.max(0, MIN_FILE_BYTES - bytes);
+  if (budget.left < 0) throw tooLarge(QUOTA_EXCEEDED);
 }
