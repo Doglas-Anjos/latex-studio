@@ -1,6 +1,11 @@
 {
   "name": "latex-studio",
   "private": true,
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Doglas-Anjos/latex-studio.git"
+  },
   "packageManager": "pnpm@12.8.1",
   "engines": {
     "node": ">=22.22.3"

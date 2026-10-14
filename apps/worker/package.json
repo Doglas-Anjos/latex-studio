@@ -2,6 +2,12 @@
   "name": "@latex-studio/worker",
   "version": "0.0.0",
   "private": true,
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Doglas-Anjos/latex-studio.git",
+    "directory": "apps/worker"
+  },
   "scripts": {
     "dev": "nest start --watch",
     "build": "tsc",
