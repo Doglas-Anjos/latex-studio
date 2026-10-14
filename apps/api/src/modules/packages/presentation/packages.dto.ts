@@ -1,3 +1,4 @@
+import { PACKAGE_NAME, PACKAGE_OPTIONS } from '@latex-studio/latex-tools';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -7,20 +8,17 @@ import {
   IsOptional,
   IsString,
   Matches,
-  MaxLength,
   ValidateNested,
 } from 'class-validator';
 
+// The manifest's own rules; parseManifest (run by the service) also requires balanced braces.
 export class PackageEntryDto {
-  @Matches(/^[A-Za-z0-9._-]+$/)
-  @MaxLength(100)
+  @Matches(PACKAGE_NAME)
   name!: string;
 
-  // No braces, brackets or line breaks: the options are written verbatim into \usepackage[...]{...}.
   @IsOptional()
   @IsString()
-  @MaxLength(200)
-  @Matches(/^[^{}[\]\r\n]*$/)
+  @Matches(PACKAGE_OPTIONS)
   options?: string;
 
   @IsBoolean()

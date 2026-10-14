@@ -78,4 +78,12 @@ describe('parseManifest', () => {
     expect(() => parseManifest('[{"name":"","enabled":true,"order":1}]')).toThrow('entry 0');
     expect(() => parseManifest('[{"name":"a","enabled":"yes","order":1}]')).toThrow('enabled');
   });
+
+  it('accepts balanced braces in options and rejects anything that escapes the argument', () => {
+    const entry = (options: string) =>
+      JSON.stringify([{ name: 'geometry', options, enabled: true, order: 0 }]);
+    expect(parseManifest(entry('margin={2cm,3cm}, a4paper'))).toHaveLength(1);
+    for (const bad of [']{x}\\input{/etc/passwd}%', 'a={b', 'a}{', 'a\nb', 'a#1', 'x'.repeat(201)])
+      expect(() => parseManifest(entry(bad)), bad).toThrow('options');
+  });
 });

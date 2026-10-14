@@ -35,15 +35,18 @@ const MAX_SCAN_BYTES = 1024 * 1024;
 
 export type PackageUsage = { name: string; options?: string; path: string; line: number };
 
-/** Sorts by `order` and renumbers 0..n-1; throws 400 on an invalid manifest. */
-function normalize(manifest: unknown): PackageManifest {
-  let parsed: PackageManifest;
+/** parseManifest with its error as a 400 (an uploaded manifest can break any rule). */
+function parse(json: string): PackageManifest {
   try {
-    parsed = parseManifest(JSON.stringify(manifest));
+    return parseManifest(json);
   } catch (e) {
     throw new BadRequestException((e as Error).message);
   }
-  return [...parsed]
+}
+
+/** Sorts by `order` and renumbers 0..n-1; throws 400 on an invalid manifest. */
+function normalize(manifest: unknown): PackageManifest {
+  return [...parse(JSON.stringify(manifest))]
     .sort((a, b) => a.order - b.order)
     .map((e, order) => ({
       name: e.name,
@@ -170,6 +173,6 @@ export class PackagesService {
     if (head.length > MAX_MANIFEST_BYTES) {
       throw new PayloadTooLargeException(`${MANIFEST} is larger than 256 KB`);
     }
-    return parseManifest(head.toString());
+    return parse(head.toString());
   }
 }
