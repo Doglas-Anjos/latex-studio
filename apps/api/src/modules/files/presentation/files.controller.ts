@@ -28,7 +28,7 @@ import {
 } from '../../projects/presentation/multipart';
 import type { User } from '../../users/domain/user';
 import { FilesService, type UploadedFile } from '../application/files.service';
-import { CONTENT_TYPES } from './content-types';
+import { attachment, CONTENT_TYPES } from './content-types';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
 import { CreateFileDto, CreateFolderDto, RenameFileDto, UpdateFileDto } from './files.dto';
 
@@ -54,10 +54,9 @@ export class FilesController {
     const content = await this.files.read(project, path);
     const type = CONTENT_TYPES[extname(path).toLowerCase()];
     if (type) return new StreamableFile(content, { type });
-    // SafePath limits names to [A-Za-z0-9._ -()], so the filename needs no escaping.
     return new StreamableFile(content, {
       type: 'application/octet-stream',
-      disposition: `attachment; filename="${basename(path)}"`,
+      disposition: attachment(basename(path)),
     });
   }
 

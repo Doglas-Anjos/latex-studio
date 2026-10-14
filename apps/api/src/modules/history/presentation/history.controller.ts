@@ -13,7 +13,7 @@ import {
 } from '@nestjs/common';
 import { RouteConfig } from '@nestjs/platform-fastify';
 import { CurrentUser } from '../../auth/presentation/decorators';
-import { CONTENT_TYPES } from '../../files/presentation/content-types';
+import { attachment, CONTENT_TYPES } from '../../files/presentation/content-types';
 import type { Project } from '../../projects/domain/project';
 import {
   CurrentProject,
@@ -87,10 +87,9 @@ export class HistoryController {
     const type = CONTENT_TYPES[extname(path).toLowerCase()];
     // Only text is served inline here; images and PDFs of old versions download.
     if (type?.startsWith('text/')) return new StreamableFile(content, { type });
-    // SafePath limits names to [A-Za-z0-9._ -()], so the filename needs no escaping.
     return new StreamableFile(content, {
       type: 'application/octet-stream',
-      disposition: `attachment; filename="${basename(path)}"`,
+      disposition: attachment(basename(path)),
     });
   }
 
