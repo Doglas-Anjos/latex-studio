@@ -113,13 +113,19 @@ export { closeWhenSynced, markUnsynced } from './collab-sessions';
 
 export function Editor({ projectId, path, role }: { projectId: string; path: string; role: Role }) {
   const files = useService(FileServiceToken);
+  const download = useMutation({ mutationFn: (p: string) => files.download(projectId, p) });
   if (COLLAB_EXT.test(path)) return <CollabEditor projectId={projectId} path={path} role={role} />;
   if (IMAGE_EXT.test(path)) return <ImagePreview projectId={projectId} path={path} />;
   return (
     <div className="preview">
-      <button type="button" onClick={() => files.download(projectId, path)}>
+      <button type="button" onClick={() => download.mutate(path)}>
         Baixar {path}
       </button>
+      {download.isError && download.variables === path && (
+        <p className="form-error" role="alert">
+          Falha ao baixar. Tente de novo.
+        </p>
+      )}
     </div>
   );
 }

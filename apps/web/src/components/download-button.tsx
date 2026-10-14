@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { Archive, Download, FileDown, FileText, GitBranch } from 'lucide-react';
+import { useState } from 'react';
 import { useService } from '../di/service-provider';
 import { CompileServiceToken } from '../services/compile.service';
 import { ProjectServiceToken } from '../services/project.service';
@@ -37,8 +38,17 @@ export function DownloadButton({ projectId, canEdit }: { projectId: string; canE
     },
   });
 
+  const [downloadFailed, setDownloadFailed] = useState(false);
+  const download = async (get: () => Promise<void>) => {
+    setDownloadFailed(false);
+    try {
+      await get();
+    } catch {
+      setDownloadFailed(true);
+    }
+  };
   const downloadPdf = () => {
-    if (pdfReady && build) void compile.downloadPdf(projectId, build.id);
+    if (pdfReady && build) void download(() => compile.downloadPdf(projectId, build.id));
   };
 
   return (
@@ -61,10 +71,16 @@ export function DownloadButton({ projectId, canEdit }: { projectId: string; canE
         <button type="button" disabled={!pdfReady} onClick={downloadPdf}>
           <FileDown size={16} aria-hidden="true" /> PDF
         </button>
-        <button type="button" onClick={() => void projects.downloadSource(projectId)}>
+        <button
+          type="button"
+          onClick={() => void download(() => projects.downloadSource(projectId))}
+        >
           <Archive size={16} aria-hidden="true" /> Fonte (.zip)
         </button>
-        <button type="button" onClick={() => void projects.downloadSource(projectId, true)}>
+        <button
+          type="button"
+          onClick={() => void download(() => projects.downloadSource(projectId, true))}
+        >
           <GitBranch size={16} aria-hidden="true" /> Fonte com histórico (.zip)
         </button>
         {canEdit &&
@@ -83,6 +99,11 @@ export function DownloadButton({ projectId, canEdit }: { projectId: string; canE
       {exportAs.isError && (
         <span className="pdf-download-error" role="alert">
           Falha ao exportar. Tente de novo.
+        </span>
+      )}
+      {downloadFailed && (
+        <span className="pdf-download-error" role="alert">
+          Falha ao baixar. Tente de novo.
         </span>
       )}
     </div>

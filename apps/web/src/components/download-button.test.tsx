@@ -63,6 +63,15 @@ it('downloads the project source from the caret menu', async () => {
   expect(projects.downloadSource).toHaveBeenCalledWith('p1');
 });
 
+it('surfaces an error when a download fails instead of failing silently', async () => {
+  const { compile } = setup([succeeded]);
+  vi.mocked(compile.downloadPdf).mockRejectedValue(new Error('500'));
+  const baixar = screen.getByRole('button', { name: 'Baixar' }) as HTMLButtonElement;
+  await waitFor(() => expect(baixar.disabled).toBe(false));
+  await userEvent.click(baixar);
+  expect((await screen.findByRole('alert')).textContent).toMatch(/Falha ao baixar/);
+});
+
 it('surfaces an error when an export fails instead of failing silently', async () => {
   const tools = {
     requestExport: vi.fn().mockRejectedValue(new Error('spawn pandoc ENOENT')),
