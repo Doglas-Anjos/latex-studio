@@ -71,6 +71,25 @@ describe('subjectGraph', () => {
     expect(one.links.filter((l) => l.source.startsWith('h:'))).toHaveLength(1);
   });
 
+  it('stays linear on 200 KB of unclosed openers, long names and dense paragraphs', () => {
+    const words = Array.from({ length: 170 }, (_, i) => `term${i.toString(36)}x`).join(' ');
+    for (const unit of [
+      '\\begin{equation}x\n',
+      '\\cite{x ',
+      '\\[',
+      '\\(',
+      '\\a[',
+      `${words}.\n\n`,
+    ]) {
+      const start = performance.now();
+      subjectGraph([{ path: 'a.tex', source: unit.repeat(200_000 / unit.length) }], 'T');
+      expect(performance.now() - start, unit).toBeLessThan(300);
+    }
+    const start = performance.now();
+    subjectGraph([{ path: 'a.tex', source: `\\${'cite'.repeat(50_000)}` }], 'T');
+    expect(performance.now() - start).toBeLessThan(300);
+  });
+
   it('evolves from the previous areas: an area keeps the name it had', () => {
     expect(first.areas.get('rmse')).toBe(first.areas.get('mape'));
     // Say the error area was named "mape" last time; a seeded run keeps that name.

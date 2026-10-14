@@ -44,24 +44,59 @@ const STOP = new Set(
   ).split(/\s+/),
 );
 
-// Environments holding maths, data, drawings or code rather than prose, front matter (abstracts,
-// acronym and symbol lists) that restates every subject at once, and glossary definitions.
-const NON_PROSE =
-  /\\begin\{(equation|align|gather|multline|displaymath|math|tabularx?|longtable|tikzpicture|pgfpicture|ganttchart|forest|algorithm|algorithmic|verbatim|lstlisting|minted|abstract|resumo|resumen|siglas|simbolos|fichacatalografica)\*?\}[\s\S]*?\\end\{\1\*?\}|^[ \t]*\\new(?:acronym|glossaryentry|abbreviation)\b[^\n]*/gm;
+// The text is untrusted and parsed on the API's event loop: bounded quantifiers, and spans from an
+// opener to its closer are found by blankSpans, never by a lazy `[\s\S]*?` that rescans to the end
+// of the text from every unclosed opener (ReDoS).
+
+// Environments holding maths, data, drawings or code rather than prose, and front matter (abstracts,
+// acronym and symbol lists) that restates every subject at once.
+const NON_PROSE_ENV =
+  /\\begin\{(?:equation|align|gather|multline|displaymath|math|tabularx?|longtable|tikzpicture|pgfpicture|ganttchart|forest|algorithm|algorithmic|verbatim|lstlisting|minted|abstract|resumo|resumen|siglas|simbolos|fichacatalografica)\*?\}/g;
+// Glossary definitions.
+const GLOSSARY_DEF = /^[ \t]*\\new(?:acronym|glossaryentry|abbreviation)\b[^\n]*/gm;
+// Inline and display maths.
+const MATH = /\$\$|\$|\\\[|\\\(/g;
 // Glossary uses (\acrshort{moo}, \gls{emd}…): the document's own declared key concepts.
 const ACRONYM = /\\(?:acr(?:short|long|full)|[gG]ls[a-z]*)\{([^}]{1,40})\}/g;
 // Commands whose (first) argument is a key, path, colour or name, never prose: \cite{..}, \ref{..},
 // \label{..}, \url{..}, \cellcolor[HTML]{..}… A following prose argument (\href{url}{text}) stays.
 const KEY_ARG =
-  /\\(?:[a-zA-Z]*cite[a-zA-Z]*|[a-zA-Z]*ref|label|url|includegraphics|input|include|bibliography(?:style)?|usepackage|documentclass|begin|end|(?:cell|row|column|text|page)?color|definecolor|[hv]space|setlength|newcommand|renewcommand)\*?\s*(?:\[[^\]]*\]\s*)*\{[^}]*\}/g;
+  /\\(?:[a-zA-Z]{0,20}cite[a-zA-Z]{0,20}|[a-zA-Z]{0,20}ref|label|url|includegraphics|input|include|bibliography(?:style)?|usepackage|documentclass|begin|end|(?:cell|row|column|text|page)?color|definecolor|[hv]space|setlength|newcommand|renewcommand)\*?\s*(?:\[[^\]]{0,300}\]\s*)*\{[^}]{0,500}\}/g;
+
+const blank = (s: string) => s.replace(/[^\n]/g, ' ');
+
+/**
+ * `text` with each span from an `open` match to the first `closeOf(match)` after it blanked (newlines
+ * kept), like replacing a global `open[\s\S]*?close`. Linear: once a closer is missing, no later
+ * opener can find one either, so they are left alone instead of each scanning to the end.
+ */
+function blankSpans(text: string, open: RegExp, closeOf: (open: string) => string): string {
+  const missing = new Set<string>();
+  let out = '';
+  let last = 0;
+  open.lastIndex = 0;
+  for (let m = open.exec(text); m; m = open.exec(text)) {
+    const close = closeOf(m[0]);
+    const end = missing.has(close) ? -1 : text.indexOf(close, open.lastIndex);
+    if (end === -1) {
+      missing.add(close);
+      continue;
+    }
+    open.lastIndex = end + close.length;
+    out += text.slice(last, m.index) + blank(text.slice(m.index, open.lastIndex));
+    last = open.lastIndex;
+  }
+  return out + text.slice(last);
+}
 
 /** Strip LaTeX down to readable prose: comments, maths/data, keys, commands and braces removed. */
 function toProse(tex: string): string {
-  return tex
-    .replace(/(?<!\\)%[^\n]*/g, ' ')
-    .replace(/\$\$[\s\S]*?\$\$|\$[^$]*\$|\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)/g, ' ')
+  // `$$`→`$$`, `$`→`$`, `\[`→`\]`, `\(`→`\)`.
+  return blankSpans(tex.replace(/(?<!\\)%[^\n]*/g, ' '), MATH, (o) =>
+    o.replace('[', ']').replace('(', ')'),
+  )
     .replace(KEY_ARG, ' ')
-    .replace(/\\[a-zA-Z]+\*?(\s*\[[^\]]*\])?/g, ' ') // command + optional [..]; keeps {..} text
+    .replace(/\\[a-zA-Z]+\*?(\s*\[[^\]]{0,300}\])?/g, ' ') // command + optional [..]; keeps {..} text
     .replace(/[{}~\\]/g, ' ');
 }
 
@@ -118,7 +153,10 @@ interface Paragraph {
 function paragraphs(files: { path: string; source: string }[]): Paragraph[] {
   const out: Paragraph[] = [];
   for (const f of files) {
-    const lines = f.source.replace(NON_PROSE, (m) => m.replace(/[^\n]/g, ' ')).split('\n');
+    const endOf = (begin: string) => begin.replace('\\begin', '\\end');
+    const lines = blankSpans(f.source.replace(GLOSSARY_DEF, blank), NON_PROSE_ENV, endOf).split(
+      '\n',
+    );
     let start = 0;
     for (let i = 0; i <= lines.length; i++) {
       if (i < lines.length && (lines[i] as string).trim() !== '') continue;
@@ -237,21 +275,31 @@ export function subjectGraph(
   );
   const pool = vocab.filter((t) => share(t) < cut).slice(0, poolSize);
 
-  // Cosine co-occurrence between pooled terms, kept as each term's 5 nearest neighbours.
+  // Cosine co-occurrence between pooled terms, kept as each term's 5 nearest neighbours. Pairs are
+  // counted in a pool² array (string keys took seconds on long documents of long paragraphs), and
+  // `pairs` keeps their first-seen order, which breaks ties between equal cosines below.
   const index = new Map(pool.map((t, i) => [t, i]));
-  const co = new Map<string, number>();
+  const n = pool.length;
+  const co = new Uint32Array(n * n);
+  const pairs: number[] = [];
   for (const p of paras) {
-    const present = [...p.terms].filter((t) => index.has(t)).sort();
+    const present = [...p.terms]
+      .filter((t) => index.has(t))
+      .sort()
+      .map((t) => index.get(t) as number);
     for (let i = 0; i < present.length; i++)
       for (let j = i + 1; j < present.length; j++) {
-        const key = `${present[i]}\u0000${present[j]}`;
-        co.set(key, (co.get(key) ?? 0) + 1);
+        const key = (present[i] as number) * n + (present[j] as number);
+        if (!co[key]) pairs.push(key);
+        co[key] = (co[key] ?? 0) + 1;
       }
   }
   const near = new Map<string, [string, number][]>(pool.map((t) => [t, []]));
-  for (const [key, c] of co) {
+  for (const key of pairs) {
+    const c = co[key] as number;
     if (c < 2) continue;
-    const [a, b] = key.split('\u0000') as [string, string];
+    const a = pool[Math.floor(key / n)] as string;
+    const b = pool[key % n] as string;
     const cos = c / Math.sqrt(count(a) * count(b));
     near.get(a)?.push([b, cos]);
     near.get(b)?.push([a, cos]);
