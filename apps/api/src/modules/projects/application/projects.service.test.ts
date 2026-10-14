@@ -173,7 +173,11 @@ describe('ProjectsService', () => {
     };
     const capped = make({ ...base, USER_QUOTA_MB: 1 });
     const uncapped = make(base);
-    const over = { status: 413, message: 'Cota de armazenamento da conta excedida (1 MB)' };
+    const over = {
+      status: 413,
+      message:
+        'Cota de armazenamento da conta excedida (1 MB). Exclua projetos que não usa para liberar espaço.',
+    };
     const big = 'x'.repeat(600 * 1024); // each fits the 1 MB project quota, two do not fit 1 MB
 
     const a = await capped.projects.create(ana, 'A');

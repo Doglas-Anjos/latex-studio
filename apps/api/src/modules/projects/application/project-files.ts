@@ -112,8 +112,11 @@ export async function assertQuota(
   }
 }
 
+// Deleting a committed file frees little (history keeps its blobs); deleting a project frees all.
 export const accountQuotaExceeded = (mb?: number) =>
-  new PayloadTooLargeException(`Cota de armazenamento da conta excedida (${mb} MB)`);
+  new PayloadTooLargeException(
+    `Cota de armazenamento da conta excedida (${mb} MB). Exclua projetos que não usa para liberar espaço.`,
+  );
 
 /**
  * Bytes the owner of `project` may still store under USER_QUOTA_MB (`mb`), counted over every
