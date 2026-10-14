@@ -58,7 +58,8 @@ jobs:
   latex:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    container: texlive/texlive:latest
+    # Pinned by digest (texlive/texlive:latest as of 2026-10-04); keep in sync with docker/texlive/Dockerfile.
+    container: texlive/texlive@sha256:a7ae4dfa9d521b5db14446872fa488b839021d1f604d0a3c74461784895f2a67
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
