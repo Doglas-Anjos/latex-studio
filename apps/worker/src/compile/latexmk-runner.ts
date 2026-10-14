@@ -42,10 +42,10 @@ export const NO_SHELL =
 /**
  * Runs latexmk without a shell, with a wall-clock timeout and a minimal environment.
  *
- * Memory and pids are limited by the worker container (`mem_limit`, `pids_limit`), not here. The
- * worker shares the internal network with Postgres and Redis, and TeX runs as the worker's user:
- * file isolation rests on kpathsea's paranoid mode (pdfTeX, XeTeX), not on an OS sandbox: there is no portable per-process memory cap without a shell
- * `ulimit`, so COMPILE_MEMORY_MB is enforced by docker-compose.
+ * Per-compile memory is capped with `prlimit --as` (COMPILE_MEMORY_MB), inherited by every TeX
+ * child; pids are bounded by the container `pids_limit`. prlimit is Linux-only, so dev on
+ * Windows/macOS skips it (the container is the only place it matters). File isolation rests on the
+ * bwrap sandbox when available, else on kpathsea's paranoid mode (pdfTeX, XeTeX).
  *
  * `spawn` (argument array, no shell) instead of `execFile`: execFile's timeout only kills
  * latexmk, leaving pdflatex running (e.g. `\def\a{\a}\a` loops forever). Here latexmk leads its
@@ -122,9 +122,12 @@ export class LatexmkRunner {
     };
 
     const spec = this.sandbox.spawn('latexmk', args, workDir, env);
+    // ponytail: RLIMIT_AS (virtual memory), not RSS — a huge LuaLaTeX document may need
+    // COMPILE_MEMORY_MB raised. Upgrade path: a per-compile cgroup if that bites.
+    const limited = withMemoryLimit(spec.file, spec.args, this.config.COMPILE_MEMORY_MB);
     try {
       return await new Promise((resolve, reject) => {
-        const child = spawn(spec.file, spec.args, {
+        const child = spawn(limited.file, limited.args, {
           cwd: workDir,
           env: spec.env,
           windowsHide: true,
@@ -158,6 +161,21 @@ export class LatexmkRunner {
       if (!sandboxed) await rm(home, { recursive: true, force: true });
     }
   }
+}
+
+/**
+ * Wraps the command in `prlimit --as=<bytes>` so latexmk and every TeX child share one address-space
+ * cap (COMPILE_MEMORY_MB). Linux only; prlimit does not exist on Windows/macOS dev, so there the
+ * command runs unwrapped. prlimit itself is found via PATH, like the wrapped command.
+ */
+export function withMemoryLimit(
+  file: string,
+  args: string[],
+  memoryMb: number | undefined,
+  isLinux = process.platform === 'linux',
+): { file: string; args: string[] } {
+  if (!isLinux || !memoryMb) return { file, args };
+  return { file: 'prlimit', args: [`--as=${memoryMb * 1024 * 1024}`, '--', file, ...args] };
 }
 
 function killTree(child: ChildProcess): void {

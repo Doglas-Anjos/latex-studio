@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { WorkerConfig } from '@latex-studio/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { LatexmkRunner, NO_SHELL } from './latexmk-runner';
+import { LatexmkRunner, NO_SHELL, withMemoryLimit } from './latexmk-runner';
 import { Sandbox } from './sandbox';
 
 const latexmkAvailable = (() => {
@@ -82,6 +82,22 @@ describe('LatexmkRunner', () => {
     },
     90_000,
   );
+
+  it('caps memory with prlimit on Linux, runs unwrapped elsewhere', () => {
+    expect(withMemoryLimit('bwrap', ['latexmk'], 1024, true)).toEqual({
+      file: 'prlimit',
+      args: ['--as=1073741824', '--', 'bwrap', 'latexmk'],
+    });
+    expect(withMemoryLimit('latexmk', ['-pdf'], 1024, false)).toEqual({
+      file: 'latexmk',
+      args: ['-pdf'],
+    });
+    // No cap configured => no wrapper, even on Linux.
+    expect(withMemoryLimit('latexmk', ['-pdf'], 0, true)).toEqual({
+      file: 'latexmk',
+      args: ['-pdf'],
+    });
+  });
 
   it('rejects a main file that looks like an option', async () => {
     await expect(
