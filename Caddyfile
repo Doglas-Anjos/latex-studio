@@ -1,3 +1,11 @@
+{
+    # Proxies in front whose X-Forwarded-For is believed. Default: none (Caddy faces clients).
+    # Behind the FasorX host Caddy, docker-compose.fasorx.yml sets private_ranges.
+    servers {
+        trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1/32}
+    }
+}
+
 {$APP_DOMAIN:localhost}
 
 root * /srv
@@ -15,12 +23,18 @@ header {
 @prod not host localhost
 header @prod Strict-Transport-Security "max-age=31536000"
 
-# API and collaboration WebSocket go to the NestJS process
+# API and collaboration WebSocket go to the NestJS process. One X-Forwarded-For entry, the client
+# as resolved through the trusted proxies, so the API (which trusts only this hop) sees the real IP
+# for its rate limits.
 handle /api/* {
-    reverse_proxy api:3000
+    reverse_proxy api:3000 {
+        header_up X-Forwarded-For {client_ip}
+    }
 }
 handle /collab* {
-    reverse_proxy api:3000
+    reverse_proxy api:3000 {
+        header_up X-Forwarded-For {client_ip}
+    }
 }
 
 # Static SPA with history fallback

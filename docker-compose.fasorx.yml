@@ -1,0 +1,10 @@
+# Production behind the FasorX server (docker compose -f docker-compose.yml -f docker-compose.fasorx.yml).
+# The host's Caddy terminates TLS (Cloudflare in front) and proxies latex.fasorx.com.br to
+# 127.0.0.1:3010, so the internal Caddy serves plain HTTP on loopback only (APP_DOMAIN=:80 in .env)
+# and believes the host proxy's X-Forwarded-For. Needs Docker Compose >= 2.24 (!override).
+services:
+  caddy:
+    ports: !override
+      - "127.0.0.1:3010:80"
+    environment:
+      TRUSTED_PROXIES: private_ranges
