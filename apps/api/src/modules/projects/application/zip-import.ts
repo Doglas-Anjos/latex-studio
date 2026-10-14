@@ -1,4 +1,4 @@
-import { BadRequestException, HttpException } from '@nestjs/common';
+import { BadRequestException, HttpException, PayloadTooLargeException } from '@nestjs/common';
 import { type Entry, fromBufferPromise, type ZipFile } from 'yauzl';
 import type { ProjectFiles } from '../domain/project-storage';
 import { checkPath, isGitPath, limitBytes } from './project-files';
@@ -15,9 +15,15 @@ const invalidArchive = (e: unknown) =>
 
 /**
  * Extracts `zip` into the project. Everything that can be checked from the central directory
- * (entry count, declared sizes, paths) is checked before anything is written.
+ * (entry count, declared sizes, paths) is checked before anything is written. No file may be
+ * larger than `maxFileBytes`, as with uploads.
  */
-export async function extractZip(zip: Buffer, files: ProjectFiles, quotaBytes: number) {
+export async function extractZip(
+  zip: Buffer,
+  files: ProjectFiles,
+  quotaBytes: number,
+  maxFileBytes: number,
+) {
   let archive: ZipFile;
   try {
     archive = await fromBufferPromise(zip, { lazyEntries: true, autoClose: false });
@@ -39,6 +45,10 @@ export async function extractZip(zip: Buffer, files: ProjectFiles, quotaBytes: n
         if (((entry.externalFileAttributes >>> 16) & S_IFMT) === S_IFLNK) continue;
         // A `.git` directory could plant hooks or config in the project repository.
         if (isGitPath(name)) continue;
+        // yauzl fails an entry that inflates past its declared size, so this holds.
+        if (entry.uncompressedSize > maxFileBytes) {
+          throw new PayloadTooLargeException(`File too large: ${name}`);
+        }
         declared += entry.uncompressedSize;
         if (declared > quotaBytes) {
           throw new BadRequestException('Archive exceeds the project quota');

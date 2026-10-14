@@ -141,7 +141,8 @@ export class ProjectsService {
           files ??= await this.storage.init(id);
           if (part.fieldname === 'archive' && !mode) {
             mode = 'archive';
-            await extractZip(await part.toBuffer(), files, quota);
+            const maxFile = megabytes(this.config.MAX_UPLOAD_MB);
+            await extractZip(await part.toBuffer(), files, quota, maxFile);
           } else if (part.fieldname === 'files' && mode !== 'archive') {
             mode = 'files';
             // Folder uploads include .git and .gitignore; drop them like the zip import does.

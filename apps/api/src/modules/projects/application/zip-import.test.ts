@@ -34,7 +34,7 @@ describe('extractZip', () => {
 
   it('strips a single common root folder', async () => {
     const zip = await makeZip({ 'thesis/main.tex': 'x', 'thesis/fig/a.png': 'y' });
-    await extractZip(zip, files, QUOTA);
+    await extractZip(zip, files, QUOTA, QUOTA);
     expect(await written()).toEqual(['fig/a.png', 'main.tex']);
   });
 
@@ -42,8 +42,10 @@ describe('extractZip', () => {
     // yazl refuses `..`, so the name is patched in the raw bytes (same length).
     const zip = await makeZip({ 'XX/evil.tex': 'x', 'ok.tex': 'y' });
     const patched = Buffer.from(zip.toString('latin1').replaceAll('XX/evil', '../evil'), 'latin1');
-    await expect(extractZip(patched, files, QUOTA)).rejects.toThrow(/\.\.\/evil\.tex/);
-    await expect(extractZip(patched, files, QUOTA)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(extractZip(patched, files, QUOTA, QUOTA)).rejects.toThrow(/\.\.\/evil\.tex/);
+    await expect(extractZip(patched, files, QUOTA, QUOTA)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
     expect(await written()).toEqual([]);
   });
 
@@ -53,25 +55,31 @@ describe('extractZip', () => {
       '.gitignore': '*.aux',
       'main.tex': 'x',
     });
-    await extractZip(zip, files, QUOTA);
+    await extractZip(zip, files, QUOTA, QUOTA);
     expect(await written()).toEqual(['main.tex']);
   });
 
   it('normalizes entry names to NFC', async () => {
     // U+212A KELVIN SIGN is plain K in NFC: SafePath accepts the name only once normalized.
-    await extractZip(await makeZip({ 'Kelvin.tex': 'x' }), files, QUOTA);
+    await extractZip(await makeZip({ '\u212Aelvin.tex': 'x' }), files, QUOTA, QUOTA);
     expect(await written()).toEqual(['Kelvin.tex']);
   });
 
   it('rejects declared sizes above the quota before writing anything', async () => {
     const zip = await makeZip({ 'a.tex': 'small', 'b.tex': Buffer.alloc(QUOTA + 1) });
-    await expect(extractZip(zip, files, QUOTA)).rejects.toThrow(/quota/);
+    await expect(extractZip(zip, files, QUOTA, 2 * QUOTA)).rejects.toThrow(/quota/);
     expect(await readdir(join(dir, 'p'))).toEqual(['.git']);
+  });
+
+  it('rejects a file over the per-file cap even within the quota', async () => {
+    const zip = await makeZip({ 'a.tex': 'small', 'b.tex': Buffer.alloc(11) });
+    await expect(extractZip(zip, files, QUOTA, 10)).rejects.toThrow('File too large: b.tex');
+    expect(await written()).toEqual([]);
   });
 
   it('rejects more than 5000 entries', async () => {
     const entries: Record<string, string> = {};
     for (let i = 0; i <= 5000; i++) entries[`f${i}.tex`] = '';
-    await expect(extractZip(await makeZip(entries), files, QUOTA)).rejects.toThrow(/5000/);
+    await expect(extractZip(await makeZip(entries), files, QUOTA, QUOTA)).rejects.toThrow(/5000/);
   });
 });
