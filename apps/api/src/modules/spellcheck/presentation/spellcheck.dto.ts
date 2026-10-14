@@ -18,8 +18,8 @@ export class SuggestDto {
   @IsIn(SPELL_LANGS)
   lang!: string;
 
-  // Hunspell suggest() runs on the event loop; keep the input short so it stays cheap.
+  // Hunspell suggest() runs on the event loop and costs more with length; real typos are short.
   @IsString()
-  @Length(1, 40)
+  @Length(1, 24)
   word!: string;
 }
