@@ -34,4 +34,20 @@ describe('FasorxIdentity', () => {
     );
     expect(await new FasorxIdentity({ url: URL, app: 'latex' }).token()).toBeNull();
   });
+
+  it('treats a 403 with `completar` as no session, and a bare 403 as an error (no login loop)', async () => {
+    const completar = `${URL}/conta/`;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => json(403, { completar })),
+    );
+    expect(await new FasorxIdentity({ url: URL, app: 'latex' }).token()).toBeNull();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () => json(403, { erro: 'origem nao autorizada' })),
+    );
+    await expect(new FasorxIdentity({ url: URL, app: 'latex' }).token()).rejects.toThrow(
+      /origem nao autorizada/,
+    );
+  });
 });

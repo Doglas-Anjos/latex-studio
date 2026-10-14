@@ -84,9 +84,18 @@ export class FasorxIdentity {
       this.tokenValue = null;
       this.expires = 0;
       this.complete = '';
-      const body = (await res.json().catch(() => null)) as { completar?: unknown } | null;
+      const body = (await res.json().catch(() => null)) as {
+        completar?: unknown;
+        erro?: unknown;
+      } | null;
       if (typeof body?.completar === 'string' && body.completar.startsWith(`${url}/`)) {
         this.complete = body.completar;
+      }
+      // A 403 without `completar` (origin not authorized, account not confirmed) is a refusal, not
+      // "no session": FasorX would see the session and send the person straight back, a loop.
+      if (res.status === 403 && !this.complete) {
+        const why = typeof body?.erro === 'string' ? ` (${body.erro})` : '';
+        throw new Error(`O FasorX recusou o acesso a este app${why}.`);
       }
       return null;
     }
