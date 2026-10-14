@@ -226,6 +226,11 @@ export class FilesService {
           written.set(path, !existed ? 'add' : before === hash.digest('hex') ? 'same' : 'modify');
           if (!existed) created.push(path);
         }
+        // Again once written: the room above was read before streaming, and uploads into the
+        // owner's other projects (other locks) each saw all of it. See accountRoom.
+        if ((await accountRoom(this.projects, this.storage, mb, project)) < 0) {
+          throw accountQuotaExceeded(mb);
+        }
       } catch (e) {
         // Only new files are rolled back: an overwritten file keeps its new, complete content
         // rather than disappearing from the working tree.

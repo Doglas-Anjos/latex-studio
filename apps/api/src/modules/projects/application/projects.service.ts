@@ -26,6 +26,7 @@ import {
   parseProjectName,
 } from '../domain/project';
 import {
+  type NewProject,
   PROJECT_REPOSITORY,
   type ProjectListFilter,
   type ProjectPatch,
@@ -33,14 +34,14 @@ import {
 } from '../domain/project.repository';
 import { PROJECT_STORAGE, type ProjectFiles, type ProjectStorage } from '../domain/project-storage';
 import {
-  assertAccountQuota,
+  accountQuotaExceeded,
+  accountRoom,
   author,
   checkPath,
   isGitPath,
   limitBytes,
   megabytes,
   type UploadPart,
-  usedBytes,
 } from './project-files';
 import { ProjectLock } from './project-lock';
 import { extractZip } from './zip-import';
@@ -110,8 +111,7 @@ export class ProjectsService {
     try {
       const files = await this.storage.init(id);
       await files.repo.commitAll(await seed(files), author(owner));
-      await this.assertFitsAccount(owner, id, files);
-      return await this.projects.create({ id, name, ...(mainFile && { mainFile }) }, owner.id);
+      return await this.insertWithinQuota(owner, { id, name, ...(mainFile && { mainFile }) });
     } catch (e) {
       await this.storage.remove(id);
       throw e;
@@ -164,11 +164,12 @@ export class ProjectsService {
         if (!name || !files) throw new BadRequestException('Send a "name" and at least one file');
         const { mainFile, engine } = await finishImport(files);
         await files.repo.commitAll('Import', author(owner));
-        await this.assertFitsAccount(owner, id, files);
-        return await this.projects.create(
-          { id, name, mainFile, ...(engine && { engine }) },
-          owner.id,
-        );
+        return await this.insertWithinQuota(owner, {
+          id,
+          name,
+          mainFile,
+          ...(engine && { engine }),
+        });
       } catch (e) {
         await this.storage.remove(id);
         throw e;
@@ -219,15 +220,22 @@ export class ProjectsService {
   }
 
   /**
-   * 413 unless the new project `id`, written but not yet a row, fits in the owner's account quota.
-   * Checked after writing: an import streams under PROJECT_QUOTA_MB and a copy is no larger than
-   * its source, so what is written before the refusal is bounded, and the caller removes it.
+   * Inserts the row of a project already written, then checks the owner's account quota with it
+   * counted: concurrent imports and copies see each other's rows, so they cannot all pass on the
+   * same room. A refusal deletes the row; the caller removes the directory.
    */
-  private async assertFitsAccount(owner: User, id: string, files: ProjectFiles) {
+  private async insertWithinQuota(owner: User, project: NewProject): Promise<Project> {
+    const row = await this.projects.create(project, owner.id);
     const mb = this.config.USER_QUOTA_MB;
-    if (!mb) return;
-    const project = { id, ownerId: owner.id };
-    await assertAccountQuota(this.projects, this.storage, mb, project, await usedBytes(files));
+    try {
+      if ((await accountRoom(this.projects, this.storage, mb, row)) < 0) {
+        throw accountQuotaExceeded(mb);
+      }
+      return row;
+    } catch (e) {
+      await this.projects.delete(row.id);
+      throw e;
+    }
   }
 
   private async assertProjectCap(owner: User) {

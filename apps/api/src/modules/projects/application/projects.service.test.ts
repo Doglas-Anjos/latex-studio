@@ -201,6 +201,56 @@ describe('ProjectsService', () => {
     expect(await projects.ownedIds(ana.id)).toHaveLength(3);
   });
 
+  it('re-checks the account after writing: concurrent writes that fit alone do not all pass', async () => {
+    const config = {
+      REPOS_DIR: dir,
+      BUILDS_DIR: join(dir, 'builds'),
+      PROJECT_QUOTA_MB: 1,
+      USER_QUOTA_MB: 1,
+      MAX_PROJECTS_PER_USER: 5,
+    } as AppConfig;
+    const lock = new ProjectLock();
+    const capped = new ProjectsService(projects, storage, lock, config);
+    const files = new FilesService(storage, lock, config, new FakeDocumentSync(), projects);
+    const big = 'x'.repeat(600 * 1024); // one fits the 1 MB account, two do not
+    const refused = (results: PromiseSettledResult<unknown>[]) =>
+      results.filter((r) => r.status === 'rejected').map((r) => (r.reason as Error).message);
+
+    // Uploads into two projects of one owner: each read the whole room before streaming.
+    const a = await capped.create(ana, 'A');
+    const b = await capped.create(ana, 'B');
+    const uploads = await Promise.allSettled([
+      files.upload(a, parts('', { 'a.png': big })),
+      files.upload(b, parts('', { 'b.png': big })),
+    ]);
+    expect(refused(uploads)).not.toHaveLength(0);
+    expect(refused(uploads).every((m) => m.startsWith('Cota de armazenamento'))).toBe(true);
+    const kept = await Promise.all([
+      storage.open(a.id).isFile('a.png'),
+      storage.open(b.id).isFile('b.png'),
+    ]);
+    expect(kept.filter(Boolean).length).toBeLessThanOrEqual(1);
+
+    // Imports: both are written before either row exists (held here so the race is certain).
+    const insert = projects.create.bind(projects);
+    let release = () => {};
+    const both = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let arrived = 0;
+    projects.create = async (project, ownerId) => {
+      if (++arrived === 2) release();
+      await both;
+      return insert(project, ownerId);
+    };
+    const imports = await Promise.allSettled([
+      capped.import(bob, parts('C', { 'c.tex': big })),
+      capped.import(bob, parts('D', { 'd.tex': big })),
+    ]);
+    expect(refused(imports)).not.toHaveLength(0);
+    expect((await projects.ownedIds(bob.id)).length).toBeLessThanOrEqual(1);
+  });
+
   it('walks only the written project for the account quota, its siblings come from a cache', async () => {
     const config = {
       REPOS_DIR: dir,
