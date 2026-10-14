@@ -189,7 +189,8 @@ export class FilesService {
             if (part.fieldname === 'path') folder = String(part.value);
             continue;
           }
-          const path = folder ? `${folder}/${part.filename}` : part.filename;
+          // NFC: macOS sends decomposed names, which SafePath refuses.
+          const path = (folder ? `${folder}/${part.filename}` : part.filename).normalize('NFC');
           try {
             checkPath(files, path);
           } catch (e) {

@@ -145,13 +145,15 @@ export class ProjectsService {
             await extractZip(await part.toBuffer(), files, quota, maxFile);
           } else if (part.fieldname === 'files' && mode !== 'archive') {
             mode = 'files';
+            // NFC like the zip import: macOS sends decomposed names, which SafePath refuses.
+            const path = part.filename.normalize('NFC');
             // Folder uploads include .git and .gitignore; drop them like the zip import does.
-            if (isGitPath(part.filename)) {
+            if (isGitPath(path)) {
               part.file.resume();
               continue;
             }
-            checkPath(files, part.filename);
-            await files.writeStream(part.filename, limitBytes(part.file, budget));
+            checkPath(files, path);
+            await files.writeStream(path, limitBytes(part.file, budget));
           } else {
             throw new BadRequestException('Send one "archive" or several "files"');
           }
