@@ -15,3 +15,4 @@ Thumbs.db
 .idea/
 .worktrees/
 tmp-*.png
+.claude/settings.local.json
