@@ -54,8 +54,9 @@ async function bootstrap() {
       connectTimeout: 500,
       maxRetriesPerRequest: 1,
     }),
-    // Fail open: if Redis is down or full, availability beats strict limiting (argon2 still bounds auth).
-    skipOnError: true,
+    // Fail closed: with Redis down or full the project lock and the queues fail anyway, and failing
+    // open would silently lift every limit (compile, upload, spell suggest).
+    skipOnError: false,
     keyGenerator: (request) => rateLimitKey(identity, request),
     // Nest's exception handler turns plain errors into 500; an HttpException keeps the 429.
     errorResponseBuilder: (_request, context) =>
