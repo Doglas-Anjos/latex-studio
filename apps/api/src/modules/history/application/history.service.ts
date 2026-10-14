@@ -32,7 +32,8 @@ function checkSha(sha: string): void {
 }
 
 // The `<e-mail>` of each Co-authored-by trailer (the name stays).
-const TRAILER_EMAIL = /^(Co-authored-by: [^<\n]*?) ?<[^>\n]*>$/gim;
+// The last `<…>` of the line, so a `<` inside the name cannot keep the e-mail in.
+const TRAILER_EMAIL = /^(Co-authored-by:.*?) ?<[^<>\n]*>[ \t]*$/gim;
 const withoutEmails = (message: string) => message.replace(TRAILER_EMAIL, '$1');
 /**
  * A commit as the API serves it: authors by name only. Like the member list (e-mails for the owner
