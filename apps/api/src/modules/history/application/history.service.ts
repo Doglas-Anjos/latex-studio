@@ -89,16 +89,32 @@ export class HistoryService {
     return content;
   }
 
-  /** Working-tree changes not yet committed. */
-  async status(project: Project) {
+  /**
+   * Working-tree changes not yet committed, each tagged with who edited it collaboratively since
+   * the baseline: `mine` (the caller touched it) and `others` (the other editors' names, e-mails
+   * dropped like everywhere else a viewer reads). A file only the caller edited has `others: []`;
+   * one with no recorded collaborative editor (an upload, a restore) has both empty.
+   */
+  async status(project: Project, user: User) {
     const repo = this.storage.open(project.id).repo;
     const [base] = await repo.log(1);
     const changes = await repo.workingChanges(base?.sha ?? null);
+    const editors = await this.projects.editorsByPath(
+      project.id,
+      changes.map((c) => c.path),
+    );
     return {
       baseline: base
         ? { sha: base.sha, message: withoutEmails(base.message), date: base.date }
         : null,
-      changes,
+      changes: changes.map((c) => {
+        const who = editors.get(c.path) ?? [];
+        return {
+          ...c,
+          mine: who.some((e) => e.email === user.email),
+          others: who.filter((e) => e.email !== user.email).map((e) => e.name),
+        };
+      }),
     };
   }
 

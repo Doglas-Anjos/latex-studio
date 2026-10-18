@@ -98,6 +98,17 @@ export class FakeProjects implements ProjectRepository {
     this.edits.push({ projectId, path, userId });
   }
   /** Users are named by their id, as in `listMembers`. */
+  async editorsByPath(projectId: string, paths: string[]) {
+    const byPath = new Map<string, Array<{ name: string; email: string }>>();
+    for (const e of this.edits) {
+      if (e.projectId !== projectId || !paths.includes(e.path)) continue;
+      const list = byPath.get(e.path) ?? [];
+      if (!list.some((x) => x.email === e.userId)) list.push({ name: e.userId, email: e.userId });
+      byPath.set(e.path, list);
+    }
+    return byPath;
+  }
+  /** Users are named by their id, as in `listMembers`. */
   async withEditors<T>(
     projectId: string,
     paths: string[] | null,
