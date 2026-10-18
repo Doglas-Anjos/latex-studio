@@ -2,6 +2,11 @@ packages:
   - apps/*
   - packages/*
 
+# Nest CLI needs the programmatic compiler API, which TypeScript 7.0 (native preview) dropped
+# until 7.1. Pin to TS 6 for builds/dev until the API returns; devDep range stays ^7.
+overrides:
+  typescript: 6.0.3
+
 # Supply-chain policy: refuse versions published less than 24h ago
 minimumReleaseAge: 1440
 
