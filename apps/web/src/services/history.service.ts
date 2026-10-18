@@ -13,9 +13,17 @@ export interface FileChange {
   type: 'add' | 'modify' | 'remove';
 }
 
+/** A working-tree change tagged with who edited it collaboratively since the baseline. */
+export interface StatusChange extends FileChange {
+  /** The caller touched this file. */
+  mine: boolean;
+  /** Names of the other people who edited it (e-mails dropped by the API). */
+  others: string[];
+}
+
 export interface HistoryStatus {
   baseline: { sha: string; message: string; date: string } | null;
-  changes: FileChange[];
+  changes: StatusChange[];
 }
 
 export interface BlameRun {

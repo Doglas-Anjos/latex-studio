@@ -2495,6 +2495,74 @@ button.change-row-main:hover .change-name {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 16%, transparent);
 }
+/* Authorship of working changes: who edited each file since the last saved version. */
+.change-author-group + .change-author-group {
+  margin-top: 0.6rem;
+}
+.change-author-header {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.15rem;
+  padding: 0.2rem 0.3rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.change-author-header[data-author="others"],
+.change-author-header[data-author="shared"] {
+  color: var(--mark);
+}
+.change-author-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.change-author-count {
+  margin-left: auto;
+  font-weight: 600;
+  color: var(--muted);
+}
+.change-authors {
+  flex: none;
+  max-width: 9rem;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.change-row[data-author="others"],
+.change-row[data-author="shared"] {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--mark) 55%, transparent);
+}
+.changes-others-note {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+  color: var(--mark);
+  font-size: 0.78rem;
+}
+.changes-others-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.changes-others-list li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+.changes-others-list .change-authors {
+  margin-left: auto;
+}
 .changes-composer {
   display: grid;
   gap: 0.4rem;

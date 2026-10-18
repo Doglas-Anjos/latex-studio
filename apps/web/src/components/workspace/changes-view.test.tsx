@@ -47,6 +47,33 @@ describe('ChangesView', () => {
     await waitFor(() => expect(service.commit).toHaveBeenCalledWith('p1', 'nova', undefined));
   });
 
+  it('groups by author and confirms before committing a file others also edited', async () => {
+    const service = {
+      status: vi.fn().mockResolvedValue({
+        baseline: { sha: 'abc', message: 'base', date: new Date().toISOString() },
+        changes: [
+          { path: 'main.tex', type: 'modify', mine: true, others: [] },
+          { path: 'shared.tex', type: 'modify', mine: true, others: ['Ana'] },
+        ],
+      }),
+      commit: vi.fn().mockResolvedValue({ sha: 'd' }),
+    } as unknown as HistoryService;
+    renderWithApp(
+      <ChangesView projectId="p1" canEdit />,
+      new Container().register(HistoryServiceToken, service),
+    );
+    expect(await screen.findByText('Suas alterações')).toBeTruthy();
+    expect(screen.getByText('Editadas por você e outras pessoas')).toBeTruthy();
+    await userEvent.type(screen.getByLabelText('Mensagem da versão'), 'nova');
+    await userEvent.click(screen.getByRole('button', { name: 'Salvar versão' }));
+    // The commit waits on a confirmation dialog listing the shared file.
+    expect(service.commit).not.toHaveBeenCalled();
+    const dialog = screen.getByRole('dialog', { name: 'Salvar trabalho de outras pessoas?' });
+    expect(within(dialog).getByText('shared.tex')).toBeTruthy();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Salvar mesmo assim' }));
+    await waitFor(() => expect(service.commit).toHaveBeenCalledWith('p1', 'nova', undefined));
+  });
+
   it('asks for confirmation before discarding changes, and cancel keeps them', async () => {
     const service = {
       status: vi.fn().mockResolvedValue({
