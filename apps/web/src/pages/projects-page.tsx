@@ -2,16 +2,19 @@ import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowRight,
+  Boxes,
   CircleHelp,
   Clock3,
   Copy,
   Download,
   FileText,
   FolderOpen,
+  GitBranch,
   Plus,
   Search,
   Share2,
   Trash2,
+  Users,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -258,7 +261,10 @@ function RecentProject({ project, onOpen }: { project: Project; onOpen: (id: str
 
 function EmptyLibrary({ onCreate, onImport }: { onCreate: () => void; onImport: () => void }) {
   return (
-    <div className="dashboard-empty">
+    <div className="dashboard-empty dashboard-empty-start">
+      <span className="dashboard-empty-icon" aria-hidden="true">
+        <FileText size={26} />
+      </span>
       <h2>Ainda não há projetos</h2>
       <p>Crie um projeto em branco ou importe arquivos que você já tem.</p>
       <div className="dashboard-empty-actions">
@@ -269,6 +275,20 @@ function EmptyLibrary({ onCreate, onImport }: { onCreate: () => void; onImport: 
           Importar arquivos
         </Button>
       </div>
+      <ul className="dashboard-empty-hints">
+        <li>
+          <GitBranch size={16} aria-hidden="true" />
+          Cada projeto é um repositório git, com histórico e versões salvas quando você quiser.
+        </li>
+        <li>
+          <Users size={16} aria-hidden="true" />
+          Edição colaborativa em tempo real, com cursores nomeados e comentários no texto.
+        </li>
+        <li>
+          <Boxes size={16} aria-hidden="true" />
+          Compile com pdfLaTeX, XeLaTeX ou LuaLaTeX e ligue pacotes sem editar o preâmbulo.
+        </li>
+      </ul>
     </div>
   );
 }
