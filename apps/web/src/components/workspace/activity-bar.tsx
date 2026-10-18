@@ -13,20 +13,10 @@ import {
 } from 'lucide-react';
 import { useRef } from 'react';
 import { useHistoryStatus } from '../../hooks/use-history-status';
+import { useNav } from '../../i18n';
 import { type SidebarView, useSettingsStore } from '../../settings-store';
 import { SettingsDialog } from '../settings-dialog';
 
-export const viewLabels: Record<SidebarView, string> = {
-  files: 'Arquivos',
-  navigator: 'Navegador',
-  map: 'Mapa',
-  graph: 'Grafo de assuntos',
-  changes: 'Mudanças',
-  packages: 'Bibliotecas',
-  comments: 'Comentários',
-  history: 'Histórico',
-  members: 'Membros',
-};
 export const sidebarViewIcons: Record<SidebarView, LucideIcon> = {
   files: Files,
   navigator: ListTree,
@@ -38,6 +28,7 @@ export const sidebarViewIcons: Record<SidebarView, LucideIcon> = {
   history: History,
   members: Users,
 };
+const VIEWS = Object.keys(sidebarViewIcons) as SidebarView[];
 
 export function ActivityBar({
   projectId,
@@ -49,10 +40,11 @@ export function ActivityBar({
   const settings = useRef<HTMLDialogElement>(null);
   const view = useSettingsStore((s) => s.sidebarView);
   const set = useSettingsStore((s) => s.set);
+  const nav = useNav();
   const changed = useHistoryStatus(projectId).data?.changes.length ?? 0;
   return (
     <nav className="activity-bar" aria-label="Painéis">
-      {(Object.keys(viewLabels) as SidebarView[]).map((v) => {
+      {VIEWS.map((v) => {
         const Icon = sidebarViewIcons[v];
         return (
           <button
@@ -60,8 +52,8 @@ export function ActivityBar({
             type="button"
             className="activity-btn"
             aria-pressed={view === v}
-            aria-label={viewLabels[v]}
-            title={viewLabels[v]}
+            aria-label={nav.labels[v]}
+            title={nav.titles[v]}
             onClick={() => {
               set({ sidebarView: v });
               onSelect?.(v);
@@ -77,8 +69,8 @@ export function ActivityBar({
       <button
         type="button"
         className="activity-btn activity-settings"
-        aria-label="Configurações"
-        title="Configurações"
+        aria-label={nav.settings.label}
+        title={nav.settings.title}
         onClick={() => settings.current?.showModal()}
       >
         <Settings size={20} aria-hidden="true" />

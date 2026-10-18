@@ -20,7 +20,7 @@ import { InviteDialog, openInvite } from '../components/members-panel';
 import { PdfViewer } from '../components/pdf-viewer';
 import { RoleBadge } from '../components/role-badge';
 import { ThemeToggle } from '../components/theme-toggle';
-import { ActivityBar, sidebarViewIcons, viewLabels } from '../components/workspace/activity-bar';
+import { ActivityBar, sidebarViewIcons } from '../components/workspace/activity-bar';
 import { BottomPanel } from '../components/workspace/bottom-panel';
 import { DiffTab } from '../components/workspace/diff-tab';
 import { Sidebar } from '../components/workspace/sidebar';
@@ -30,6 +30,7 @@ import { TabBar } from '../components/workspace/tab-bar';
 import { useMatchMedia } from '../components/workspace/use-match-media';
 import { useSidebarVisibility } from '../components/workspace/use-sidebar-visibility';
 import { useService } from '../di/service-provider';
+import { useNav } from '../i18n';
 import { FileServiceToken } from '../services/file.service';
 import { ProjectServiceToken, type Role } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
@@ -52,6 +53,7 @@ export function ProjectPage() {
   const panelOpen = useSettingsStore((s) => s.panelOpen);
   const sidebarView = useSettingsStore((s) => s.sidebarView);
   const setSettings = useSettingsStore((s) => s.set);
+  const sidebarLabels = useNav().labels;
   const [surface, setSurface] = useState<Surface>('editor');
   const compact = useMatchMedia(COMPACT_QUERY);
   const {
@@ -217,7 +219,7 @@ export function ProjectPage() {
           <dialog
             ref={sidebarDialog}
             className="sidebar-sheet"
-            aria-label={viewLabels[sidebarView]}
+            aria-label={sidebarLabels[sidebarView]}
             onClose={() => setSidebarOpen(false)}
             onClick={(e) => {
               if (e.target === e.currentTarget) e.currentTarget.close();
@@ -225,7 +227,7 @@ export function ProjectPage() {
           >
             <div className="sidebar-sheet-header">
               <SidebarIcon size={16} aria-hidden="true" />
-              <span>{viewLabels[sidebarView]}</span>
+              <span>{sidebarLabels[sidebarView]}</span>
               <Button
                 variant="ghost"
                 size="icon"

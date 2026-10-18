@@ -43,6 +43,8 @@ export const SYNTAX_TOKENS: { token: SyntaxToken; label: string }[] = [
 ];
 
 export type ThemeSetting = 'light' | 'dark' | 'system';
+/** UI language. '' = automatic (FasorX account when available, then the browser). */
+export type UiLang = 'pt-BR' | 'en' | 'es';
 export type SidebarView =
   | 'files'
   | 'navigator'
@@ -84,6 +86,8 @@ export interface Settings {
   spellcheck: boolean;
   /** BCP-47 tag choosing the dictionary (pt-* and en-* are bundled). */
   spellcheckLang: string;
+  /** UI language; '' follows the account/browser (see i18n.ts). */
+  uiLang: '' | UiLang;
 }
 
 interface SettingsState extends Settings {
@@ -112,6 +116,7 @@ const defaults: Settings = {
   stopOnFirstError: false,
   spellcheck: false,
   spellcheckLang: 'pt-BR',
+  uiLang: '',
 };
 
 export const resolveTheme = (theme: ThemeSetting, prefersDark: boolean): 'light' | 'dark' =>
