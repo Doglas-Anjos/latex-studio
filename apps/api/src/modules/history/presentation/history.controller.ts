@@ -52,8 +52,8 @@ export class HistoryController {
   @RouteConfig({ rateLimit: { max: 120, timeWindow: '1 minute' } })
   @Get('status')
   @RequireProjectRole('viewer')
-  status(@CurrentProject() project: Project) {
-    return this.history.status(project);
+  status(@CurrentProject() project: Project, @CurrentUser() user: User) {
+    return this.history.status(project, user);
   }
 
   @RouteConfig({ rateLimit: { max: 30, timeWindow: '1 minute' } })

@@ -56,6 +56,11 @@ export interface ProjectRepository {
   delete(id: string): Promise<void>;
   /** Remembers who edited a file collaboratively, so the next commit of it names them. */
   recordEdit(projectId: string, path: string, userId: string): Promise<void>;
+  /** Who edited each of `paths` collaboratively since the last commit (read-only, keeps the rows). */
+  editorsByPath(
+    projectId: string,
+    paths: string[],
+  ): Promise<Map<string, Array<{ name: string; email: string }>>>;
   /**
    * Runs `commit` with who edited `paths` (every file when null), then clears those records, so
    * each edit is credited once. A `commit` that throws clears nothing; edits recorded while it

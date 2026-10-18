@@ -15,6 +15,7 @@ import {
   Pencil,
   Trash2,
   Upload as UploadIcon,
+  Users,
   X,
 } from 'lucide-react';
 import {
@@ -158,16 +159,19 @@ export function FileTree({
   });
   const tree = useMemo(() => buildTree(data ?? []), [data]);
   const status = useHistoryStatus(projectId).data;
-  const { dirty, dirtyDirs } = useMemo(() => {
+  const { dirty, dirtyDirs, others } = useMemo(() => {
     const dirty = new Map<string, 'add' | 'modify'>();
     const dirtyDirs = new Set<string>();
+    // Files another person also edited since the last saved version.
+    const others = new Set<string>();
     for (const c of status?.changes ?? []) {
       if (c.type === 'remove') continue;
+      if ((c.others?.length ?? 0) > 0) others.add(c.path);
       dirty.set(c.path, c.type);
       const parts = c.path.split('/');
       for (let i = 1; i < parts.length; i++) dirtyDirs.add(parts.slice(0, i).join('/'));
     }
-    return { dirty, dirtyDirs };
+    return { dirty, dirtyDirs, others };
   }, [status]);
 
   const rename = (from: string) => {
@@ -233,6 +237,11 @@ export function FileTree({
                 <span className="tree-label-text" data-dirty={dirtyType}>
                   {n.name}
                 </span>
+                {!isFolder && others.has(n.path) && (
+                  <span className="tree-others" title="Editado também por outras pessoas">
+                    <Users size={11} aria-hidden="true" />
+                  </span>
+                )}
                 {dirtyType && (
                   <span
                     className="tree-dirty"

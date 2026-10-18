@@ -128,9 +128,9 @@ describe('HistoryService', () => {
     const v2 = (await service.commit(project, ana, 'v2')).sha;
     await files.write('a.tex', 'one\ntwo\nthree\n');
 
-    const status = await service.status(project);
+    const status = await service.status(project, ana);
     expect(status.baseline?.sha).toBe(v2);
-    expect(status.changes).toEqual([{ path: 'a.tex', type: 'modify' }]);
+    expect(status.changes).toEqual([{ path: 'a.tex', type: 'modify', mine: false, others: [] }]);
 
     const { lines, commits } = await service.blame(project, 'a.tex');
     expect(Object.values(commits).map((c) => c.author)).toEqual([
@@ -163,7 +163,7 @@ describe('HistoryService', () => {
     expect(await service.changes(project, (await service.log(project))[1]?.sha ?? '', sha)).toEqual(
       [{ path: 'a.tex', type: 'modify' }],
     );
-    expect(await service.status(project)).toMatchObject({
+    expect(await service.status(project, ana)).toMatchObject({
       changes: [{ path: 'b.tex', type: 'modify' }],
     });
 
@@ -189,8 +189,33 @@ describe('HistoryService', () => {
     // Names only: e-mails never leave through the history API.
     expect(head?.message).toBe('Update a.tex\n\nCo-authored-by: bruno');
     expect(head?.author).toEqual({ name: ana.name });
-    expect((await service.status(project)).changes).toEqual([{ path: 'b.tex', type: 'modify' }]);
+    expect((await service.status(project, ana)).changes).toEqual([
+      { path: 'b.tex', type: 'modify', mine: false, others: ['carla'] },
+    ]);
     expect(projects.edits.map((e) => e.userId)).toEqual(['carla']);
+  });
+
+  it('tags status changes as mine, shared or by others', async () => {
+    const files = storage.open(project.id);
+    for (const p of ['mine.tex', 'shared.tex', 'theirs.tex', 'nobody.tex']) {
+      await files.write(p, 'one');
+    }
+    await service.commit(project, ana, 'v1');
+    for (const p of ['mine.tex', 'shared.tex', 'theirs.tex', 'nobody.tex']) {
+      await files.write(p, 'two-longer');
+    }
+    await projects.recordEdit(project.id, 'mine.tex', ana.email);
+    await projects.recordEdit(project.id, 'shared.tex', ana.email);
+    await projects.recordEdit(project.id, 'shared.tex', 'bruno@example.com');
+    await projects.recordEdit(project.id, 'theirs.tex', 'bruno@example.com');
+    // nobody.tex changed on disk but was never edited collaboratively: no attribution.
+
+    const { changes } = await service.status(project, ana);
+    const by = Object.fromEntries(changes.map((c) => [c.path, { mine: c.mine, others: c.others }]));
+    expect(by['mine.tex']).toEqual({ mine: true, others: [] });
+    expect(by['shared.tex']).toEqual({ mine: true, others: ['bruno@example.com'] });
+    expect(by['theirs.tex']).toEqual({ mine: false, others: ['bruno@example.com'] });
+    expect(by['nobody.tex']).toEqual({ mine: false, others: [] });
   });
 
   it('fileLog lists only the commits that touched the path', async () => {
@@ -321,7 +346,7 @@ describe('HistoryService.commitFile against the real collaborative stack', () =>
       [{ path: 'a.tex', type: 'modify' }],
     );
     // b.tex's unrelated change is untouched by commitFile.
-    expect(await service.status(project)).toMatchObject({
+    expect(await service.status(project, ana)).toMatchObject({
       changes: [{ path: 'b.tex', type: 'modify' }],
     });
   });
@@ -375,6 +400,6 @@ describe('HistoryService.commitFile against the real collaborative stack', () =>
     // store must not have rewritten it back to the pre-"-B" snapshot once it finally got its turn.
     expect(text(await service.fileAt(project, sha, 'a.tex'))).toBe('one-A-B');
     expect(text(await files.repo.readFile('a.tex'))).toBe('one-A-B');
-    expect(await service.status(project)).toMatchObject({ changes: [] });
+    expect(await service.status(project, ana)).toMatchObject({ changes: [] });
   });
 });

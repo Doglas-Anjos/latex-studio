@@ -165,6 +165,25 @@ export class DrizzleProjectRepository implements ProjectRepository {
       });
   }
 
+  async editorsByPath(
+    projectId: string,
+    paths: string[],
+  ): Promise<Map<string, Array<{ name: string; email: string }>>> {
+    const byPath = new Map<string, Array<{ name: string; email: string }>>();
+    if (paths.length === 0) return byPath;
+    const rows = await this.db
+      .select({ path: fileEdits.path, name: users.name, email: users.email })
+      .from(fileEdits)
+      .innerJoin(users, eq(users.id, fileEdits.userId))
+      .where(and(eq(fileEdits.projectId, projectId), inArray(fileEdits.path, paths)));
+    for (const { path, name, email } of rows) {
+      const list = byPath.get(path) ?? [];
+      if (!list.some((e) => e.email === email)) list.push({ name, email });
+      byPath.set(path, list);
+    }
+    return byPath;
+  }
+
   async withEditors<T>(
     projectId: string,
     paths: string[] | null,

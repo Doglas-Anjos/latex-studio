@@ -485,6 +485,16 @@
   background: currentColor;
   opacity: 0.6;
 }
+/* Edited by someone else since the last saved version. */
+.tree-others {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--mark);
+}
+.tree-others + .tree-dirty {
+  margin-left: 0.3rem;
+}
 .help-sections {
   display: grid;
   gap: 0.9rem;
