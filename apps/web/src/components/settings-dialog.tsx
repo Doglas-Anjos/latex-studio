@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Code2, FileText, Palette, Settings as SettingsIcon, SpellCheck } from 'lucide-react';
 import { type ReactNode, type RefObject, useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
+import { UI_LANGS } from '../i18n';
 import { type Project, ProjectServiceToken } from '../services/project.service';
 import {
   type DiffView,
@@ -369,6 +370,24 @@ function AppearancePanel() {
 
   return (
     <div className="settings-section">
+      <Row
+        title="Idioma da interface"
+        description="Idioma do menu lateral. “Automático” usa o idioma da sua conta FasorX, quando disponível, ou o do navegador."
+        control={
+          <select
+            value={s.uiLang}
+            aria-label="Idioma da interface"
+            onChange={(e) => set({ uiLang: e.target.value as Settings['uiLang'] })}
+          >
+            <option value="">Automático</option>
+            {UI_LANGS.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        }
+      />
       <Row
         title="Tema"
         control={

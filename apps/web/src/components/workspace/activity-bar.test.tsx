@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Container } from '../../di/container';
 import { type HistoryService, HistoryServiceToken } from '../../services/history.service';
 import { useSettingsStore } from '../../settings-store';
@@ -9,7 +9,12 @@ import { renderWithApp } from '../../test/render';
 import { ActivityBar } from './activity-bar';
 
 describe('ActivityBar', () => {
-  afterEach(cleanup);
+  // The labels are i18n'd; pin pt-BR so the assertions below are language-stable.
+  beforeEach(() => useSettingsStore.setState({ uiLang: 'pt-BR' }));
+  afterEach(() => {
+    useSettingsStore.setState({ uiLang: '' });
+    cleanup();
+  });
 
   it('switches the sidebar view and shows the changes badge', async () => {
     const status = vi.fn().mockResolvedValue({

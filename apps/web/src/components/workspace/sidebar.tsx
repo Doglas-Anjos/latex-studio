@@ -1,3 +1,4 @@
+import { useNav } from '../../i18n';
 import type { Role } from '../../services/project.service';
 import { useSettingsStore } from '../../settings-store';
 import { useWorkspaceStore } from '../../workspace-store';
@@ -7,7 +8,6 @@ import { HistoryPanel } from '../history-panel';
 import { MembersPanel } from '../members-panel';
 import { NavigatorPanel } from '../navigator-panel';
 import { PackagesPanel } from '../packages-panel';
-import { viewLabels } from './activity-bar';
 import { ChangesView } from './changes-view';
 import { GraphView } from './graph-view';
 import { MapView } from './map-view';
@@ -21,14 +21,15 @@ export function Sidebar({
   showHeading?: boolean;
 }) {
   const view = useSettingsStore((s) => s.sidebarView);
+  const labels = useNav().labels;
   // Read here, not passed down: a tab switch then re-renders the sidebar, not the whole page.
   const path = useWorkspaceStore((s) => s.activePath) ?? project.mainFile;
   const canEdit = project.role === 'owner' || project.role === 'editor';
   return (
-    <aside className="sidebar" aria-label={viewLabels[view]}>
+    <aside className="sidebar" aria-label={labels[view]}>
       {showHeading && (
         <h2 className="pane-title">
-          {viewLabels[view]}
+          {labels[view]}
           {view === 'files' && <span className="sidebar-project">{project.name}</span>}
         </h2>
       )}
