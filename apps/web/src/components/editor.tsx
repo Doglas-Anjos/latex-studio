@@ -105,7 +105,7 @@ export function peersFrom(
     if (selfUser && u.id === selfUser) continue;
     // Remote-controlled: only a plain hex colour reaches a style attribute.
     const color = typeof u.color === 'string' && HEX_COLOR.test(u.color) ? u.color : 'var(--muted)';
-    peers.push({ id, name: u.name, color });
+    peers.push({ id, userId: typeof u.id === 'string' ? u.id : String(id), name: u.name, color });
   }
   return peers;
 }

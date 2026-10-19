@@ -211,8 +211,8 @@ describe('peersFrom', () => {
       [4, {}],
     ]);
     expect(peersFrom(states, 1)).toEqual([
-      { id: 2, name: 'Ana', color: '#1f6fa8' },
-      { id: 3, name: 'Ana', color: 'var(--muted)' },
+      { id: 2, userId: '2', name: 'Ana', color: '#1f6fa8' },
+      { id: 3, userId: '3', name: 'Ana', color: 'var(--muted)' },
     ]);
   });
 
@@ -222,6 +222,8 @@ describe('peersFrom', () => {
       [5, { user: { id: 'u1', name: 'Local', color: '#000000' } }],
       [6, { user: { id: 'u2', name: 'Ana', color: '#1f6fa8' } }],
     ]);
-    expect(peersFrom(states, 1, 'u1')).toEqual([{ id: 6, name: 'Ana', color: '#1f6fa8' }]);
+    expect(peersFrom(states, 1, 'u1')).toEqual([
+      { id: 6, userId: 'u2', name: 'Ana', color: '#1f6fa8' },
+    ]);
   });
 });

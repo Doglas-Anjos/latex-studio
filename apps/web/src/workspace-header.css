@@ -154,6 +154,49 @@
   background: var(--chrome-line);
 }
 
+/* Presence: Google-Docs-style initial circles for collaborators on the open file. */
+.presence-avatars {
+  display: flex;
+  align-items: center;
+  flex: none;
+  margin: 0;
+  padding: 0 0.15rem 0 0;
+  list-style: none;
+}
+.presence-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.65rem;
+  height: 1.65rem;
+  margin-left: -0.4rem;
+  box-sizing: border-box;
+  border: 2px solid var(--chrome-bg);
+  border-radius: 50%;
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.4);
+  cursor: default;
+}
+.presence-avatar:first-child {
+  margin-left: 0;
+}
+.presence-avatar-extra {
+  background: var(--chrome-bg-raised);
+  color: var(--chrome-muted);
+  text-shadow: none;
+}
+
+/* Language menu lives in the dark header: right-align the popover and pin the light surface ink. */
+.lang-menu .menu-list {
+  left: auto;
+  right: 0;
+  min-width: 9rem;
+  color: var(--ink);
+}
+
 /* RoleBadge is styled for the light surface; make it read on the dark bar. */
 .wsh-header .role-badge[data-role] {
   flex: none;
