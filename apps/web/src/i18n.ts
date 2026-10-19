@@ -118,3 +118,211 @@ export function useUiLang(): UiLang {
 export function useNav(): NavStrings {
   return NAV[useUiLang()];
 }
+
+interface DashStrings {
+  /** BCP-47 tag for Intl date formatting. */
+  locale: string;
+  title: string;
+  /** Singular / plural noun for the project count. */
+  project: string;
+  projects: string;
+  admin: string;
+  search: string;
+  newProject: string;
+  blankProject: string;
+  importZip: string;
+  importFolder: string;
+  filterAll: string;
+  filterMine: string;
+  filterShared: string;
+  filters: string;
+  loading: string;
+  loadError: string;
+  recent: string;
+  open: string;
+  /** Prefixes the project name in the "continue" button's aria-label. */
+  continuePrefix: string;
+  emptyTitle: string;
+  emptyText: string;
+  createProject: string;
+  importFiles: string;
+  hintGit: string;
+  hintCollab: string;
+  hintCompile: string;
+  noResultsTitle: string;
+  noResultsText: string;
+  clearSearch: string;
+  paginationLabel: string;
+  page: string;
+  totalSuffix: string;
+  previous: string;
+  next: string;
+  colTitle: string;
+  colModified: string;
+  actions: string;
+  actOpen: string;
+  actShare: string;
+  actCopy: string;
+  actDownload: string;
+  actRemove: string;
+  howItWorks: string;
+  logout: string;
+}
+
+// Dashboard (projects page + app header). Second i18n slice, after the nav menu.
+const DASH: Record<UiLang, DashStrings> = {
+  'pt-BR': {
+    locale: 'pt-BR',
+    title: 'Projetos',
+    project: 'projeto',
+    projects: 'projetos',
+    admin: 'Administração',
+    search: 'Buscar projeto',
+    newProject: 'Novo projeto',
+    blankProject: 'Projeto em branco',
+    importZip: 'Importar .zip',
+    importFolder: 'Importar pasta',
+    filterAll: 'Todos os projetos',
+    filterMine: 'Meus projetos',
+    filterShared: 'Compartilhados comigo',
+    filters: 'Filtros',
+    loading: 'Carregando…',
+    loadError: 'Não foi possível carregar os projetos.',
+    recent: 'Último projeto',
+    open: 'Abrir',
+    continuePrefix: 'Continuar projeto',
+    emptyTitle: 'Ainda não há projetos',
+    emptyText: 'Crie um projeto em branco ou importe arquivos que você já tem.',
+    createProject: 'Criar projeto',
+    importFiles: 'Importar arquivos',
+    hintGit:
+      'Cada projeto é um repositório git, com histórico e versões salvas quando você quiser.',
+    hintCollab: 'Edição colaborativa em tempo real, com cursores nomeados e comentários no texto.',
+    hintCompile:
+      'Compile com pdfLaTeX, XeLaTeX ou LuaLaTeX e ligue pacotes sem editar o preâmbulo.',
+    noResultsTitle: 'Nenhum projeto encontrado',
+    noResultsText: 'Tente outro termo ou escolha um filtro diferente.',
+    clearSearch: 'Limpar busca e filtros',
+    paginationLabel: 'Paginação de projetos',
+    page: 'Página',
+    totalSuffix: 'no total',
+    previous: 'Anterior',
+    next: 'Próxima',
+    colTitle: 'Título',
+    colModified: 'Última modificação',
+    actions: 'Ações',
+    actOpen: 'Abrir',
+    actShare: 'Compartilhar',
+    actCopy: 'Fazer uma cópia',
+    actDownload: 'Baixar .zip',
+    actRemove: 'Excluir',
+    howItWorks: 'Como funciona',
+    logout: 'Sair',
+  },
+  en: {
+    locale: 'en',
+    title: 'Projects',
+    project: 'project',
+    projects: 'projects',
+    admin: 'Administration',
+    search: 'Search project',
+    newProject: 'New project',
+    blankProject: 'Blank project',
+    importZip: 'Import .zip',
+    importFolder: 'Import folder',
+    filterAll: 'All projects',
+    filterMine: 'My projects',
+    filterShared: 'Shared with me',
+    filters: 'Filters',
+    loading: 'Loading…',
+    loadError: 'Could not load the projects.',
+    recent: 'Last project',
+    open: 'Open',
+    continuePrefix: 'Continue project',
+    emptyTitle: 'No projects yet',
+    emptyText: 'Create a blank project or import files you already have.',
+    createProject: 'Create project',
+    importFiles: 'Import files',
+    hintGit: 'Each project is a git repository, with history and versions saved whenever you want.',
+    hintCollab: 'Real-time collaborative editing, with named cursors and inline comments.',
+    hintCompile:
+      'Compile with pdfLaTeX, XeLaTeX or LuaLaTeX and toggle packages without editing the preamble.',
+    noResultsTitle: 'No projects found',
+    noResultsText: 'Try another term or pick a different filter.',
+    clearSearch: 'Clear search and filters',
+    paginationLabel: 'Project pagination',
+    page: 'Page',
+    totalSuffix: 'in total',
+    previous: 'Previous',
+    next: 'Next',
+    colTitle: 'Title',
+    colModified: 'Last modified',
+    actions: 'Actions',
+    actOpen: 'Open',
+    actShare: 'Share',
+    actCopy: 'Make a copy',
+    actDownload: 'Download .zip',
+    actRemove: 'Delete',
+    howItWorks: 'How it works',
+    logout: 'Log out',
+  },
+  es: {
+    locale: 'es',
+    title: 'Proyectos',
+    project: 'proyecto',
+    projects: 'proyectos',
+    admin: 'Administración',
+    search: 'Buscar proyecto',
+    newProject: 'Nuevo proyecto',
+    blankProject: 'Proyecto en blanco',
+    importZip: 'Importar .zip',
+    importFolder: 'Importar carpeta',
+    filterAll: 'Todos los proyectos',
+    filterMine: 'Mis proyectos',
+    filterShared: 'Compartidos conmigo',
+    filters: 'Filtros',
+    loading: 'Cargando…',
+    loadError: 'No se pudieron cargar los proyectos.',
+    recent: 'Último proyecto',
+    open: 'Abrir',
+    continuePrefix: 'Continuar proyecto',
+    emptyTitle: 'Aún no hay proyectos',
+    emptyText: 'Crea un proyecto en blanco o importa archivos que ya tengas.',
+    createProject: 'Crear proyecto',
+    importFiles: 'Importar archivos',
+    hintGit:
+      'Cada proyecto es un repositorio git, con historial y versiones guardadas cuando quieras.',
+    hintCollab:
+      'Edición colaborativa en tiempo real, con cursores con nombre y comentarios en el texto.',
+    hintCompile:
+      'Compila con pdfLaTeX, XeLaTeX o LuaLaTeX y activa paquetes sin editar el preámbulo.',
+    noResultsTitle: 'No se encontraron proyectos',
+    noResultsText: 'Prueba otro término o elige un filtro distinto.',
+    clearSearch: 'Limpiar búsqueda y filtros',
+    paginationLabel: 'Paginación de proyectos',
+    page: 'Página',
+    totalSuffix: 'en total',
+    previous: 'Anterior',
+    next: 'Siguiente',
+    colTitle: 'Título',
+    colModified: 'Última modificación',
+    actions: 'Acciones',
+    actOpen: 'Abrir',
+    actShare: 'Compartir',
+    actCopy: 'Hacer una copia',
+    actDownload: 'Descargar .zip',
+    actRemove: 'Eliminar',
+    howItWorks: 'Cómo funciona',
+    logout: 'Salir',
+  },
+};
+
+/** Dashboard (projects page + app header) strings for the current language. */
+export function useDash(): DashStrings {
+  return DASH[useUiLang()];
+}
+
+/** `n` projects, with the current language's singular/plural noun. */
+export function projectCount(d: DashStrings, n: number): string {
+  return `${n} ${n === 1 ? d.project : d.projects}`;
+}

@@ -1,5 +1,6 @@
 import { Link, Outlet } from 'react-router';
 import { useService } from '../di/service-provider';
+import { useDash } from '../i18n';
 import type { User } from '../services/auth.service';
 import { IdentityToken } from '../services/identity';
 import { Brand } from './brand';
@@ -10,6 +11,7 @@ import { useApplyTheme } from './use-theme';
 
 export function Layout({ user }: { user: User }) {
   const identity = useService(IdentityToken);
+  const d = useDash();
   useApplyTheme();
   return (
     <>
@@ -23,7 +25,7 @@ export function Layout({ user }: { user: User }) {
           <span className="user-email">{user.name || user.email}</span>
           {identity.enabled && (
             <Button variant="ghost" onClick={() => identity.signOut()}>
-              Sair
+              {d.logout}
             </Button>
           )}
         </nav>
