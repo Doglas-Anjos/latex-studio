@@ -18,16 +18,13 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import Redis from 'ioredis';
 import { WebSocketServer } from 'ws';
 import { AppModule } from './app.module';
-import { IdentityService, rateLimitKey } from './modules/auth/application/identity.service';
+import { IdentityService, peerIp, rateLimitKey } from './modules/auth/application/identity.service';
 import { HOCUSPOCUS } from './modules/collab/infrastructure/hocuspocus.server';
 
 // Local development reads the repo's .env; containers get their environment from compose.
 try {
   process.loadEnvFile(join(__dirname, '..', '..', '..', '.env'));
 } catch {}
-
-// Loopback socket address (IPv4 127/8, ::1, IPv4-mapped): a proxy we may trust X-Forwarded-* from.
-const LOOPBACK = /^(?:::ffff:)?127\.\d+\.\d+\.\d+$|^::1$/;
 
 async function bootstrap() {
   // With a verifier the API sits behind exactly one trusted hop (Caddy). In local/LAN mode the only
@@ -99,21 +96,17 @@ async function bootstrap() {
     .getInstance()
     .server.on('upgrade', (request, socket, head) => {
       if (!request.url?.startsWith('/collab')) return socket.destroy();
-      // The real client, trusting X-Forwarded-* only from a loopback proxy (Vite): the raw Host is
-      // rewritten to localhost by the proxy, so a LAN peer must not be judged by it. A peer hitting
-      // the API directly has a non-loopback socket, so its forged headers are ignored.
-      const socketIp = request.socket.remoteAddress ?? '';
-      const fromProxy = LOOPBACK.test(socketIp);
-      const fwd = (name: string) =>
-        fromProxy
-          ? (request.headers[name] as string | undefined)?.split(',')[0]?.trim()
-          : undefined;
-      const realIp = fwd('x-forwarded-for') || socketIp;
-      const realHost = fwd('x-forwarded-host') || request.headers.host || '';
+      // The real client address (see peerIp: only the proxy-appended X-Forwarded-For entry counts),
+      // which onAuthenticate uses to gate the local-mode owner grant to the host machine.
+      const peer = peerIp(
+        request.headers['x-forwarded-for'] as string | undefined,
+        request.socket.remoteAddress ?? '',
+      );
+      const host = request.headers.host ?? '';
       // Same origin as the app, or — with LAN share on — the LAN address the peer loaded it from
-      // (its Origin host equals this upgrade's real Host: same server, not a foreign site).
+      // (its Origin host equals this upgrade's Host: same server, not a foreign site).
       const origin = request.headers.origin;
-      const lanOrigin = config.LAN_SHARE && !!origin && !!realHost && safeHost(origin) === realHost;
+      const lanOrigin = config.LAN_SHARE && !!origin && !!host && safeHost(origin) === host;
       if (origin !== appOrigin && !lanOrigin) {
         return socket.end(
           'HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
@@ -124,11 +117,8 @@ async function bootstrap() {
         for (let i = 0; i < request.rawHeaders.length; i += 2) {
           headers.append(request.rawHeaders[i] as string, request.rawHeaders[i + 1] as string);
         }
-        // Overwrite host and peer-ip with the real (unforgeable) values, so onAuthenticate gates the
-        // local-mode owner grant on the true client address, not the proxy's rewritten localhost.
-        headers.set('host', realHost);
-        headers.delete('x-peer-ip');
-        headers.set('x-peer-ip', realIp);
+        // set() replaces any x-peer-ip the client sent with the real address.
+        headers.set('x-peer-ip', peer);
         const connection = hocuspocus.handleConnection(
           ws,
           new Request(`http://localhost${request.url}`, { headers }),

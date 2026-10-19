@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import type { TokenVerifier } from '../domain/token-verifier';
-import { bearerToken, IdentityService, LOCAL_IDENTITY, rateLimitKey } from './identity.service';
+import {
+  bearerToken,
+  IdentityService,
+  LOCAL_IDENTITY,
+  peerIp,
+  rateLimitKey,
+} from './identity.service';
 
 const ana = {
   issuer: 'https://fasorx.example',
@@ -61,6 +67,16 @@ describe('IdentityService', () => {
     expect(rateLimitKey(identity, req(undefined, '2001:db8::5:6:7:8'))).toBe('2001:db8:0:0');
     expect(rateLimitKey(identity, req(undefined, '::1'))).toBe('0:0:0:0');
     expect(rateLimitKey(identity, req(undefined, '::ffff:10.0.0.1'))).toBe('::ffff:10.0.0.1');
+  });
+
+  it('takes the client address from the proxy-appended X-Forwarded-For entry only', () => {
+    // A LAN peer forging loopback in front of the real entry Vite appended: not loopback.
+    expect(peerIp('127.0.0.1, 192.168.0.9', '127.0.0.1')).toBe('192.168.0.9');
+    // The host's own browser through Vite.
+    expect(peerIp('127.0.0.1', '127.0.0.1')).toBe('127.0.0.1');
+    // A peer hitting the API directly: its header is ignored, its socket is the address.
+    expect(peerIp('127.0.0.1', '192.168.0.9')).toBe('192.168.0.9');
+    expect(peerIp(undefined, '::1')).toBe('::1');
   });
 
   it('reads the bearer token from the header', () => {

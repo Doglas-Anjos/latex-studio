@@ -8,8 +8,19 @@ const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
 const LOOPBACK_IP = /^(?:127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)$/;
 
 /** True only for a loopback peer address (unspoofable, unlike the Host header). */
-function isLoopback(ip: string | undefined): boolean {
+export function isLoopback(ip: string | undefined): boolean {
   return !!ip && LOOPBACK_IP.test(ip);
+}
+
+/**
+ * The real client address of a raw request (the WebSocket upgrade, where Fastify's request.ip is not
+ * available). When the socket is a loopback proxy (Vite in dev, Caddy in production), only the
+ * right-most X-Forwarded-For entry is the proxy's own record of the client; everything to its left
+ * was sent by the client and is forgeable. Any other socket is the client itself.
+ */
+export function peerIp(forwardedFor: string | undefined, socketIp: string): string {
+  if (!forwardedFor || !isLoopback(socketIp)) return socketIp;
+  return forwardedFor.split(',').at(-1)?.trim() || socketIp;
 }
 
 /** Who every request is in local mode (no verifier configured; config allows that only on localhost). */
