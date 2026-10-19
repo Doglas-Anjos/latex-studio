@@ -70,7 +70,7 @@ export function DownloadButton({
         onClick={downloadPdf}
       >
         <Download size={16} aria-hidden="true" />
-        Baixar
+        <span className="pdf-download-label">Baixar</span>
       </button>
       <Menu
         label={<span className="sr-only">Mais opções de download</span>}

@@ -218,7 +218,8 @@
   }
   /* Header actions go icon-only (the aria-label/title keep their names) so they fit one row. */
   .wsh-back span,
-  .wsh-share span {
+  .wsh-share span,
+  .pdf-download-label {
     display: none;
   }
   .wsh-back,
@@ -234,8 +235,11 @@
    so its accessible name and hover tooltip survive losing the visible text. */
 @media (max-width: 26rem) {
   .wsh-header {
-    gap: 0.3rem;
+    gap: 0.25rem;
     padding: 0 0.5rem;
+  }
+  .wsh-brand {
+    padding: 0.3rem;
   }
   .wsh-brand .brand-suffix {
     display: none;
@@ -245,6 +249,21 @@
   }
   .wsh-segmented-btn {
     padding: 0.4rem;
+  }
+  /* Drop the separators, role badge and labels so everything fits one line on a phone. */
+  .wsh-divider,
+  .wsh-sep {
+    display: none;
+  }
+  .wsh-header .role-badge[data-role] {
+    display: none;
+  }
+  .wsh-end {
+    gap: 0.15rem;
+  }
+  .presence-avatar {
+    width: 1.5rem;
+    height: 1.5rem;
   }
 }
 
