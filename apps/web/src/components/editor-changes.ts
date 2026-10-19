@@ -4,6 +4,8 @@
 import { Chunk } from '@codemirror/merge';
 import { type Extension, StateEffect, StateField, Text } from '@codemirror/state';
 import { type EditorView, GutterMarker, gutter, ViewPlugin } from '@codemirror/view';
+// Function-level import only (both used inside lineMarker); the modules form a benign cycle.
+import { authorAt, lineAuthorsField } from './editor-authors';
 
 type LineClass = 'added' | 'modified' | 'deleted';
 /**
@@ -53,6 +55,26 @@ const markers = {
   })(),
 };
 
+// An added/modified bar tinted with the line's author colour (so you see who changed it even with
+// the blame gutter off); falls back to the semantic added/modified colour when the author is unknown.
+class AuthorBar extends GutterMarker {
+  constructor(
+    readonly cls: 'added' | 'modified',
+    readonly color: string,
+  ) {
+    super();
+  }
+  override eq(other: GutterMarker) {
+    return other instanceof AuthorBar && other.cls === this.cls && other.color === this.color;
+  }
+  override toDOM() {
+    const el = document.createElement('span');
+    el.className = `cm-line-${this.cls} cm-line-authored`;
+    el.style.setProperty('--author-color', this.color);
+    return el;
+  }
+}
+
 export function changeGutter(base: { current: string | null }): Extension {
   const plugin = ViewPlugin.fromClass(
     class {
@@ -93,9 +115,14 @@ export function changeGutter(base: { current: string | null }): Extension {
       class: 'cm-changes-gutter',
       lineMarker(view, line) {
         const cls = view.state.field(classField).get(view.state.doc.lineAt(line.from).number);
-        return cls ? markers[cls] : null;
+        if (!cls) return null;
+        if (cls === 'deleted') return markers.deleted;
+        const authors = view.state.field(lineAuthorsField, false);
+        const author = authors ? authorAt(authors, line.from) : null;
+        return author?.color ? new AuthorBar(cls, author.color) : markers[cls];
       },
       lineMarkerChange: (u) =>
+        u.startState.field(lineAuthorsField, false) !== u.state.field(lineAuthorsField, false) ||
         u.transactions.some((t) => t.effects.some((e) => e.is(setLineClasses))),
     }),
   ];

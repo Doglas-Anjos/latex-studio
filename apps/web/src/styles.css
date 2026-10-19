@@ -3904,6 +3904,10 @@ button.change-row-main:hover .change-name {
 .cm-changes-gutter .cm-line-deleted {
   border-bottom: 2px solid var(--danger);
 }
+/* Added/modified bar tinted by its author (editor-changes.ts) instead of the semantic colour. */
+.cm-changes-gutter .cm-line-authored {
+  background: var(--author-color);
+}
 .cm-changedLine {
   background: color-mix(in srgb, var(--warn) 18%, transparent);
 }
