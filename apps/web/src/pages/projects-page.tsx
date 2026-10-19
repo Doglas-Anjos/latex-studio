@@ -29,6 +29,7 @@ import {
 } from '../components/dashboard/dialogs';
 import { HelpDialog } from '../components/dashboard/help-dialog';
 import { FasorxFooter } from '../components/fasorx-footer';
+import { LanShareDialog } from '../components/lan-share-dialog';
 import { InviteDialog, openInvite } from '../components/members-panel';
 import { Menu } from '../components/menu';
 import { ROLE_ICON, RoleBadge } from '../components/role-badge';
@@ -69,6 +70,10 @@ export function ProjectsPage() {
   const copyRef = useRef<HTMLDialogElement>(null);
   const removeRef = useRef<HTMLDialogElement>(null);
   const shareRef = useRef<HTMLDialogElement>(null);
+  const lanShareRef = useRef<HTMLDialogElement>(null);
+  const [lanOpen, setLanOpen] = useState(false);
+  // A local install (no FasorX) shares over the LAN; a FasorX deployment invites members by e-mail.
+  const local = useMe().data?.issuer === 'local';
   const helpRef = useRef<HTMLDialogElement>(null);
 
   const search = useDebounced(query.trim());
@@ -117,7 +122,12 @@ export function ProjectsPage() {
   };
   const openShare = (p: Project) => {
     setSharing(p);
-    openInvite(shareRef.current);
+    if (local) {
+      setLanOpen(true);
+      lanShareRef.current?.showModal();
+    } else {
+      openInvite(shareRef.current);
+    }
   };
   const openRemove = (p: Project) => {
     setRemoving(p);
@@ -232,7 +242,16 @@ export function ProjectsPage() {
       <CreateDialog dialogRef={createRef} onDone={open} />
       <ImportDialog dialogRef={importRef} mode={importMode} setMode={setImportMode} onDone={open} />
       <CopyDialog dialogRef={copyRef} project={copying} onDone={open} />
-      <InviteDialog dialogRef={shareRef} project={sharing} />
+      {local && sharing ? (
+        <LanShareDialog
+          dialogRef={lanShareRef}
+          project={sharing}
+          open={lanOpen}
+          onClose={() => setLanOpen(false)}
+        />
+      ) : (
+        <InviteDialog dialogRef={shareRef} project={sharing} />
+      )}
       <RemoveDialog dialogRef={removeRef} project={removing} onDone={() => setRemoving(null)} />
     </div>
   );
