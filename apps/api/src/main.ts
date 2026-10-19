@@ -26,15 +26,18 @@ try {
   process.loadEnvFile(join(__dirname, '..', '..', '..', '.env'));
 } catch {}
 
+// Loopback socket address (IPv4 127/8, ::1, IPv4-mapped): a proxy we may trust X-Forwarded-* from.
+const LOOPBACK = /^(?:::ffff:)?127\.\d+\.\d+\.\d+$|^::1$/;
+
 async function bootstrap() {
-  // With a verifier the API sits behind exactly one trusted hop (Caddy), so request.ip is the real
-  // client for rate limiting. In local/LAN mode nothing fronts it (it binds the interface directly),
-  // so trust no hop: request.ip is the socket peer and a forged X-Forwarded-For is ignored — else a
-  // LAN peer could send `X-Forwarded-For: 127.0.0.1` to fake a loopback address and be granted owner.
+  // With a verifier the API sits behind exactly one trusted hop (Caddy). In local/LAN mode the only
+  // thing that fronts it is the dev proxy (Vite) on loopback, so trust X-Forwarded-* only from a
+  // loopback source: request.ip/hostname are then the real client (for the owner gate and rate
+  // limits), while a LAN peer hitting the API directly cannot forge them (its socket is not loopback).
   const hasVerifier = !!(process.env.AUTH_JWKS_URL || process.env.AUTH_SECRET);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ trustProxy: hasVerifier ? (_address, hop) => hop < 1 : false }),
+    new FastifyAdapter({ trustProxy: hasVerifier ? (_address, hop) => hop < 1 : 'loopback' }),
   );
   const config = app.get<AppConfig>(APP_CONFIG);
   const identity = app.get(IdentityService);
@@ -96,15 +99,21 @@ async function bootstrap() {
     .getInstance()
     .server.on('upgrade', (request, socket, head) => {
       if (!request.url?.startsWith('/collab')) return socket.destroy();
+      // The real client, trusting X-Forwarded-* only from a loopback proxy (Vite): the raw Host is
+      // rewritten to localhost by the proxy, so a LAN peer must not be judged by it. A peer hitting
+      // the API directly has a non-loopback socket, so its forged headers are ignored.
+      const socketIp = request.socket.remoteAddress ?? '';
+      const fromProxy = LOOPBACK.test(socketIp);
+      const fwd = (name: string) =>
+        fromProxy
+          ? (request.headers[name] as string | undefined)?.split(',')[0]?.trim()
+          : undefined;
+      const realIp = fwd('x-forwarded-for') || socketIp;
+      const realHost = fwd('x-forwarded-host') || request.headers.host || '';
       // Same origin as the app, or — with LAN share on — the LAN address the peer loaded it from
-      // (its Origin host equals this upgrade's Host: same server, not a foreign site). onAuthenticate
-      // re-checks origin against host; a cross-site page keeps its own Origin and is refused there.
+      // (its Origin host equals this upgrade's real Host: same server, not a foreign site).
       const origin = request.headers.origin;
-      const lanOrigin =
-        config.LAN_SHARE &&
-        !!origin &&
-        !!request.headers.host &&
-        safeHost(origin) === request.headers.host;
+      const lanOrigin = config.LAN_SHARE && !!origin && !!realHost && safeHost(origin) === realHost;
       if (origin !== appOrigin && !lanOrigin) {
         return socket.end(
           'HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
@@ -115,10 +124,11 @@ async function bootstrap() {
         for (let i = 0; i < request.rawHeaders.length; i += 2) {
           headers.append(request.rawHeaders[i] as string, request.rawHeaders[i + 1] as string);
         }
-        // The socket peer address, as a header the client cannot forge: drop any copy it sent, then
-        // set the real one. onAuthenticate uses it to gate the local-mode owner grant to loopback.
+        // Overwrite host and peer-ip with the real (unforgeable) values, so onAuthenticate gates the
+        // local-mode owner grant on the true client address, not the proxy's rewritten localhost.
+        headers.set('host', realHost);
         headers.delete('x-peer-ip');
-        if (request.socket.remoteAddress) headers.set('x-peer-ip', request.socket.remoteAddress);
+        headers.set('x-peer-ip', realIp);
         const connection = hocuspocus.handleConnection(
           ws,
           new Request(`http://localhost${request.url}`, { headers }),
