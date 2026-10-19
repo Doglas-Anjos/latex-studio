@@ -16,6 +16,7 @@ import { Button } from '../components/button';
 import { holdSessions } from '../components/collab-sessions';
 import { DownloadButton } from '../components/download-button';
 import { Editor } from '../components/editor';
+import { LanguageToggle } from '../components/language-toggle';
 import { InviteDialog, openInvite } from '../components/members-panel';
 import { PdfViewer } from '../components/pdf-viewer';
 import { RoleBadge } from '../components/role-badge';
@@ -23,6 +24,7 @@ import { ThemeToggle } from '../components/theme-toggle';
 import { ActivityBar, sidebarViewIcons } from '../components/workspace/activity-bar';
 import { BottomPanel } from '../components/workspace/bottom-panel';
 import { DiffTab } from '../components/workspace/diff-tab';
+import { PresenceAvatars } from '../components/workspace/presence-avatars';
 import { Sidebar } from '../components/workspace/sidebar';
 import { Splitter } from '../components/workspace/splitter';
 import { StatusBar } from '../components/workspace/status-bar';
@@ -175,6 +177,7 @@ export function ProjectPage() {
           </fieldset>
         )}
         <div className="wsh-end">
+          <PresenceAvatars />
           <DownloadButton
             projectId={project.id}
             canEdit={canEdit}
@@ -204,6 +207,7 @@ export function ProjectPage() {
             <span>Projetos</span>
           </Link>
           <span className="wsh-divider" aria-hidden="true" />
+          <LanguageToggle />
           <ThemeToggle />
         </div>
       </header>

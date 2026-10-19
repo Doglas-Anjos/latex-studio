@@ -34,6 +34,7 @@ import { Menu } from '../components/menu';
 import { ROLE_ICON, RoleBadge } from '../components/role-badge';
 import { useService } from '../di/service-provider';
 import { useDebounced } from '../hooks/use-debounced';
+import { projectCount, useDash } from '../i18n';
 import {
   type Project,
   type ProjectFilter,
@@ -41,19 +42,21 @@ import {
   type Role,
 } from '../services/project.service';
 
-const dateFmt = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' });
-const projectCount = (n: number) => `${n} ${n === 1 ? 'projeto' : 'projetos'}`;
+const dateFormat = (locale: string) =>
+  new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' });
 
 const PAGE_SIZE = 10;
-const filters: [ProjectFilter, string][] = [
-  ['all', 'Todos os projetos'],
-  ['mine', 'Meus projetos'],
-  ['shared', 'Compartilhados comigo'],
-];
+const FILTER_ORDER: ProjectFilter[] = ['all', 'mine', 'shared'];
 
 export function ProjectsPage() {
   const projects = useService(ProjectServiceToken);
   const navigate = useNavigate();
+  const d = useDash();
+  const filterLabel: Record<ProjectFilter, string> = {
+    all: d.filterAll,
+    mine: d.filterMine,
+    shared: d.filterShared,
+  };
   const [filter, setFilter] = useState<ProjectFilter>('all');
   const [query, setQuery] = useState('');
   const [cursors, setCursors] = useState<Array<string | null>>([null]);
@@ -126,11 +129,11 @@ export function ProjectsPage() {
       <section className="dashboard-library" aria-labelledby="dashboard-library-title">
         <div className="dashboard-toolbar">
           <div className="dashboard-heading">
-            <h1 id="dashboard-library-title">Projetos</h1>
-            {data && <span className="dashboard-count">{projectCount(data.total)}</span>}
+            <h1 id="dashboard-library-title">{d.title}</h1>
+            {data && <span className="dashboard-count">{projectCount(d, data.total)}</span>}
             {useMe().data?.isAdmin && (
               <Link to="/admin" className="dashboard-admin-link">
-                Administração
+                {d.admin}
               </Link>
             )}
           </div>
@@ -139,8 +142,8 @@ export function ProjectsPage() {
               <Search size={16} aria-hidden="true" />
               <input
                 type="search"
-                placeholder="Buscar projeto"
-                aria-label="Buscar projeto"
+                placeholder={d.search}
+                aria-label={d.search}
                 value={query}
                 onChange={(e) => changeQuery(e.target.value)}
               />
@@ -150,18 +153,18 @@ export function ProjectsPage() {
               triggerClassName="btn btn-secondary btn-compact"
               label={
                 <>
-                  <Plus size={16} aria-hidden="true" /> Novo projeto
+                  <Plus size={16} aria-hidden="true" /> {d.newProject}
                 </>
               }
             >
               <button type="button" onClick={openCreate}>
-                Projeto em branco
+                {d.blankProject}
               </button>
               <button type="button" onClick={() => openImport('zip')}>
-                Importar .zip
+                {d.importZip}
               </button>
               <button type="button" onClick={() => openImport('folder')}>
-                Importar pasta
+                {d.importFolder}
               </button>
             </Menu>
           </div>
@@ -170,22 +173,22 @@ export function ProjectsPage() {
         {recent && <RecentProject project={recent} onOpen={open} />}
 
         {(!!data?.total || filtered) && (
-          <nav className="filter-tabs" aria-label="Filtros">
-            {filters.map(([key, label]) => (
+          <nav className="filter-tabs" aria-label={d.filters}>
+            {FILTER_ORDER.map((key) => (
               <button
                 key={key}
                 type="button"
                 aria-pressed={filter === key}
                 onClick={() => changeFilter(key)}
               >
-                {label}
+                {filterLabel[key]}
               </button>
             ))}
           </nav>
         )}
 
-        {isPending && <p className="status-note">Carregando…</p>}
-        {error && <Alert>Não foi possível carregar os projetos.</Alert>}
+        {isPending && <p className="status-note">{d.loading}</p>}
+        {error && <Alert>{d.loadError}</Alert>}
         {download.error && <Alert>{download.error.message}</Alert>}
         {data?.total === 0 && !filtered && (
           <EmptyLibrary onCreate={openCreate} onImport={() => openImport('zip')} />
@@ -219,7 +222,7 @@ export function ProjectsPage() {
 
       <div className="dashboard-footer">
         <Button variant="ghost" size="compact" onClick={() => helpRef.current?.showModal()}>
-          <CircleHelp size={16} aria-hidden="true" /> Como funciona
+          <CircleHelp size={16} aria-hidden="true" /> {d.howItWorks}
         </Button>
       </div>
 
@@ -236,16 +239,18 @@ export function ProjectsPage() {
 }
 
 function RecentProject({ project, onOpen }: { project: Project; onOpen: (id: string) => void }) {
+  const d = useDash();
+  const dateFmt = dateFormat(d.locale);
   return (
     <button
       type="button"
       className="dashboard-recent"
       onClick={() => onOpen(project.id)}
-      aria-label={`Continuar projeto ${project.name}`}
+      aria-label={`${d.continuePrefix} ${project.name}`}
     >
       <FileText className="dashboard-recent-icon" size={19} aria-hidden="true" />
       <span className="dashboard-recent-copy">
-        <span>Último projeto</span>
+        <span>{d.recent}</span>
         <span className="dashboard-recent-name">
           <strong>{project.name}</strong>
           <RoleBadge role={project.role} />
@@ -253,40 +258,41 @@ function RecentProject({ project, onOpen }: { project: Project; onOpen: (id: str
         <time dateTime={project.updatedAt}>{dateFmt.format(new Date(project.updatedAt))}</time>
       </span>
       <span className="dashboard-recent-action" aria-hidden="true">
-        Abrir <ArrowRight className="dashboard-recent-arrow" size={16} />
+        {d.open} <ArrowRight className="dashboard-recent-arrow" size={16} />
       </span>
     </button>
   );
 }
 
 function EmptyLibrary({ onCreate, onImport }: { onCreate: () => void; onImport: () => void }) {
+  const d = useDash();
   return (
     <div className="dashboard-empty dashboard-empty-start">
       <span className="dashboard-empty-icon" aria-hidden="true">
         <FileText size={26} />
       </span>
-      <h2>Ainda não há projetos</h2>
-      <p>Crie um projeto em branco ou importe arquivos que você já tem.</p>
+      <h2>{d.emptyTitle}</h2>
+      <p>{d.emptyText}</p>
       <div className="dashboard-empty-actions">
         <Button variant="primary" onClick={onCreate}>
-          Criar projeto
+          {d.createProject}
         </Button>
         <Button variant="secondary" onClick={onImport}>
-          Importar arquivos
+          {d.importFiles}
         </Button>
       </div>
       <ul className="dashboard-empty-hints">
         <li>
           <GitBranch size={16} aria-hidden="true" />
-          Cada projeto é um repositório git, com histórico e versões salvas quando você quiser.
+          {d.hintGit}
         </li>
         <li>
           <Users size={16} aria-hidden="true" />
-          Edição colaborativa em tempo real, com cursores nomeados e comentários no texto.
+          {d.hintCollab}
         </li>
         <li>
           <Boxes size={16} aria-hidden="true" />
-          Compile com pdfLaTeX, XeLaTeX ou LuaLaTeX e ligue pacotes sem editar o preâmbulo.
+          {d.hintCompile}
         </li>
       </ul>
     </div>
@@ -294,13 +300,14 @@ function EmptyLibrary({ onCreate, onImport }: { onCreate: () => void; onImport: 
 }
 
 function NoResults({ onClear }: { onClear: () => void }) {
+  const d = useDash();
   return (
     <div className="dashboard-empty dashboard-empty-search">
       <Search size={23} aria-hidden="true" />
-      <h2>Nenhum projeto encontrado</h2>
-      <p>Tente outro termo ou escolha um filtro diferente.</p>
+      <h2>{d.noResultsTitle}</h2>
+      <p>{d.noResultsText}</p>
       <Button variant="ghost" onClick={onClear}>
-        Limpar busca e filtros
+        {d.clearSearch}
       </Button>
     </div>
   );
@@ -321,18 +328,19 @@ function Pagination({
   onPrevious: () => void;
   onNext: () => void;
 }) {
+  const d = useDash();
   return (
-    <nav className="dashboard-pagination" aria-label="Paginação de projetos">
+    <nav className="dashboard-pagination" aria-label={d.paginationLabel}>
       <span aria-live="polite">
-        Página {page}
-        {total !== undefined && ` · ${projectCount(total)} no total`}
+        {d.page} {page}
+        {total !== undefined && ` · ${projectCount(d, total)} ${d.totalSuffix}`}
       </span>
       <div>
         <Button variant="secondary" size="compact" disabled={!hasPrevious} onClick={onPrevious}>
-          Anterior
+          {d.previous}
         </Button>
         <Button variant="secondary" size="compact" disabled={!hasNext} onClick={onNext}>
-          Próxima <ArrowRight size={15} aria-hidden="true" />
+          {d.next} <ArrowRight size={15} aria-hidden="true" />
         </Button>
       </div>
     </nav>
@@ -354,14 +362,16 @@ function ProjectTable({
   onDownload: (id: string) => void;
   onRemove: (p: Project) => void;
 }) {
+  const d = useDash();
+  const dateFmt = dateFormat(d.locale);
   return (
     <table className="project-table">
       <thead>
         <tr>
-          <th scope="col">Título</th>
-          <th scope="col">Última modificação</th>
+          <th scope="col">{d.colTitle}</th>
+          <th scope="col">{d.colModified}</th>
           <th scope="col">
-            <span className="sr-only">Ações</span>
+            <span className="sr-only">{d.actions}</span>
           </th>
         </tr>
       </thead>
@@ -380,30 +390,30 @@ function ProjectTable({
               </button>
               <RoleBadge role={p.role} />
             </td>
-            <td data-label="Última modificação">
+            <td data-label={d.colModified}>
               <Clock3 size={13} className="project-date-icon" aria-hidden="true" />
               <time dateTime={p.updatedAt}>{dateFmt.format(new Date(p.updatedAt))}</time>
             </td>
             <td className="row-actions-cell">
               <div className="row-actions">
-                <IconButton label="Abrir" onClick={() => onOpen(p.id)}>
+                <IconButton label={d.actOpen} onClick={() => onOpen(p.id)}>
                   <FolderOpen size={16} />
                 </IconButton>
                 {p.role === 'owner' && (
-                  <IconButton label="Compartilhar" onClick={() => onShare(p)}>
+                  <IconButton label={d.actShare} onClick={() => onShare(p)}>
                     <Share2 size={16} />
                   </IconButton>
                 )}
                 {(p.role === 'owner' || p.role === 'editor') && (
-                  <IconButton label="Fazer uma cópia" onClick={() => onCopy(p)}>
+                  <IconButton label={d.actCopy} onClick={() => onCopy(p)}>
                     <Copy size={16} />
                   </IconButton>
                 )}
-                <IconButton label="Baixar .zip" onClick={() => onDownload(p.id)}>
+                <IconButton label={d.actDownload} onClick={() => onDownload(p.id)}>
                   <Download size={16} />
                 </IconButton>
                 {p.role === 'owner' && (
-                  <IconButton label="Excluir" onClick={() => onRemove(p)}>
+                  <IconButton label={d.actRemove} onClick={() => onRemove(p)}>
                     <Trash2 size={16} />
                   </IconButton>
                 )}

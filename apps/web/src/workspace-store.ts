@@ -35,6 +35,8 @@ export type Connection = 'connecting' | 'connected' | 'disconnected';
 export interface Peer {
   /** Awareness clientID: two tabs of the same user are two peers. */
   id: number;
+  /** The account behind the client, so a person's tabs can be merged to one avatar. */
+  userId: string;
   name: string;
   color: string;
 }
@@ -182,7 +184,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       s.peers.length === peers.length &&
       s.peers.every((p, i) => {
         const q = peers[i];
-        return q && p.id === q.id && p.name === q.name && p.color === q.color;
+        return (
+          q && p.id === q.id && p.userId === q.userId && p.name === q.name && p.color === q.color
+        );
       })
         ? s
         : { peers },

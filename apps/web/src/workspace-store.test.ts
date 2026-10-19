@@ -31,11 +31,11 @@ describe('workspace store', () => {
   });
 
   it('keeps the same peers array when an awareness change leaves the peer list as it was', () => {
-    s().setPeers([{ id: 1, name: 'Ana', color: '#123456' }]);
+    s().setPeers([{ id: 1, userId: 'ana', name: 'Ana', color: '#123456' }]);
     const before = s().peers;
-    s().setPeers([{ id: 1, name: 'Ana', color: '#123456' }]);
+    s().setPeers([{ id: 1, userId: 'ana', name: 'Ana', color: '#123456' }]);
     expect(s().peers).toBe(before);
-    s().setPeers([{ id: 1, name: 'Ana', color: '#654321' }]);
+    s().setPeers([{ id: 1, userId: 'ana', name: 'Ana', color: '#654321' }]);
     expect(s().peers).not.toBe(before);
   });
 });

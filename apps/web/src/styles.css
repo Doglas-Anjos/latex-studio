@@ -1136,6 +1136,22 @@ a {
   border-radius: 8px;
   box-shadow: var(--shadow);
 }
+/* Language switcher (header, dark chrome): icon-only trigger, right-aligned popover with the light
+   surface ink pinned so the items read, used on both the workspace and the dashboard headers. */
+.lang-menu summary::after {
+  display: none;
+}
+.lang-menu .menu-list {
+  left: auto;
+  right: 0;
+  min-width: 9rem;
+  color: var(--ink);
+}
+/* The icon-only trigger shows no current value, so mark the active language in the menu. */
+.lang-menu .menu-list button[aria-pressed="true"] {
+  font-weight: 600;
+  color: var(--primary);
+}
 .menu-list button,
 .dialog-list button {
   display: block;
