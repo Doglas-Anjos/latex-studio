@@ -99,7 +99,8 @@ class LiveMarker extends GutterMarker {
     el.className = 'cm-blame-run cm-blame-live';
     if (this.author.color) el.style.setProperty('--blame-color', this.author.color);
     if (this.head) {
-      el.textContent = `${this.author.name.split(' ')[0] || '—'} · agora`;
+      // Full name (not just the first word): LAN aliases often share one, e.g. "Teste 1"/"Teste 2".
+      el.textContent = `${this.author.name || '—'} · agora`;
       el.title = `${this.author.name} — edição não salva`;
     }
     return el;
