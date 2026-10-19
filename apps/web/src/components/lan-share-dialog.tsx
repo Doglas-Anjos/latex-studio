@@ -1,12 +1,53 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Copy, Trash2, Wifi } from 'lucide-react';
-import { type FormEvent, type RefObject, useEffect, useState } from 'react';
+import { type FormEvent, type RefObject, useEffect, useId, useState } from 'react';
 import { useService } from '../di/service-provider';
 import { useLan } from '../i18n';
 import { LanServiceToken } from '../services/lan.service';
 import { Button } from './button';
 import { Dialog } from './dialog';
 import './lan-share.css';
+
+/**
+ * The local host's install-wide remote-access switch: guests get in only while it is on, and the
+ * server starts with it off. Renders nothing where there is no switch (the API answers 404).
+ */
+export function RemoteAccessSwitch() {
+  const lan = useService(LanServiceToken);
+  const t = useLan();
+  const qc = useQueryClient();
+  const id = useId();
+  const { data } = useQuery({
+    queryKey: ['lan-remote'],
+    queryFn: () => lan.remote(),
+    retry: false,
+  });
+  const toggle = useMutation({
+    mutationFn: (on: boolean) => lan.setRemote(on),
+    onSettled: () => qc.invalidateQueries({ queryKey: ['lan-remote'] }),
+  });
+  if (!data) return null;
+  const on = toggle.isPending ? !!toggle.variables : data.remote;
+  return (
+    <div className="lan-remote" data-on={on}>
+      <button
+        type="button"
+        role="switch"
+        className="pkg-switch"
+        aria-checked={on}
+        aria-labelledby={`${id}-title`}
+        aria-describedby={`${id}-state`}
+        // Not `disabled` while saving: that would drop keyboard focus; extra clicks are ignored.
+        aria-busy={toggle.isPending}
+        onClick={() => toggle.isPending || toggle.mutate(!on)}
+      />
+      <span className="lan-remote-copy">
+        <strong id={`${id}-title`}>{t.remoteTitle}</strong>
+        <small id={`${id}-state`}>{on ? t.remoteOn : t.remoteOff}</small>
+      </span>
+    </div>
+  );
+}
 
 /**
  * Owner-only LAN share panel: publish the project, then hand each friend a link + a one-time PIN.
@@ -100,6 +141,7 @@ export function LanShareDialog({
       {data && !data.enabled && <p className="status-note">{t.disabled}</p>}
       {data?.enabled && (
         <div className="lan-share">
+          <RemoteAccessSwitch />
           <Button
             variant={data.published ? 'secondary' : 'primary'}
             onClick={() => publish.mutate()}

@@ -400,6 +400,10 @@ interface LanStrings {
   join: string;
   joinError: string;
   joinLocked: string;
+  joinRemoteOff: string;
+  remoteTitle: string;
+  remoteOn: string;
+  remoteOff: string;
 }
 
 const LAN: Record<UiLang, LanStrings> = {
@@ -426,6 +430,11 @@ const LAN: Record<UiLang, LanStrings> = {
     join: 'Entrar',
     joinError: 'PIN inválido ou projeto indisponível.',
     joinLocked: 'Muitas tentativas erradas. Aguarde alguns minutos e tente de novo.',
+    joinRemoteOff: 'O anfitrião desligou o acesso remoto. Peça para ele ligar de novo.',
+    remoteTitle: 'Acesso remoto (LAN)',
+    remoteOn: 'Ligado: amigos com PIN entram nos projetos publicados.',
+    remoteOff:
+      'Desligado: ninguém de fora entra, nem com PIN. Volta a desligar sempre que o servidor reinicia.',
   },
   en: {
     title: 'Share on the local network',
@@ -450,6 +459,11 @@ const LAN: Record<UiLang, LanStrings> = {
     join: 'Join',
     joinError: 'Invalid PIN or project unavailable.',
     joinLocked: 'Too many wrong attempts. Wait a few minutes and try again.',
+    joinRemoteOff: 'The host turned remote access off. Ask them to turn it back on.',
+    remoteTitle: 'Remote access (LAN)',
+    remoteOn: 'On: friends with a PIN can open the published projects.',
+    remoteOff:
+      'Off: nobody else can get in, not even with a PIN. It turns off again whenever the server restarts.',
   },
   es: {
     title: 'Compartir en la red local',
@@ -474,6 +488,11 @@ const LAN: Record<UiLang, LanStrings> = {
     join: 'Entrar',
     joinError: 'PIN no válido o proyecto no disponible.',
     joinLocked: 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.',
+    joinRemoteOff: 'El anfitrión desactivó el acceso remoto. Pídele que lo vuelva a activar.',
+    remoteTitle: 'Acceso remoto (LAN)',
+    remoteOn: 'Activado: los amigos con PIN pueden abrir los proyectos publicados.',
+    remoteOff:
+      'Desactivado: nadie más puede entrar, ni siquiera con PIN. Se desactiva de nuevo al reiniciar el servidor.',
   },
 };
 

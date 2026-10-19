@@ -67,6 +67,32 @@
   color: var(--primary);
 }
 
+.lan-remote {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface);
+}
+
+.lan-remote[data-on="true"] {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--line));
+}
+
+.lan-remote .pkg-switch {
+  flex: none;
+  margin-top: 0.1rem;
+}
+
+.lan-remote-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.lan-remote-copy small,
 .lan-share-empty,
 .lan-share-note {
   color: var(--muted);

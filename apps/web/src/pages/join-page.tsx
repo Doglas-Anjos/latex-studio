@@ -34,7 +34,7 @@ export function JoinPage() {
       navigate(`/projects/${projectId}`, { replace: true });
     },
   });
-  const locked = join.error instanceof ApiError && join.error.status === 429;
+  const status = join.error instanceof ApiError ? join.error.status : 0;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -73,7 +73,7 @@ export function JoinPage() {
         />
         {join.isError && (
           <p className="form-error" role="alert">
-            {locked ? t.joinLocked : t.joinError}
+            {status === 429 ? t.joinLocked : status === 403 ? t.joinRemoteOff : t.joinError}
           </p>
         )}
         <Button
