@@ -30,6 +30,9 @@ export interface LanService {
   revoke(projectId: string, accessId: string): Promise<void>;
   /** A guest joins with a PIN; the returned token is the LAN session (stored by the caller). */
   join(projectId: string, pin: string): Promise<{ token: string; alias: string }>;
+  /** The remote-access switch; a 404 (not the local host, or LAN share off) means "no switch". */
+  remote(): Promise<{ remote: boolean }>;
+  setRemote(on: boolean): Promise<void>;
 }
 
 export const LanServiceToken = createToken<LanService>('LanService');
@@ -64,5 +67,13 @@ export class HttpLanService implements LanService {
     return this.api.post<{ token: string; alias: string }>(`/projects/${projectId}/lan/join`, {
       pin,
     });
+  }
+
+  remote() {
+    return this.api.get<{ remote: boolean }>('/lan');
+  }
+
+  async setRemote(on: boolean) {
+    await this.api.post('/lan/remote', { on });
   }
 }

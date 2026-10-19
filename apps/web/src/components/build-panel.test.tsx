@@ -338,7 +338,7 @@ describe('BuildPanel active and stuck builds', () => {
     };
   }
 
-  function setupWith(build: ReturnType<typeof activeBuild>) {
+  function setupWith(build: ReturnType<typeof activeBuild>, hostCompiles = false) {
     const compile = {
       builds: vi.fn().mockResolvedValue([build]),
       compile: vi.fn().mockResolvedValue({ ...build, id: 'b2', status: 'queued' }),
@@ -348,7 +348,7 @@ describe('BuildPanel active and stuck builds', () => {
       usage: vi.fn().mockResolvedValue([]),
     } as unknown as PackageService;
     renderWithApp(
-      <BuildPanel projectId="p1" canCompile={true} />,
+      <BuildPanel projectId="p1" canCompile={!hostCompiles} hostCompiles={hostCompiles} />,
       new Container()
         .register(CompileServiceToken, compile)
         .register(ProjectServiceToken, {
@@ -361,6 +361,14 @@ describe('BuildPanel active and stuck builds', () => {
     );
     return { compile };
   }
+
+  it('lets a LAN guest watch the host build run, without stopping it, and says why', async () => {
+    setupWith(activeBuild(new Date().toISOString()), true);
+    await screen.findByText(/Compilando…/);
+    const stop = screen.getByRole('button', { name: /Parar/ }) as HTMLButtonElement;
+    expect(stop.disabled).toBe(true);
+    expect(screen.getByText('Só o anfitrião compila neste computador')).toBeTruthy();
+  });
 
   it('offers Parar instead of Compilar while a fresh build is running', async () => {
     setupWith(activeBuild(new Date().toISOString()));

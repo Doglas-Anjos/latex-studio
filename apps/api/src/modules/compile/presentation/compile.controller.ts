@@ -17,6 +17,7 @@ import {
 } from '@nestjs/common';
 import { RouteConfig } from '@nestjs/platform-fastify';
 import { CurrentUser } from '../../auth/presentation/decorators';
+import { assertMayRunTools } from '../../lan/application/lan.service';
 import type { Project } from '../../projects/domain/project';
 import {
   CurrentProject,
@@ -58,6 +59,7 @@ export class CompileController {
     @CurrentUser() user: User,
     @Body() dto: CompileDto,
   ): Promise<Build> {
+    assertMayRunTools(user);
     return this.compile.request(project, user, dto);
   }
 
@@ -66,8 +68,10 @@ export class CompileController {
   @HttpCode(200)
   cancel(
     @CurrentProject() project: Project,
+    @CurrentUser() user: User,
     @Param('buildId', ParseUUIDPipe) buildId: string,
   ): Promise<Build> {
+    assertMayRunTools(user); // where only the host compiles, a guest does not stop their build
     return this.compile.cancel(project, buildId);
   }
 

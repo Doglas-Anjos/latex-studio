@@ -10,7 +10,7 @@ Mantém o essencial: edição simultânea (Yjs, com cursores nomeados), comentá
 
 A interface segue o modelo do VS Code: barra de atividades, sidebar redimensionável, abas, painel de compilação e barra de status. "Mudanças" mostra o que mudou desde a última versão salva (marcas na margem, lista de arquivos, diff lado a lado), o histórico compara versões, o botão Blame mostra quem alterou cada linha, e Auto-indent formata com `latexindent` (no worker) ou com o indentador do editor quando ele não existe. Tema claro/escuro e cores de sintaxe são editáveis pelo usuário (engrenagem), guardados no navegador.
 
-**Não tem login próprio.** Quem autentica é a aplicação na frente (FasorX): ela emite um JWT curto para o navegador, que o apresenta em `Authorization: Bearer`, e a API só verifica a assinatura. Localmente, sem verificador configurado, tudo roda como um usuário local, sem cadastro; nesse modo a API só escuta em localhost e não sobe com `NODE_ENV=production`, então um servidor (Docker Compose incluso) sempre precisa das variáveis `AUTH_*`.
+**Não tem login próprio.** Quem autentica é a aplicação na frente (FasorX): ela emite um JWT curto para o navegador, que o apresenta em `Authorization: Bearer`, e a API só verifica a assinatura. Localmente, sem verificador configurado, tudo roda como um usuário local, sem cadastro; nesse modo a API só escuta em localhost (salvo com o [compartilhamento em rede local](#compartilhar-um-projeto-na-rede-local-lan) ligado) e não sobe com `NODE_ENV=production`, então um servidor (Docker Compose incluso) sempre precisa das variáveis `AUTH_*`.
 
 Arquitetura completa em [docs/architecture.md](docs/architecture.md).
 
@@ -91,7 +91,7 @@ BUILDS_DIR=/caminho/absoluto/latex-studio/data/builds
 ```
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d    # Postgres em 5432 e Redis em 6379 (POSTGRES_PORT/REDIS_PORT mudam)
+docker compose -f docker-compose.dev.yml up -d    # Postgres em 5432 e Redis em 6379, só em localhost (POSTGRES_PORT/REDIS_PORT mudam)
 pnpm build                      # compila os pacotes compartilhados (packages/*)
 pnpm --filter @latex-studio/api dev               # lê o .env da raiz automaticamente
 pnpm --filter @latex-studio/worker dev
@@ -104,6 +104,76 @@ o `bibtex` não resolve — o efeito é a bibliografia (`.bib`/`.bst`) não ser 
 saírem indefinidas. Em produção (contêiner Linux) isso não acontece.
 
 Verificações: `pnpm lint`, `pnpm typecheck`, `pnpm test`. Os pacotes em `packages/` precisam estar compilados (`pnpm build`) antes do typecheck dos apps.
+
+## Compartilhar um projeto na rede local (LAN)
+
+Rodando localmente, você pode abrir um projeto para outras pessoas na mesma rede (casa, laboratório, sala de aula). Cada pessoa recebe um PIN de 4 dígitos e edita pelo navegador, sem conta e sem instalar nada.
+
+É uma comodidade para rede de confiança, não um login de verdade, por isso só existe no modo local da seção anterior. **Subir o Docker Compose não publica nada:** o compose roda em produção (`NODE_ENV=production`), onde o compartilhamento em rede local é recusado. Além disso, dentro do Docker todo acesso chega pelo IP do Caddy, e a API não teria como saber quem é o anfitrião.
+
+### 1. Subir
+
+Requisitos: Node e pnpm (como em Desenvolvimento) e o Docker aberto. Depois:
+
+```bash
+pnpm lan
+```
+
+O script faz toda a configuração e, no fim, mostra o seu endereço e os endereços na rede. **Ctrl+C** encerra o app; Postgres e Redis continuam no Docker (para parar: `docker compose -f docker-compose.dev.yml stop`). Ele:
+
+- cria o `.env` num clone novo, já apontando para esta máquina;
+- num `.env` existente, só grava o `LAN_SECRET`, que gera uma vez;
+- liga o modo LAN só para os processos que inicia, sem mudar o arquivo. Um `.env` com FasorX (`AUTH_*`) continua como está e é ignorado enquanto o `pnpm lan` roda;
+- sobe Postgres e Redis (só no loopback, longe da rede) e compila os pacotes compartilhados;
+- inicia API e worker, gera o build de produção do frontend e o serve para a rede na porta do `APP_URL` (5173 por padrão). O build carrega mais rápido nos aparelhos dos amigos e não expõe o servidor de desenvolvimento.
+
+Só o firewall fica com você: libere a porta mostrada no fim (5173 por padrão) para a rede privada. No Windows, aceite o aviso do firewall para o Node marcando **Redes privadas**, e confira se a rede Wi-Fi está como privada. Se você recusou o aviso, libere em Firewall do Windows Defender → Permitir um aplicativo. No Linux: `sudo ufw allow 5173/tcp`.
+
+Para subir à mão, as três variáveis são:
+- `APP_URL=http://localhost:<porta>`: o link dos amigos usa essa porta;
+- `LAN_SHARE=true`;
+- `LAN_SECRET`: 32 caracteres ou mais.
+
+Também é preciso `NODE_ENV=development`, as variáveis `AUTH_*` vazias e o frontend com `--host 0.0.0.0`. O passo a passo está em [scripts/lan.mjs](scripts/lan.mjs).
+
+### 2. Publicar (no seu computador)
+
+Abra o app no endereço local que o `pnpm lan` mostrou (**http://localhost:5173** por padrão). Só quem acessa pela própria máquina (localhost) é o anfitrião; quem entra pelo IP da rede é sempre convidado.
+
+1. Na tela inicial, ligue **Acesso remoto (LAN)**. Ele começa desligado toda vez que a API sobe, então reiniciar o servidor sempre fecha a porta.
+2. No projeto, clique em **Compartilhar** (no cabeçalho ou no ícone da lista de projetos) e depois em **Publicar na rede**.
+3. Em **Pessoas com acesso**, digite o nome de cada amigo e clique em **Adicionar**. O PIN aparece **uma única vez**: anote ou mande na hora.
+4. Copie o **Link para compartilhar** (`http://<seu-ip>:5173/join/<projeto>`). Se o computador tiver mais de um endereço (Wi-Fi, VPN, WSL), escolha na lista o da rede dos amigos.
+
+### 3. Entrar (no computador do amigo)
+
+O amigo abre o link, digita o PIN e edita o projeto como editor. O nome dele aparece nos avatares e nas linhas que ele altera, com uma cor própria. Ele vê só os projetos compartilhados com ele e não cria nem importa projetos. A sessão dura 12 horas; depois disso, é preciso digitar o PIN de novo.
+
+**Anfitrião no Windows: só compartilhe com quem você confiaria seus arquivos.**
+
+- **Só o anfitrião compila e exporta.** O convidado edita e vê o último PDF, que se atualiza sozinho em até 10 s quando o anfitrião compila, mas os botões de compilar, exportar e contar palavras ficam desabilitados para ele.
+- **O motivo:** no Windows a compilação roda sem sandbox, e o MiKTeX não impede o LaTeX de ler arquivos fora do projeto. Um `\input` ou `\openin` com um caminho como `C:/...` lê qualquer arquivo que o seu usuário do Windows alcança.
+- **O risco que sobra:** quem compila é o anfitrião, mas o texto compilado inclui o que o convidado escreveu, e o PDF e o log voltam para ele. Ou seja, um convidado mal-intencionado ainda consegue ler arquivos do anfitrião.
+- **Linux e macOS não têm essa limitação:** lá o TeX Live bloqueia esses caminhos.
+
+### Encerrar
+
+- **Todo mundo, na hora:** desligue **Acesso remoto (LAN)**. Ninguém entra, nem com PIN, e quem estiver editando é desconectado. Se você religar em menos de 12 horas, quem já tinha entrado volta sem digitar o PIN.
+- **Um projeto:** **Parar de compartilhar** no diálogo de compartilhamento.
+- **Uma pessoa:** **Remover** (lixeira) ao lado do nome. O PIN dela deixa de valer.
+
+Erros de PIN são limitados: 5 erros seguidos bloqueiam aquele computador por alguns minutos, e 30 erros num projeto bloqueiam o projeto inteiro por um tempo.
+
+### Problemas comuns
+
+- **O amigo não abre o link:**
+  - confira o firewall;
+  - confira se ele está na mesma rede (redes Wi-Fi de visitante costumam isolar os aparelhos);
+  - tente outro endereço da lista.
+- **"O anfitrião desligou o acesso remoto":** ligue **Acesso remoto (LAN)** na tela inicial.
+- **O interruptor não aparece:** o app não foi iniciado pelo `pnpm lan`, ou você abriu pelo IP da rede em vez de `localhost`.
+- **`pnpm lan` diz que a porta está em uso:** outro programa ocupa a porta (talvez outra cópia do app); encerre-o e tente de novo.
+- **"PIN inválido ou projeto indisponível":** o PIN está errado, ou o projeto não está publicado.
 
 ## Layout
 

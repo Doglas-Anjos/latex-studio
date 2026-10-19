@@ -1,4 +1,9 @@
-import { IsString, Length, Matches } from 'class-validator';
+import { IsBoolean, IsString, Length, Matches } from 'class-validator';
+
+export class RemoteDto {
+  @IsBoolean()
+  on!: boolean;
+}
 
 export class CreateAccessDto {
   @IsString()

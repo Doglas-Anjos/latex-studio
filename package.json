@@ -17,6 +17,7 @@
     "test": "vitest run --passWithNoTests",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
+    "lan": "node scripts/lan.mjs",
     "test:latex": "vitest run --mode latex"
   },
   "devDependencies": {

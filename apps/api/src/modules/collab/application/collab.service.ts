@@ -20,7 +20,7 @@ import {
   type ProjectRepository,
 } from '../../projects/domain/project.repository';
 import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/project-storage';
-import type { User } from '../../users/domain/user';
+import { LAN_ISSUER, type User } from '../../users/domain/user';
 import { YJS_DOC_REPOSITORY, type YjsDocRepository } from '../domain/yjs-doc.repository';
 
 export const TEXT_EXTENSIONS = new Set(['.tex', '.bib', '.sty', '.cls', '.txt', '.md', '.json']);
@@ -120,6 +120,17 @@ export class CollabService {
       (this.lan ? await this.lan.roleOf(projectId, user.id) : null);
     if (!role) throw new ForbiddenException();
     return { user, projectId, path, readOnly: role === 'viewer' || role === 'reviewer' };
+  }
+
+  /**
+   * Whether an authenticated connection may stay, re-checked once it is registered (see the
+   * `connected` hook). Only LAN guests: their access ends by the host's revoke paths, which close
+   * only connections that already exist. Members are not re-checked.
+   */
+  async stillAllowed(user: User, documentName: string): Promise<boolean> {
+    if (user.issuer !== LAN_ISSUER) return true;
+    const { projectId } = this.parseDocumentName(documentName);
+    return (await this.lan?.roleOf(projectId, user.id)) != null;
   }
 
   /** Saved Yjs state, or the file's text when the document was never opened collaboratively. */

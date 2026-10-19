@@ -1,9 +1,9 @@
-import { BadRequestException, HttpException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, HttpException } from '@nestjs/common';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { LAN_ISSUER } from '../../users/domain/user';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import { FakeLan } from '../testing/fake-lan.repository';
-import { LanService, lanOrigins } from './lan.service';
+import { LanService, lanOrigins, mayRunTools } from './lan.service';
 import { LanTokenService } from './lan-token.service';
 
 const P = '00000000-0000-4000-8000-00000000000a';
@@ -18,7 +18,24 @@ describe('LanService', () => {
     repo = new FakeLan();
     users = new FakeUsers();
     tokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
+    tokens.setRemote(true);
     service = new LanService(repo, users, tokens);
+  });
+
+  it('switching remote access off stops guests but not the host, and lists who to disconnect', async () => {
+    await service.publish(P);
+    const { pin } = await service.createAccess(P, 'Ana');
+    const userId = repo.access[0]?.userId ?? '';
+    expect(await service.setRemote(false)).toEqual([[P, userId]]);
+    expect(service.remote()).toBe(false);
+    await expect(service.join(P, pin, '10.0.0.5')).rejects.toBeInstanceOf(ForbiddenException);
+    expect(await service.roleOf(P, userId)).toBeNull();
+    expect(await service.projectsFor(userId)).toEqual([]);
+    // The host still prepares: publish, hand out PINs, see the published markers.
+    await service.createAccess(P, 'Bia');
+    expect(await service.listPublished()).toEqual([P]);
+    expect(await service.setRemote(true)).toEqual([]);
+    expect((await service.join(P, pin, '10.0.0.5'))?.alias).toBe('Ana');
   });
 
   it('publishes and unpublishes a project', async () => {
@@ -148,10 +165,21 @@ describe('LanService', () => {
     await service.publish(P);
     await service.createAccess(P, 'Ana');
     const userId = repo.access[0]?.userId ?? '';
-    const off = new LanService(repo, users, new LanTokenService({ LAN_SHARE: false }));
+    const offTokens = new LanTokenService({ LAN_SHARE: false });
+    offTokens.setRemote(true); // the switch alone must not open it
+    const off = new LanService(repo, users, offTokens);
     expect(await off.roleOf(P, userId)).toBeNull();
     expect(await off.listPublished()).toEqual([]);
     expect(await off.projectsFor(userId)).toEqual([]);
+  });
+});
+
+describe('mayRunTools', () => {
+  it('keeps a LAN guest off TeX and the export tools on Windows only', () => {
+    expect(mayRunTools({ issuer: LAN_ISSUER }, 'win32')).toBe(false); // MiKTeX, no sandbox
+    expect(mayRunTools({ issuer: LAN_ISSUER }, 'linux')).toBe(true);
+    expect(mayRunTools({ issuer: 'local' }, 'win32')).toBe(true); // the host compiles
+    expect(mayRunTools({ issuer: 'https://fasorx.example' }, 'win32')).toBe(true);
   });
 });
 

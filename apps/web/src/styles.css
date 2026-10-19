@@ -980,6 +980,10 @@ a {
 .build-toggle {
   margin-left: auto;
 }
+.build-host-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
 .build-details {
   flex: 1;
   min-height: 0;

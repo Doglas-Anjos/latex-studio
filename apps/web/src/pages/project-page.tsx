@@ -55,7 +55,10 @@ export function ProjectPage() {
   const lanShareRef = useRef<HTMLDialogElement>(null);
   const [lanOpen, setLanOpen] = useState(false);
   // A local install (no FasorX) shares over the LAN; a FasorX deployment invites members by e-mail.
-  const local = useMe().data?.issuer === 'local';
+  const me = useMe().data;
+  const local = me?.issuer === 'local';
+  // A LAN guest on a Windows host edits, but only the host compiles and exports (see /auth/me).
+  const hostCompiles = me?.hostCompiles === true;
   const openTab = useWorkspaceStore((s) => s.openTab);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const pdfWidth = useSettingsStore((s) => s.pdfWidth);
@@ -217,7 +220,7 @@ export function ProjectPage() {
           <PresenceAvatars />
           <DownloadButton
             projectId={project.id}
-            canEdit={canEdit}
+            canExport={canEdit && !hostCompiles}
             isOwner={project.role === 'owner'}
           />
           {project.role === 'owner' && (
@@ -331,7 +334,11 @@ export function ProjectPage() {
             <Splitter root={root} resizes="panelHeight" label="Redimensionar painel inferior" />
           )}
           <div className="bottom-slot" data-open={panelOpen}>
-            <BottomPanel projectId={project.id} canCompile={canEdit} />
+            <BottomPanel
+              projectId={project.id}
+              canCompile={canEdit && !hostCompiles}
+              hostCompiles={hostCompiles}
+            />
           </div>
         </div>
       </div>

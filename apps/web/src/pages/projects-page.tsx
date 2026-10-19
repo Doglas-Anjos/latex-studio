@@ -29,7 +29,7 @@ import {
 } from '../components/dashboard/dialogs';
 import { HelpDialog } from '../components/dashboard/help-dialog';
 import { FasorxFooter } from '../components/fasorx-footer';
-import { LanShareDialog } from '../components/lan-share-dialog';
+import { LanShareDialog, RemoteAccessSwitch } from '../components/lan-share-dialog';
 import { InviteDialog, openInvite } from '../components/members-panel';
 import { Menu } from '../components/menu';
 import { ROLE_ICON, RoleBadge } from '../components/role-badge';
@@ -185,6 +185,7 @@ export function ProjectsPage() {
           </div>
         </div>
 
+        {local && <RemoteAccessSwitch />}
         {recent && <RecentProject project={recent} onOpen={open} />}
 
         {(!!data?.total || filtered) && (

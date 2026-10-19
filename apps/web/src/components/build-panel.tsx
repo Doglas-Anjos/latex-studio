@@ -91,13 +91,24 @@ function useSecondTick(on: boolean) {
   }, [on]);
 }
 
-export function BuildPanel({ projectId, canCompile }: { projectId: string; canCompile: boolean }) {
+const HOST_COMPILES = 'Só o anfitrião compila neste computador';
+
+export function BuildPanel({
+  projectId,
+  canCompile,
+  hostCompiles = false,
+}: {
+  projectId: string;
+  canCompile: boolean;
+  /** Only the host compiles here (a LAN guest on Windows): say so, and watch for their builds. */
+  hostCompiles?: boolean;
+}) {
   const compile = useService(CompileServiceToken);
   const projects = useService(ProjectServiceToken);
   const tools = useService(ToolsServiceToken);
   const files = useService(FileServiceToken);
   const queryClient = useQueryClient();
-  const { data: builds } = useBuilds(projectId);
+  const { data: builds } = useBuilds(projectId, hostCompiles);
   const packages = useService(PackageServiceToken);
   const { data: manifest } = useQuery({
     queryKey: ['packages', projectId],
@@ -191,12 +202,15 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
   const stuck = isStale(build);
   const running = isActive(build) && !stuck;
   const compileDisabled = !canCompile || start.isPending;
-  const mainDisabled = running ? stop.isPending : compileDisabled;
-  const compileTitle = !canCompile
-    ? 'Você não tem permissão para compilar este projeto'
-    : stuck && build
-      ? `Sem resposta há ${elapsedSeconds(build)}s; clique para tentar novamente`
-      : undefined;
+  // A guest watches the host's build run but does not stop it.
+  const mainDisabled = running ? stop.isPending || hostCompiles : compileDisabled;
+  const compileTitle = hostCompiles
+    ? HOST_COMPILES
+    : !canCompile
+      ? 'Você não tem permissão para compilar este projeto'
+      : stuck && build
+        ? `Sem resposta há ${elapsedSeconds(build)}s; clique para tentar novamente`
+        : undefined;
 
   const waitFor = useWaitForJob(projectId);
   const [formatProgress, setFormatProgress] = useState('');
@@ -292,6 +306,8 @@ export function BuildPanel({ projectId, canCompile }: { projectId: string; canCo
             <ChevronDown size={14} aria-hidden="true" />
           </Button>
         </div>
+        {/* Visible, not only a tooltip: phones have no hover. */}
+        {hostCompiles && <span className="build-host-note">{HOST_COMPILES}</span>}
         {menuOpen && (
           <CompileMenu anchor={caretRef} onClose={closeMenu}>
             <MenuGroup label="Compilação automática">

@@ -103,6 +103,7 @@ describe('CollabService', () => {
 
   it('lets a LAN guest edit from the LAN origin, only with LAN share on and a matching Host', async () => {
     const lanTokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
+    lanTokens.setRemote(true);
     const lan = new LanService(new FakeLan(), users, lanTokens);
     const identity = new IdentityService(users, undefined, lanTokens);
     const service = (LAN_SHARE: boolean) =>
@@ -135,6 +136,15 @@ describe('CollabService', () => {
     });
     await expect(lanAuth(service(true), 'localhost:3001')).rejects.toThrow('Bad origin');
     await expect(lanAuth(service(false), '192.168.0.5:5175')).rejects.toThrow('Bad origin');
+
+    // Re-checked once the connection is registered: a revoke that ran mid-connect still lands.
+    const { user: guest } = await lanAuth(service(true), '192.168.0.5:5175');
+    const doc = `${projectId}/main.tex`;
+    expect(await service(true).stillAllowed(guest, doc)).toBe(true);
+    lanTokens.setRemote(false);
+    expect(await service(true).stillAllowed(guest, doc)).toBe(false);
+    // Anyone else is not re-checked (the LAN revoke paths are the only ones that race).
+    expect(await service(true).stillAllowed({ ...guest, issuer: 'local' }, doc)).toBe(true);
   });
 
   it('refuses a non-canonical (uppercase) project id', () => {

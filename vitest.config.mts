@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => ({
     mode === 'latex'
       ? { include: ['apps/*/src/**/*.e2e.test.ts'], testTimeout: 300_000 }
       : {
-          include: ['{apps,packages}/*/src/**/*.test.{ts,tsx}'],
+          include: ['{apps,packages}/*/src/**/*.test.{ts,tsx}', 'scripts/*.test.mjs'],
           exclude: [...configDefaults.exclude, '**/*.e2e.test.ts'],
           // Git and filesystem tests can exceed 5 s on Windows.
           testTimeout: 15000,

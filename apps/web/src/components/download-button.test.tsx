@@ -31,7 +31,7 @@ function setup(builds: Build[], canEdit = true, tools = {} as unknown as ToolsSe
   } as unknown as CompileService;
   const projects = { downloadSource: vi.fn() } as unknown as ProjectService;
   const { container } = renderWithApp(
-    <DownloadButton projectId="p1" canEdit={canEdit} />,
+    <DownloadButton projectId="p1" canExport={canEdit} />,
     new Container()
       .register(CompileServiceToken, compile)
       .register(ProjectServiceToken, projects)

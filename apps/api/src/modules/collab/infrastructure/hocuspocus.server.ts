@@ -5,6 +5,9 @@ import { type CollabService, MAX_DOC_CHARS } from '../application/collab.service
 
 export const HOCUSPOCUS = Symbol('HOCUSPOCUS');
 
+/** `ResetConnection` from @hocuspocus/common, as `closeConnections` sends it. */
+export const RESET = { code: 4205, reason: 'Reset Connection' };
+
 /**
  * Cap on a doc's encoded state (its DB row, re-encoded on every save): a full-size doc plus as
  * much again of history. Shared types other than `content`, embeds and tombstones all count.
@@ -38,6 +41,16 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
       });
       connectionConfig.readOnly = session.readOnly;
       return { user: session.user };
+    },
+    // Runs once the connection is registered on its doc. A LAN revoke (unpublish, access removed,
+    // remote access off) that ran while it was still loading found nothing to close: check again.
+    // Never throws (an unhandled rejection would take the API down): a failed check closes it.
+    async connected({ context, documentName, connection }) {
+      const user = context?.user;
+      if (!user) return;
+      if (!(await collab.stillAllowed(user, documentName).catch(() => false))) {
+        connection.close(RESET);
+      }
     },
     // The doc is held in this process and re-encoded on every save: refuse to grow it further.
     // A single message is capped by the socket. Throwing closes only this connection.
