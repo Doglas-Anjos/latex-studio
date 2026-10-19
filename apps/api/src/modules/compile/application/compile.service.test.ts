@@ -91,6 +91,7 @@ const ana: User = {
   email: 'ana@example.com',
   name: 'Ana',
   createdAt: new Date(),
+  issuer: 'local',
 };
 
 const row = (over: Partial<Build>): Build => ({

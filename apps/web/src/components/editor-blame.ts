@@ -1,6 +1,7 @@
 import { StateEffect, StateField } from '@codemirror/state';
 import { type EditorView, GutterMarker, gutter } from '@codemirror/view';
 import type { Blame, BlameRun } from '../services/history.service';
+import { authorAt, type LineAuthor, lineAuthorsField } from './editor-authors';
 import { peerSlot } from './presence';
 
 export const setBlame = StateEffect.define<Blame | null>();
@@ -77,6 +78,37 @@ const cont = new (class extends GutterMarker {
 })();
 
 /**
+ * Who changed a line since the last commit: the author's full name + colour at the start of each
+ * run, a coloured bar on its other lines. Overrides the committed blame for that line, so an unsaved
+ * change shows who made it instead of a blank "não salvo".
+ */
+class LiveMarker extends GutterMarker {
+  constructor(
+    private readonly author: LineAuthor,
+    private readonly head: boolean,
+  ) {
+    super();
+  }
+  override eq(other: GutterMarker) {
+    return (
+      other instanceof LiveMarker && other.author.id === this.author.id && other.head === this.head
+    );
+  }
+  override toDOM() {
+    const el = document.createElement('span');
+    el.className = 'cm-blame-run cm-blame-live';
+    // A CSS var, not a resolved hex, so the colour follows a theme switch (same slot as the cursor).
+    el.style.setProperty('--blame-color', `var(--peer-${peerSlot(this.author.id) + 1})`);
+    if (this.head) {
+      // Full name (not just the first word): LAN aliases often share one, e.g. "Teste 1"/"Teste 2".
+      el.textContent = `${this.author.name || '—'} · agora`;
+      el.title = `${this.author.name} — edição não salva`;
+    }
+    return el;
+  }
+}
+
+/**
  * Who last changed each line, from GET history/blame. Shown only while a Blame is set.
  * ponytail: assumes the doc matches the working tree the server read; stale after local edits
  * until the next fetch.
@@ -84,16 +116,27 @@ const cont = new (class extends GutterMarker {
 export function blameGutter() {
   return [
     blameField,
+    lineAuthorsField,
     gutter({
       class: 'cm-blame-gutter',
       lineMarker(view: EditorView, line) {
+        const n = view.state.doc.lineAt(line.from).number;
+        // A live (uncommitted) author wins: show who is editing this line now.
+        const authors = view.state.field(lineAuthorsField, false);
+        const live = authors ? authorAt(authors, line.from) : null;
+        if (live) {
+          const prev = n > 1 && authors ? authorAt(authors, view.state.doc.line(n - 1).from) : null;
+          return new LiveMarker(live, !prev || prev.id !== live.id);
+        }
         const blame = view.state.field(blameField);
         if (!blame) return null;
-        const n = view.state.doc.lineAt(line.from).number;
         const run = runStarts(blame).get(n);
         return run ? new RunMarker(run, blame) : cont;
       },
-      lineMarkerChange: (u) => u.transactions.some((tr) => tr.effects.some((e) => e.is(setBlame))),
+      // Re-render on a new blame or whenever live authorship changed.
+      lineMarkerChange: (u) =>
+        u.startState.field(lineAuthorsField, false) !== u.state.field(lineAuthorsField, false) ||
+        u.transactions.some((tr) => tr.effects.some((e) => e.is(setBlame))),
     }),
   ];
 }

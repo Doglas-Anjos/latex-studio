@@ -2,7 +2,7 @@ import { DATABASE, type Database } from '@latex-studio/core';
 import { users } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, ilike, ne, or, sql } from 'drizzle-orm';
-import type { Identity, User } from '../domain/user';
+import { type Identity, LAN_ISSUER, type User } from '../domain/user';
 import type { UserRepository } from '../domain/user.repository';
 
 const publicColumns = {
@@ -10,6 +10,7 @@ const publicColumns = {
   email: users.email,
   name: users.name,
   createdAt: users.createdAt,
+  issuer: users.issuer,
 };
 
 @Injectable()
@@ -43,8 +44,8 @@ export class DrizzleUserRepository implements UserRepository {
   async list({ search, limit, offset }: { search?: string; limit: number; offset: number }) {
     // Escape LIKE wildcards in the admin's search text (Postgres' default LIKE escape is backslash).
     const term = search?.trim().replace(/[\\%_]/g, '\\$&');
-    // Synthetic LAN-share users (issuer 'lan') are not real accounts: keep them out of the console.
-    const notLan = ne(users.issuer, 'lan');
+    // Synthetic LAN-share users are not real accounts: keep them out of the console.
+    const notLan = ne(users.issuer, LAN_ISSUER);
     const where = term
       ? and(notLan, or(ilike(users.email, `%${term}%`), ilike(users.name, `%${term}%`)))
       : notLan;

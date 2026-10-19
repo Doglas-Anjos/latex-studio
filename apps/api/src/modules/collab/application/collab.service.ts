@@ -6,12 +6,14 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
   PayloadTooLargeException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import * as Y from 'yjs';
 import { IdentityService } from '../../auth/application/identity.service';
+import { LanService } from '../../lan/application/lan.service';
 import { ProjectLock } from '../../projects/application/project-lock';
 import {
   PROJECT_REPOSITORY,
@@ -33,6 +35,27 @@ export interface CollabSession {
 }
 
 /**
+ * The WebSocket Origin rule, shared by the upgrade handler (main.ts) and `authenticate`: the app's
+ * origin, or — only with LAN share on — the origin the peer loaded the app from, which equals the
+ * upgrade's own `Host` (same server on the LAN address, not a foreign site). A cross-site page
+ * keeps its own Origin, which never matches the server's Host, so it stays out.
+ */
+export function allowedOrigin(
+  origin: string | null | undefined,
+  host: string | null | undefined,
+  appUrl: string,
+  lanShare: boolean,
+): boolean {
+  if (!origin) return false;
+  try {
+    const url = new URL(origin);
+    return url.origin === new URL(appUrl).origin || (lanShare && !!host && url.host === host);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Backs the Hocuspocus hooks. WebSocket upgrades bypass Nest guards, so `authenticate` checks
  * the Origin, the bearer token (sent by the provider in its auth message) and the project role.
  */
@@ -45,6 +68,7 @@ export class CollabService {
     @Inject(YJS_DOC_REPOSITORY) private readonly docs: YjsDocRepository,
     @Inject(ProjectLock) private readonly lock: ProjectLock,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Optional() @Inject(LanService) private readonly lan?: LanService,
   ) {}
 
   /**
@@ -76,15 +100,24 @@ export class CollabService {
     token: string;
     origin: string | null;
     host: string | null;
+    remoteIp: string;
     documentName: string;
   }): Promise<CollabSession> {
-    if (!input.origin || !this.sameOrigin(input.origin)) throw new ForbiddenException('Bad origin');
+    if (!allowedOrigin(input.origin, input.host, this.config.APP_URL, this.config.LAN_SHARE)) {
+      throw new ForbiddenException('Bad origin');
+    }
     const { projectId, path } = this.parseDocumentName(input.documentName);
 
-    const user = await this.identity.resolve(input.token || null, input.host ?? undefined);
+    const user = await this.identity.resolve(
+      input.token || null,
+      input.host ?? undefined,
+      input.remoteIp,
+    );
     if (!user) throw new UnauthorizedException();
 
-    const role = await this.projects.roleOf(projectId, user.id);
+    const role =
+      (await this.projects.roleOf(projectId, user.id)) ??
+      (this.lan ? await this.lan.roleOf(projectId, user.id) : null);
     if (!role) throw new ForbiddenException();
     return { user, projectId, path, readOnly: role === 'viewer' || role === 'reviewer' };
   }
@@ -134,13 +167,5 @@ export class CollabService {
       await this.storage.open(projectId).write(path, text);
       return state.byteLength;
     });
-  }
-
-  private sameOrigin(origin: string): boolean {
-    try {
-      return new URL(origin).origin === new URL(this.config.APP_URL).origin;
-    } catch {
-      return false;
-    }
   }
 }

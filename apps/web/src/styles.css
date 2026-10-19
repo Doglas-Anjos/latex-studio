@@ -327,7 +327,10 @@ a {
   font-weight: 600;
 }
 .field input,
-.field select {
+.field select,
+.lan-share input,
+.lan-share select,
+.join-pin {
   font: inherit;
   min-height: 2.5rem;
   padding: 0.55rem 0.7rem;
@@ -340,7 +343,10 @@ a {
     box-shadow 0.12s;
 }
 .field input:focus-visible,
-.field select:focus-visible {
+.field select:focus-visible,
+.lan-share input:focus-visible,
+.lan-share select:focus-visible,
+.join-pin:focus-visible {
   outline: none;
   border-color: var(--focus);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent);
@@ -3904,6 +3910,52 @@ button.change-row-main:hover .change-name {
 .cm-changes-gutter .cm-line-deleted {
   border-bottom: 2px solid var(--danger);
 }
+/* Added/modified bar tinted by its author's palette slot (editor-changes.ts), matching the cursor
+   colour, instead of the semantic added/modified colour. */
+.cm-changes-gutter .cm-author-0 {
+  background: var(--peer-1);
+}
+.cm-changes-gutter .cm-author-1 {
+  background: var(--peer-2);
+}
+.cm-changes-gutter .cm-author-2 {
+  background: var(--peer-3);
+}
+.cm-changes-gutter .cm-author-3 {
+  background: var(--peer-4);
+}
+.cm-changes-gutter .cm-author-4 {
+  background: var(--peer-5);
+}
+.cm-changes-gutter .cm-author-5 {
+  background: var(--peer-6);
+}
+.cm-changes-gutter .cm-author-6 {
+  background: var(--peer-7);
+}
+.cm-changes-gutter .cm-author-7 {
+  background: var(--peer-8);
+}
+
+/* Full-screen session / PIN-entry screens (RequireAuth error, join page). */
+.session-screen {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  text-align: center;
+  padding: 1rem;
+}
+.session-screen .status-note {
+  max-width: 28rem;
+}
+.session-lang {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+}
 .cm-changedLine {
   background: color-mix(in srgb, var(--warn) 18%, transparent);
 }
@@ -3956,6 +4008,12 @@ button.change-row-main:hover .change-name {
   border-left-style: dashed;
   border-left-color: color-mix(in srgb, var(--muted) 55%, transparent);
   font-style: italic;
+}
+/* Being edited right now by a known person: a solid mark in their colour (overrides "não salvo"). */
+.cm-blame-run.cm-blame-live {
+  border-left-style: solid;
+  font-style: normal;
+  color: var(--blame-color);
 }
 
 /* Comment gutter: a "+" per line, hidden until the line is hovered (mouse) or

@@ -1,14 +1,7 @@
 import { indentSelection } from '@codemirror/commands';
 import { syntaxHighlighting } from '@codemirror/language';
 import { diff } from '@codemirror/merge';
-import {
-  Compartment,
-  EditorSelection,
-  EditorState,
-  type Extension,
-  Prec,
-  type Transaction,
-} from '@codemirror/state';
+import { Compartment, EditorSelection, EditorState, type Extension, Prec } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { basicSetup } from 'codemirror';
@@ -35,8 +28,15 @@ import { Button } from './button';
 import { type CollabSession, dropSession, isOpenSession, openSession } from './collab-sessions';
 import { commentGutter } from './comment-gutter';
 import { CommentMenu } from './comment-menu';
+import {
+  isLocalEdit,
+  localAuthor,
+  registerAuthor,
+  seedPastAuthors,
+  trackRemoteAuthors,
+} from './editor-authors';
 import { blameGutter, blameVisible, setBlame } from './editor-blame';
-import { changeGutter, DIFF_LIMITS, setChangeBase } from './editor-changes';
+import { changeGutter, DIFF_LIMITS, lineClasses, setChangeBase } from './editor-changes';
 import {
   type ComposerRect,
   type ComposerTarget,
@@ -81,10 +81,6 @@ const SCOPE_ICON: Record<CommentScope, typeof Type> = {
   line: Rows,
   section: Heading,
 };
-
-/** Typing, deleting, undo/redo by this user: remote updates and formatting do not count. */
-export const isLocalEdit = (tr: Transaction) =>
-  ['input', 'delete', 'undo', 'redo'].some((e) => tr.isUserEvent(e));
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
@@ -171,18 +167,18 @@ function AuthImage({ projectId, path, zoom }: { projectId: string; path: string;
   ) : null;
 }
 
+type Me = { id: string; name?: string | null; email: string };
+
+/** How this user is shown on their own lines and cursor. */
+const toAuthor = (me: Me) => ({ id: me.id, name: me.name || me.email });
+
 /** The name and colour collaborators see on this client's cursor. */
 function setPresence(
   awareness: { setLocalStateField: (field: string, value: unknown) => void },
-  me: { id: string; name?: string | null; email: string },
+  me: Me,
 ) {
   const color = peerColor(me.id);
-  awareness.setLocalStateField('user', {
-    id: me.id,
-    name: me.name || me.email,
-    color,
-    colorLight: `${color}33`,
-  });
+  awareness.setLocalStateField('user', { ...toAuthor(me), color, colorLight: `${color}33` });
 }
 
 function revealLine(view: EditorView, path: string) {
@@ -260,6 +256,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   });
   const queryClient = useQueryClient();
   const ytextRef = useRef<Y.Text | null>(null);
+  // Re-attributes the uncommitted lines of the open file (set by the main effect).
+  const seedAuthorsRef = useRef<(() => void) | null>(null);
   const editorBoxRef = useRef<HTMLDivElement | null>(null);
   // True while the popup's own textarea has focus.
   const composingRef = useRef(false);
@@ -514,6 +512,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             : [],
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
+          localAuthor.of(() => (meRef.current ? toAuthor(meRef.current) : null)),
           blameGutter(),
           commentExtensions,
           EditorView.updateListener.of((u) => {
@@ -524,7 +523,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             if (!u.docChanged) return;
             // A pending cross-file jump reveals once Yjs has flushed enough lines into the doc.
             revealLine(u.view, path);
-            if (u.transactions.some(isLocalEdit)) useWorkspaceStore.getState().bumpDocVersion();
+            if (u.transactions.some(isLocalEdit)) {
+              useWorkspaceStore.getState().bumpDocVersion();
+              // Who this client is, for attributing its unsaved lines in later sessions. Only once
+              // this user has actually typed: never from a read-only connection (the server never
+              // acknowledges that write) and never on open (it would count as an edit of the file).
+              if (!readOnly && meRef.current)
+                registerAuthor(doc, meRef.current.id, meRef.current.name ?? '');
+            }
             clearTimeout(wordTimer);
             wordTimer = setTimeout(
               () => useWorkspaceStore.getState().setWordCount(approxWords(u.state.doc.toString())),
@@ -589,8 +595,21 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
         useWorkspaceStore.getState().goToLine(path, c.line);
       }
     };
+    // Uncommitted lines → the author who wrote them, from the shared authors map. Runs on sync and
+    // when the saved version (re)loads; a no-op until that base is known.
+    seedAuthorsRef.current = () => {
+      const base = changeBase.current;
+      if (base === null) return;
+      const changed = new Set<number>();
+      for (const [n, cls] of lineClasses(base, view.state.doc.toString()))
+        if (cls !== 'deleted') changed.add(n);
+      seedPastAuthors(view, ytext, doc, changed);
+    };
     // A "go to line" request may arrive before or after the first sync.
-    const onSynced = () => revealLine(view, path);
+    const onSynced = () => {
+      revealLine(view, path);
+      seedAuthorsRef.current?.();
+    };
     provider.on('synced', onSynced);
     const unsubWrap = useSettingsStore.subscribe((s, prev) => {
       if (s.lineWrapping !== prev.lineWrapping)
@@ -609,6 +628,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           );
     };
     awareness?.on('change', onAwareness);
+    // Live remote edits → their author (this user's own edits are attributed by the field).
+    const stopAuthors = trackRemoteAuthors(view, ytext, awareness);
     // The server refuses or drops a document whose file was deleted or renamed (here or by a
     // collaborator), or that is too large: stop reconnecting and keep the text visible but frozen.
     let closed = false;
@@ -636,6 +657,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       unsubscribe();
       unsubWrap();
       awareness?.off('change', onAwareness);
+      stopAuthors();
+      seedAuthorsRef.current = null;
       useWorkspaceStore.getState().setPeers([]);
       clearTimeout(wordTimer);
       useWorkspaceStore.getState().setEditorCommands(null);
@@ -674,12 +697,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
         doc.destroy();
       }
     };
-  }, [projectId, path, readOnly, canComment, identity.token, files, queryClient, spellchecker]);
+  }, [projectId, path, readOnly, canComment, identity, files, queryClient, spellchecker]);
 
   useEffect(() => {
     const text = baseText ?? null;
     changeBase.current = text;
     viewRef.current?.dispatch({ effects: setChangeBase.of(text) });
+    // A new saved version (load, or after a commit): re-attribute only what still differs from it.
+    seedAuthorsRef.current?.();
   }, [baseText]);
 
   const activeBlame = blameVisible(blameOn, blame) ? (blame ?? null) : null;

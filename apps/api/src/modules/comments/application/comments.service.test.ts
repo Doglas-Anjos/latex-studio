@@ -13,6 +13,7 @@ const user = (name: string): User => ({
   email: `${name}@example.com`,
   name,
   createdAt: new Date(),
+  issuer: 'local',
 });
 
 class FakeComments implements CommentRepository {

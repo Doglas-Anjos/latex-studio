@@ -57,8 +57,10 @@ export class DrizzleLanRepository implements LanRepository {
     return rows.length > 0;
   }
 
-  async deleteAccess(id: string): Promise<void> {
-    await this.db.delete(lanAccess).where(eq(lanAccess.id, id));
+  async deleteAccess(projectId: string, id: string): Promise<void> {
+    await this.db
+      .delete(lanAccess)
+      .where(and(eq(lanAccess.projectId, projectId), eq(lanAccess.id, id)));
   }
 
   async touchAccess(id: string): Promise<void> {

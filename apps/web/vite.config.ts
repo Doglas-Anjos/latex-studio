@@ -8,8 +8,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': `http://${api}`,
-      '/collab': { target: `ws://${api}`, ws: true },
+      // xfwd forwards the real client IP/host (X-Forwarded-*) so the API can tell a LAN peer from
+      // the host machine; without it the proxy (on loopback) makes every request look like localhost.
+      '/api': { target: `http://${api}`, xfwd: true },
+      '/collab': { target: `ws://${api}`, ws: true, xfwd: true },
     },
   },
 });

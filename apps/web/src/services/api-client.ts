@@ -1,4 +1,5 @@
 import type { FasorxIdentity } from './identity';
+import { lanSession } from './lan-session';
 
 export class ApiError extends Error {
   constructor(
@@ -92,6 +93,15 @@ export class ApiClient {
 
   private async send(path: string, init: RequestInit): Promise<Response> {
     const res = await fetch(this.base + path, init);
+    // A LAN guest whose token expired or was revoked: drop it and send them back to the PIN screen
+    // for this project, rather than down the FasorX login path (which does not apply to a guest).
+    // Not for the join call itself: a mistyped PIN must not end a session the guest already has.
+    if (res.status === 401 && lanSession.active() && !path.endsWith('/lan/join')) {
+      lanSession.clear();
+      const id = location.pathname.match(/\/projects\/([^/]+)/)?.[1];
+      if (id) location.assign(`/join/${id}`);
+      throw new ApiError(401, 'Sessão de convidado expirada.');
+    }
     if (res.status === 401 && this.identity.enabled) {
       // No token to send: FasorX itself said there is no session. Its login only sends people
       // back once they have one, so there is no loop to break: always go.

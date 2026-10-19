@@ -21,8 +21,13 @@ export class IdentityGuard implements CanActivate {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     if (isPublic(this.reflector, context)) return true;
     const request = context.switchToHttp().getRequest<FastifyRequest>();
-    const { authorization, host } = request.headers;
-    const user = await this.identity.resolve(bearerToken(authorization), host);
+    // request.hostname and request.ip come from X-Forwarded-* only when the proxy is loopback
+    // (trustProxy='loopback'), so a LAN peer cannot forge a localhost host or a loopback address.
+    const user = await this.identity.resolve(
+      bearerToken(request.headers.authorization),
+      request.hostname,
+      request.ip,
+    );
     if (!user) throw new UnauthorizedException();
     request.user = user;
     return true;

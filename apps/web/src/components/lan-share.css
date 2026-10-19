@@ -1,0 +1,118 @@
+.lan-share {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.lan-share-label {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.lan-share-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.lan-share-link-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.lan-share-link-row input {
+  flex: 1;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 0.85rem;
+}
+
+.lan-share-add {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.lan-share-add input {
+  flex: 1;
+}
+
+.lan-share-people {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.lan-share-people li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+}
+
+.lan-share-alias {
+  flex: 1;
+}
+
+.lan-share-pin {
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+}
+
+.lan-share-empty,
+.lan-share-note {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.join-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: center;
+  width: 100%;
+  max-width: 22rem;
+  padding: 2rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: var(--surface);
+}
+
+.join-card h1 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+/* Not the error line: it keeps .form-error's colour. */
+.join-card p:not(.form-error) {
+  margin: 0;
+  color: var(--muted);
+}
+
+.join-icon {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary) 15%, transparent);
+  color: var(--primary);
+}
+
+.join-pin {
+  width: 8ch;
+  text-align: center;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 1.75rem;
+  letter-spacing: 0.4em;
+  padding: 0.4rem 0.2rem;
+}

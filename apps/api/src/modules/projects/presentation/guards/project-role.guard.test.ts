@@ -3,7 +3,11 @@ import { type ExecutionContext, ForbiddenException, NotFoundException } from '@n
 import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { LanService } from '../../../lan/application/lan.service';
+import { LanTokenService } from '../../../lan/application/lan-token.service';
+import { FakeLan } from '../../../lan/testing/fake-lan.repository';
 import type { User } from '../../../users/domain/user';
+import { FakeUsers } from '../../../users/testing/fake-user.repository';
 import { FakeProjects } from '../../testing/fake-project.repository';
 import { ProjectRoleGuard, RequireProjectRole } from './project-role.guard';
 
@@ -56,6 +60,27 @@ describe('ProjectRoleGuard', () => {
     await expect(result).resolves.toBe(true);
     expect(request.project?.id).toBe(projectId);
     expect(request.projectRole).toBe('editor');
+  });
+
+  it('makes a LAN guest an editor only while the project stays published', async () => {
+    const tokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
+    const repo = new FakeLan();
+    const lan = new LanService(repo, new FakeUsers(), tokens);
+    guard = new ProjectRoleGuard(
+      new Reflector(),
+      projects,
+      { SUPERADMIN_EMAILS: '' } as never,
+      lan,
+    );
+    await lan.publish(projectId);
+    await lan.createAccess(projectId, 'Gus');
+    const guestId = repo.access[0]?.userId ?? '';
+    const { request, result } = run(guestId);
+    await expect(result).resolves.toBe(true);
+    expect(request.projectRole).toBe('editor');
+    expect(request.viaAdmin).toBe(false);
+    await lan.unpublish(projectId);
+    await expect(run(guestId).result).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('lets a superadmin view a project they are not a member of, but not edit it', async () => {

@@ -8,12 +8,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import * as Y from 'yjs';
 import { IdentityService } from '../../auth/application/identity.service';
 import type { TokenVerifier } from '../../auth/domain/token-verifier';
+import { LanService } from '../../lan/application/lan.service';
+import { LanTokenService } from '../../lan/application/lan-token.service';
+import { FakeLan } from '../../lan/testing/fake-lan.repository';
 import { ProjectLock } from '../../projects/application/project-lock';
 import { FsProjectStorage } from '../../projects/infrastructure/fs-project-storage';
 import { FakeProjects } from '../../projects/testing/fake-project.repository';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import type { YjsDocRepository } from '../domain/yjs-doc.repository';
-import { CollabService, MAX_DOC_CHARS } from './collab.service';
+import { allowedOrigin, CollabService, MAX_DOC_CHARS } from './collab.service';
 
 const ORIGIN = 'https://latex.example.com';
 
@@ -52,6 +55,7 @@ describe('CollabService', () => {
       token,
       origin,
       host: 'latex.example.com',
+      remoteIp: '203.0.113.7',
       documentName: `${projectId}/main.tex`,
     });
 
@@ -91,9 +95,46 @@ describe('CollabService', () => {
         token,
         origin: ORIGIN,
         host: 'latex.example.com',
+        remoteIp: '203.0.113.7',
         documentName: `${projectId}/a.png`,
       }),
     ).rejects.toThrow();
+  });
+
+  it('lets a LAN guest edit from the LAN origin, only with LAN share on and a matching Host', async () => {
+    const lanTokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
+    const lan = new LanService(new FakeLan(), users, lanTokens);
+    const identity = new IdentityService(users, undefined, lanTokens);
+    const service = (LAN_SHARE: boolean) =>
+      new CollabService(
+        identity,
+        projects,
+        storage,
+        docs,
+        lock,
+        {
+          APP_URL: 'http://localhost:5175/',
+          LAN_SHARE,
+        } as AppConfig,
+        lan,
+      );
+    await lan.publish(projectId);
+    const { pin } = await lan.createAccess(projectId, 'Gus');
+    const token = (await lan.join(projectId, pin, '192.168.0.9'))?.token ?? '';
+    const lanAuth = (s: CollabService, host: string) =>
+      s.authenticate({
+        token,
+        origin: 'http://192.168.0.5:5175',
+        host,
+        remoteIp: '192.168.0.9',
+        documentName: `${projectId}/main.tex`,
+      });
+    // Not a member: editor through lan.roleOf, so the session is writable.
+    await expect(lanAuth(service(true), '192.168.0.5:5175')).resolves.toMatchObject({
+      readOnly: false,
+    });
+    await expect(lanAuth(service(true), 'localhost:3001')).rejects.toThrow('Bad origin');
+    await expect(lanAuth(service(false), '192.168.0.5:5175')).rejects.toThrow('Bad origin');
   });
 
   it('refuses a non-canonical (uppercase) project id', () => {
@@ -168,5 +209,24 @@ describe('CollabService', () => {
     await upload;
     expect(await storeDone).toBe(0);
     expect(await readFile(join(dir, projectId, 'main.tex'), 'utf8')).toBe('uploaded');
+  });
+});
+
+describe('allowedOrigin', () => {
+  const app = 'http://localhost:5175/';
+  const lan = 'http://192.168.0.5:5175';
+
+  it('allows the app origin, and the LAN origin only with LAN share on and a matching Host', () => {
+    expect(allowedOrigin('http://localhost:5175', 'localhost:5175', app, false)).toBe(true);
+    expect(allowedOrigin(lan, '192.168.0.5:5175', app, true)).toBe(true);
+    expect(allowedOrigin(lan, '192.168.0.5:5175', app, false)).toBe(false);
+    expect(allowedOrigin(lan, undefined, app, true)).toBe(false);
+  });
+
+  it('refuses a foreign site and a missing or malformed origin', () => {
+    expect(allowedOrigin('https://evil.example.com', '192.168.0.5:5175', app, true)).toBe(false);
+    expect(allowedOrigin(undefined, '192.168.0.5:5175', app, true)).toBe(false);
+    expect(allowedOrigin('null', 'null', app, true)).toBe(false);
+    expect(allowedOrigin('not a url', 'not a url', app, true)).toBe(false);
   });
 });

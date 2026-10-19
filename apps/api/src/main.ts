@@ -18,7 +18,8 @@ import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fa
 import Redis from 'ioredis';
 import { WebSocketServer } from 'ws';
 import { AppModule } from './app.module';
-import { IdentityService, rateLimitKey } from './modules/auth/application/identity.service';
+import { IdentityService, peerIp, rateLimitKey } from './modules/auth/application/identity.service';
+import { allowedOrigin } from './modules/collab/application/collab.service';
 import { HOCUSPOCUS } from './modules/collab/infrastructure/hocuspocus.server';
 
 // Local development reads the repo's .env; containers get their environment from compose.
@@ -27,10 +28,14 @@ try {
 } catch {}
 
 async function bootstrap() {
-  // Exactly one trusted hop (Caddy), so request.ip is the real client for rate limiting.
+  // With a verifier the API sits behind exactly one trusted hop (Caddy). In local/LAN mode the only
+  // thing that fronts it is the dev proxy (Vite) on loopback, so trust X-Forwarded-* only from a
+  // loopback source: request.ip/hostname are then the real client (for the owner gate and rate
+  // limits), while a LAN peer hitting the API directly cannot forge them (its socket is not loopback).
+  const hasVerifier = !!(process.env.AUTH_JWKS_URL || process.env.AUTH_SECRET);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ trustProxy: (_address, hop) => hop < 1 }),
+    new FastifyAdapter({ trustProxy: hasVerifier ? (_address, hop) => hop < 1 : 'loopback' }),
   );
   const config = app.get<AppConfig>(APP_CONFIG);
   const identity = app.get(IdentityService);
@@ -79,13 +84,26 @@ async function bootstrap() {
   // Origin is refused here already, before a socket is held open for it.
   const hocuspocus = app.get<Hocuspocus>(HOCUSPOCUS);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
-  const appOrigin = new URL(config.APP_URL).origin;
   app
     .getHttpAdapter()
     .getInstance()
     .server.on('upgrade', (request, socket, head) => {
       if (!request.url?.startsWith('/collab')) return socket.destroy();
-      if (request.headers.origin !== appOrigin) {
+      // The real client address (see peerIp: only the proxy-appended X-Forwarded-For entry counts),
+      // which onAuthenticate uses to gate the local-mode owner grant to the host machine.
+      const peer = peerIp(
+        request.headers['x-forwarded-for'] as string | undefined,
+        request.socket.remoteAddress ?? '',
+      );
+      // Same origin as the app, or — with LAN share on — the LAN address the peer loaded it from.
+      if (
+        !allowedOrigin(
+          request.headers.origin,
+          request.headers.host,
+          config.APP_URL,
+          config.LAN_SHARE,
+        )
+      ) {
         return socket.end(
           'HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
         );
@@ -95,6 +113,8 @@ async function bootstrap() {
         for (let i = 0; i < request.rawHeaders.length; i += 2) {
           headers.append(request.rawHeaders[i] as string, request.rawHeaders[i + 1] as string);
         }
+        // set() replaces any x-peer-ip the client sent with the real address.
+        headers.set('x-peer-ip', peer);
         const connection = hocuspocus.handleConnection(
           ws,
           new Request(`http://localhost${request.url}`, { headers }),
@@ -109,11 +129,11 @@ async function bootstrap() {
       });
     });
 
-  // Local mode trusts any request addressed to localhost, so it must not be reachable from the
-  // network at all: loopback only ('localhost' binds 127.0.0.1 and ::1), which also leaves a
-  // proxy in another container (Caddy) unable to reach it.
-  const verifier = config.AUTH_JWKS_URL || config.AUTH_SECRET;
-  await app.listen(config.API_PORT, verifier ? '0.0.0.0' : 'localhost');
+  // Local mode trusts a request only when it is addressed to localhost AND arrives from a loopback
+  // peer (IdentityService), so binding all interfaces is safe once that holds. Without a verifier
+  // and without LAN share, stay loopback only ('localhost' binds 127.0.0.1 and ::1), which also
+  // leaves a proxy in another container (Caddy) unable to reach it.
+  await app.listen(config.API_PORT, hasVerifier || config.LAN_SHARE ? '0.0.0.0' : 'localhost');
 }
 
 void bootstrap();

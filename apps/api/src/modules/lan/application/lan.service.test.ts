@@ -1,8 +1,9 @@
 import { BadRequestException, HttpException } from '@nestjs/common';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { LAN_ISSUER } from '../../users/domain/user';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import { FakeLan } from '../testing/fake-lan.repository';
-import { LanService } from './lan.service';
+import { LanService, lanOrigins } from './lan.service';
 import { LanTokenService } from './lan-token.service';
 
 const P = '00000000-0000-4000-8000-00000000000a';
@@ -34,7 +35,7 @@ describe('LanService', () => {
     expect(acc.alias).toBe('Ana');
     expect(acc.pin).toMatch(/^\d{4}$/);
     // A real user row backs the access, named after the alias.
-    expect(users.rows).toEqual([expect.objectContaining({ issuer: 'lan', name: 'Ana' })]);
+    expect(users.rows).toEqual([expect.objectContaining({ issuer: LAN_ISSUER, name: 'Ana' })]);
     const list = await service.listAccess(P);
     expect(list).toEqual([expect.objectContaining({ id: acc.id, alias: 'Ana' })]);
     expect(JSON.stringify(list)).not.toContain('pinHash');
@@ -75,6 +76,10 @@ describe('LanService', () => {
     const bad = wrongOf(pin);
     for (let i = 0; i < 5; i++) expect(await service.verify(P, bad, '10.0.0.9')).toBeNull();
     await expect(service.verify(P, bad, '10.0.0.9')).rejects.toBeInstanceOf(HttpException);
+    // Postgres matches the id in any case: an uppercase twin must share the lock, not reset it.
+    await expect(service.verify(P.toUpperCase(), bad, '10.0.0.9')).rejects.toBeInstanceOf(
+      HttpException,
+    );
     // the right pin is now locked out too, but only for that client
     await expect(service.verify(P, pin, '10.0.0.9')).rejects.toBeInstanceOf(HttpException);
     expect(await service.verify(P, pin, '10.0.0.10')).toEqual(
@@ -82,12 +87,40 @@ describe('LanService', () => {
     );
   });
 
-  it('revokes an access', async () => {
+  it('locks a concurrent burst of wrong pins, not only sequential ones', async () => {
+    await service.publish(P);
+    const { pin } = await service.createAccess(P, 'Ana');
+    const burst = await Promise.allSettled(
+      Array.from({ length: 6 }, () => service.verify(P, wrongOf(pin), '10.0.0.7')),
+    );
+    expect(burst.filter((r) => r.status === 'rejected')).toHaveLength(1); // the 6th, past the cap of 5
+  });
+
+  it('revokes an access and returns its backing user id', async () => {
     await service.publish(P);
     const { id, pin } = await service.createAccess(P, 'Ana');
-    await service.revokeAccess(id);
+    const userId = repo.access[0]?.userId ?? '';
+    expect(await service.revokeAccess(P, id)).toBe(userId);
     expect(await service.listAccess(P)).toEqual([]);
     expect(await service.verify(P, pin, '10.0.0.5')).toBeNull();
+    expect(await service.revokeAccess(P, id)).toBeNull(); // already gone
+  });
+
+  it('keeps the project-wide failure budget across a successful login', async () => {
+    await service.publish(P);
+    const { pin } = await service.createAccess(P, 'Ana');
+    const bad = wrongOf(pin);
+    // 29 wrong guesses, at most 4 per client so no single client locks (cap is 5).
+    for (let i = 0; i < 29; i++) {
+      expect(await service.verify(P, bad, `c${Math.floor(i / 4)}`)).toBeNull();
+    }
+    // A valid login clears only that client's counter, never the project's — else a friend could
+    // reset the budget and walk the PIN space.
+    expect(await service.verify(P, pin, 'friend')).toEqual(
+      expect.objectContaining({ alias: 'Ana' }),
+    );
+    expect(await service.verify(P, bad, 'zz')).toBeNull(); // the 30th failure trips the project lock
+    await expect(service.verify(P, bad, 'yy')).rejects.toBeInstanceOf(HttpException);
   });
 
   it('join mints a token for the backing user on a valid pin', async () => {
@@ -98,5 +131,45 @@ describe('LanService', () => {
     expect(joined?.alias).toBe('Ana');
     expect(await tokens.verify(joined?.token ?? '')).toBe(userId);
     expect(await service.join(P, wrongOf(pin), '10.0.0.6')).toBeNull();
+  });
+
+  it('lists the published projects a lan user has an access to', async () => {
+    const Q = '00000000-0000-4000-8000-00000000000b';
+    const R = '00000000-0000-4000-8000-00000000000c';
+    await service.publish(P);
+    await service.publish(Q);
+    await service.createAccess(P, 'Ana');
+    const userId = repo.access[0]?.userId ?? '';
+    await repo.createAccess(R, userId, 'Ana', 'hash'); // access, but R is not published
+    expect(await service.projectsFor(userId)).toEqual([P]);
+  });
+
+  it('answers empty without reading the LAN tables when LAN share is off', async () => {
+    await service.publish(P);
+    await service.createAccess(P, 'Ana');
+    const userId = repo.access[0]?.userId ?? '';
+    const off = new LanService(repo, users, new LanTokenService({ LAN_SHARE: false }));
+    expect(await off.roleOf(P, userId)).toBeNull();
+    expect(await off.listPublished()).toEqual([]);
+    expect(await off.projectsFor(userId)).toEqual([]);
+  });
+});
+
+describe('lanOrigins', () => {
+  // biome-ignore lint/suspicious/noExplicitAny: a minimal stub of os.networkInterfaces()
+  const nets: any = {
+    lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true }],
+    eth0: [
+      { address: '192.168.0.12', family: 'IPv4', internal: false },
+      { address: 'fe80::1', family: 'IPv6', internal: false },
+    ],
+  };
+
+  it('rebases the app origin onto each non-internal IPv4, dropping loopback and IPv6', () => {
+    expect(lanOrigins('http://localhost:5175/', nets)).toEqual(['http://192.168.0.12:5175']);
+  });
+
+  it('returns nothing for an unparseable app url', () => {
+    expect(lanOrigins('not a url', nets)).toEqual([]);
   });
 });

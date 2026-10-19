@@ -29,6 +29,7 @@ import {
 } from '../components/dashboard/dialogs';
 import { HelpDialog } from '../components/dashboard/help-dialog';
 import { FasorxFooter } from '../components/fasorx-footer';
+import { LanShareDialog } from '../components/lan-share-dialog';
 import { InviteDialog, openInvite } from '../components/members-panel';
 import { Menu } from '../components/menu';
 import { ROLE_ICON, RoleBadge } from '../components/role-badge';
@@ -69,6 +70,13 @@ export function ProjectsPage() {
   const copyRef = useRef<HTMLDialogElement>(null);
   const removeRef = useRef<HTMLDialogElement>(null);
   const shareRef = useRef<HTMLDialogElement>(null);
+  const lanShareRef = useRef<HTMLDialogElement>(null);
+  const [lanOpen, setLanOpen] = useState(false);
+  // A local install (no FasorX) shares over the LAN; a FasorX deployment invites members by e-mail.
+  const issuer = useMe().data?.issuer;
+  const local = issuer === 'local';
+  // A LAN guest (joined by PIN) only edits what was shared with them: no creating/importing projects.
+  const guest = issuer === 'lan';
   const helpRef = useRef<HTMLDialogElement>(null);
 
   const search = useDebounced(query.trim());
@@ -117,7 +125,12 @@ export function ProjectsPage() {
   };
   const openShare = (p: Project) => {
     setSharing(p);
-    openInvite(shareRef.current);
+    if (local) {
+      setLanOpen(true);
+      lanShareRef.current?.showModal();
+    } else {
+      openInvite(shareRef.current);
+    }
   };
   const openRemove = (p: Project) => {
     setRemoving(p);
@@ -148,25 +161,27 @@ export function ProjectsPage() {
                 onChange={(e) => changeQuery(e.target.value)}
               />
             </label>
-            <Menu
-              className="new-menu"
-              triggerClassName="btn btn-secondary btn-compact"
-              label={
-                <>
-                  <Plus size={16} aria-hidden="true" /> {d.newProject}
-                </>
-              }
-            >
-              <button type="button" onClick={openCreate}>
-                {d.blankProject}
-              </button>
-              <button type="button" onClick={() => openImport('zip')}>
-                {d.importZip}
-              </button>
-              <button type="button" onClick={() => openImport('folder')}>
-                {d.importFolder}
-              </button>
-            </Menu>
+            {!guest && (
+              <Menu
+                className="new-menu"
+                triggerClassName="btn btn-secondary btn-compact"
+                label={
+                  <>
+                    <Plus size={16} aria-hidden="true" /> {d.newProject}
+                  </>
+                }
+              >
+                <button type="button" onClick={openCreate}>
+                  {d.blankProject}
+                </button>
+                <button type="button" onClick={() => openImport('zip')}>
+                  {d.importZip}
+                </button>
+                <button type="button" onClick={() => openImport('folder')}>
+                  {d.importFolder}
+                </button>
+              </Menu>
+            )}
           </div>
         </div>
 
@@ -190,9 +205,10 @@ export function ProjectsPage() {
         {isPending && <p className="status-note">{d.loading}</p>}
         {error && <Alert>{d.loadError}</Alert>}
         {download.error && <Alert>{download.error.message}</Alert>}
-        {data?.total === 0 && !filtered && (
+        {data?.total === 0 && !filtered && !guest && (
           <EmptyLibrary onCreate={openCreate} onImport={() => openImport('zip')} />
         )}
+        {data?.total === 0 && !filtered && guest && <p className="status-note">{d.guestEmpty}</p>}
         {data && rows.length === 0 && (data.total > 0 || filtered) && (
           <NoResults onClear={clearSearch} />
         )}
@@ -232,7 +248,16 @@ export function ProjectsPage() {
       <CreateDialog dialogRef={createRef} onDone={open} />
       <ImportDialog dialogRef={importRef} mode={importMode} setMode={setImportMode} onDone={open} />
       <CopyDialog dialogRef={copyRef} project={copying} onDone={open} />
-      <InviteDialog dialogRef={shareRef} project={sharing} />
+      {local ? (
+        <LanShareDialog
+          dialogRef={lanShareRef}
+          project={sharing}
+          open={lanOpen}
+          onClose={() => setLanOpen(false)}
+        />
+      ) : (
+        <InviteDialog dialogRef={shareRef} project={sharing} />
+      )}
       <RemoveDialog dialogRef={removeRef} project={removing} onDone={() => setRemoving(null)} />
     </div>
   );
@@ -377,7 +402,7 @@ function ProjectTable({
       </thead>
       <tbody>
         {rows.map((p) => (
-          <tr key={p.id} data-role={p.role}>
+          <tr key={p.id} data-role={p.role} data-published={p.published || undefined}>
             <td>
               <button type="button" className="project-link" onClick={() => onOpen(p.id)}>
                 <span className="project-link-icon">

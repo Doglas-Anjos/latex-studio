@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Identity, User } from '../domain/user';
+import { type Identity, LAN_ISSUER, type User } from '../domain/user';
 import type { UserRepository } from '../domain/user.repository';
 
 export class FakeUsers implements UserRepository {
@@ -23,7 +23,7 @@ export class FakeUsers implements UserRepository {
     const t = search?.toLowerCase();
     const all = this.rows.filter(
       (u) =>
-        u.issuer !== 'lan' &&
+        u.issuer !== LAN_ISSUER &&
         (!t || u.email.toLowerCase().includes(t) || u.name.toLowerCase().includes(t)),
     );
     return { items: all.slice(offset, offset + limit), total: all.length };

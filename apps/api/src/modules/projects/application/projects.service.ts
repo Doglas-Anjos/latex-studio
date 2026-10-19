@@ -19,7 +19,8 @@ import {
 } from '@nestjs/common';
 import { AuditService } from '../../audit/audit.service';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
-import type { User } from '../../users/domain/user';
+import { LanService } from '../../lan/application/lan.service';
+import { LAN_ISSUER, type User } from '../../users/domain/user';
 import {
   type Project,
   type ProjectEngine,
@@ -87,6 +88,8 @@ export class ProjectsService {
     @Optional() @Inject(AuditService) private readonly audit?: AuditService,
     // Optional only so tests that never delete can skip it; CollabModule always provides it.
     @Optional() @Inject(DOCUMENT_SYNC) private readonly sync?: DocumentSync,
+    // Marks which listed projects are shared on the LAN, so the dashboard can tint them.
+    @Optional() @Inject(LanService) private readonly lan?: LanService,
   ) {}
 
   create(owner: User, name: string): Promise<Project> {
@@ -206,13 +209,28 @@ export class ProjectsService {
   }
 
   async listForUser(user: User, options: ListProjectsOptions = {}): Promise<ListProjectsResult> {
+    // A LAN guest owns and is a member of nothing, so the normal query is empty for them: list the
+    // projects shared with them instead (always marked published, since access implies published).
+    if (user.issuer === LAN_ISSUER && this.lan) {
+      const ids = await this.lan.projectsFor(user.id);
+      const found = await Promise.all(ids.map((id) => this.projects.findById(id)));
+      const items = found
+        .filter((p): p is Project => p !== null)
+        .map((p) => ({ ...p, role: 'editor' as const, published: true }));
+      return { items, total: items.length, nextCursor: null };
+    }
     const limit = options.limit ?? PROJECT_PAGE_SIZE;
     const filter = options.filter ?? 'all';
     const search = foldSearch(options.search ?? '');
     const cursor = options.cursor ? decodeProjectCursor(options.cursor, filter, search) : null;
     const page = await this.projects.listPageForUser(user.id, { limit, filter, search, cursor });
+    // Tag the ones published to the LAN so the dashboard can show them in a different colour.
+    const published = this.lan ? new Set(await this.lan.listPublished()) : null;
+    const items = published
+      ? page.items.map((p) => ({ ...p, published: published.has(p.id) }))
+      : page.items;
     return {
-      items: page.items,
+      items,
       total: page.total,
       nextCursor: page.next
         ? Buffer.from(JSON.stringify({ v: 1, ...page.next, filter, search })).toString('base64url')
@@ -257,6 +275,11 @@ export class ProjectsService {
   }
 
   private async assertProjectCap(owner: User) {
+    // A LAN guest (joined by PIN) may only edit the project shared with them: never create or import
+    // its own on the host. The single chokepoint for both create and import, so neither can leak.
+    if (owner.issuer === LAN_ISSUER) {
+      throw new ForbiddenException('LAN guests cannot create projects');
+    }
     if ((await this.projects.ownedIds(owner.id)).length >= this.config.MAX_PROJECTS_PER_USER) {
       throw new ConflictException('Project limit reached');
     }

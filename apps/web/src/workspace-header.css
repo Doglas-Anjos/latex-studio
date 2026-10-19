@@ -216,33 +216,54 @@
   .wsh-segmented {
     margin: 0 0.1rem;
   }
+  /* Header actions go icon-only (the aria-label/title keep their names) so they fit one row. */
+  .wsh-back span,
+  .wsh-share span,
+  .pdf-download-label {
+    display: none;
+  }
+  .wsh-back,
+  .wsh-share {
+    padding: 0.4rem;
+  }
 }
 
-/* Phone (down to ~320px): the brand suffix and back-link label are the first
-   things to drop so the project name, surface switch and theme action keep
+/* Phone (down to ~320px): the brand suffix drops (the back link and share went
+   icon-only at 48rem) so the project name, surface switch and theme action keep
    to one row without pushing the header wider than the viewport. The
    surface switch goes icon-only too; each button keeps an aria-label/title
    so its accessible name and hover tooltip survive losing the visible text. */
 @media (max-width: 26rem) {
   .wsh-header {
-    gap: 0.3rem;
+    gap: 0.25rem;
     padding: 0 0.5rem;
+  }
+  .wsh-brand {
+    padding: 0.3rem;
   }
   .wsh-brand .brand-suffix {
     display: none;
-  }
-  .wsh-back span,
-  .wsh-share span {
-    display: none;
-  }
-  .wsh-back {
-    padding: 0.4rem;
   }
   .wsh-segmented-btn span {
     display: none;
   }
   .wsh-segmented-btn {
     padding: 0.4rem;
+  }
+  /* Drop the separators, role badge and labels so everything fits one line on a phone. */
+  .wsh-divider,
+  .wsh-sep {
+    display: none;
+  }
+  .wsh-header .role-badge[data-role] {
+    display: none;
+  }
+  .wsh-end {
+    gap: 0.15rem;
+  }
+  .presence-avatar {
+    width: 1.5rem;
+    height: 1.5rem;
   }
 }
 

@@ -19,6 +19,7 @@ const user: User = {
   email: 'ana@example.com',
   name: 'Ana',
   createdAt: new Date(),
+  issuer: 'local',
 };
 
 const MAIN =

@@ -2,6 +2,7 @@ import { APP_CONFIG, type AppConfig, PROJECT_LOCK_REDIS, parseRedisUrl } from '@
 import { forwardRef, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
 import Redis from 'ioredis';
 import { CollabModule } from '../collab/collab.module';
+import { LanController } from '../lan/presentation/lan.controller';
 import { ProjectLock } from './application/project-lock';
 import { ProjectsService } from './application/projects.service';
 import { PROJECT_REPOSITORY } from './domain/project.repository';
@@ -13,7 +14,7 @@ import { ProjectsController } from './presentation/projects.controller';
 @Module({
   // CollabModule needs the project repository and storage; ProjectsService closes open docs.
   imports: [forwardRef(() => CollabModule)],
-  controllers: [ProjectsController],
+  controllers: [ProjectsController, LanController],
   providers: [
     ProjectsService,
     ProjectLock,

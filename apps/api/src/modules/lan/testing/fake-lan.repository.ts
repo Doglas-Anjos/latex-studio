@@ -36,8 +36,8 @@ export class FakeLan implements LanRepository {
   async hasAccess(projectId: string, userId: string) {
     return this.access.some((a) => a.projectId === projectId && a.userId === userId);
   }
-  async deleteAccess(id: string) {
-    this.access = this.access.filter((a) => a.id !== id);
+  async deleteAccess(projectId: string, id: string) {
+    this.access = this.access.filter((a) => !(a.projectId === projectId && a.id === id));
   }
   async touchAccess(id: string) {
     const row = this.access.find((a) => a.id === id);

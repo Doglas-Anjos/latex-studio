@@ -42,6 +42,10 @@ const optionalCount = z.preprocess(
   z.coerce.number().int().min(1).max(30).optional(),
 );
 
+/** Local mode and LAN share run only here: APP_URL on localhost and NODE_ENV not production. */
+const localDev = (c: { APP_URL: string; NODE_ENV?: string | undefined }) =>
+  new URL(c.APP_URL).hostname === 'localhost' && c.NODE_ENV?.toLowerCase() !== 'production';
+
 /**
  * Identity comes from the application in front (FasorX) as a signed JWT in `Authorization`.
  * Without a verifier (neither AUTH_JWKS_URL nor AUTH_SECRET) the API runs in local mode: every
@@ -80,30 +84,22 @@ const envSchema = baseSchema
     SUBJECT_GRAPH_AREAS: optionalCount,
     SUBJECT_GRAPH_TERMS: optionalCount,
   })
-  .refine(
-    (c) =>
-      c.AUTH_JWKS_URL ||
-      c.AUTH_SECRET ||
-      (new URL(c.APP_URL).hostname === 'localhost' && c.NODE_ENV?.toLowerCase() !== 'production'),
-    {
-      message:
-        'AUTH_JWKS_URL or AUTH_SECRET is required unless APP_URL is localhost and NODE_ENV is not production',
-    },
-  )
+  .refine((c) => c.AUTH_JWKS_URL || c.AUTH_SECRET || localDev(c), {
+    message:
+      'AUTH_JWKS_URL or AUTH_SECRET is required unless APP_URL is localhost and NODE_ENV is not production',
+  })
   // The same key signs tokens for every app of that issuer: pin who signs and for whom.
   .refine((c) => !(c.AUTH_JWKS_URL || c.AUTH_SECRET) || (c.AUTH_ISSUER && c.AUTH_AUDIENCE), {
     message: 'AUTH_ISSUER and AUTH_AUDIENCE are required with a verifier',
   })
-  // Opening the app to the network has no real login, so keep it to a trusted local machine.
+  // Opening the app to the network has no real login, so keep it to a trusted local machine — and
+  // to local mode: with a verifier, Fastify trusts the socket's own X-Forwarded-For, so a LAN peer
+  // would pick its own address and dodge the PIN lockout.
   .refine(
-    (c) =>
-      !c.LAN_SHARE ||
-      (!!c.LAN_SECRET &&
-        new URL(c.APP_URL).hostname === 'localhost' &&
-        c.NODE_ENV?.toLowerCase() !== 'production'),
+    (c) => !c.LAN_SHARE || (!!c.LAN_SECRET && localDev(c) && !c.AUTH_JWKS_URL && !c.AUTH_SECRET),
     {
       message:
-        'LAN_SHARE needs LAN_SECRET and is only allowed when APP_URL is localhost and NODE_ENV is not production',
+        'LAN_SHARE needs LAN_SECRET, no AUTH_JWKS_URL/AUTH_SECRET, and is only allowed when APP_URL is localhost and NODE_ENV is not production',
     },
   );
 

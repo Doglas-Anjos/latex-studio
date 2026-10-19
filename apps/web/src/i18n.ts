@@ -138,6 +138,18 @@ interface DashStrings {
   filters: string;
   loading: string;
   loadError: string;
+  guestEmpty: string;
+  needPin: string;
+  needLink: string;
+  serverError: string;
+  /** serverError plus the LAN hint, for a local install. */
+  serverErrorLan: string;
+  tryAgain: string;
+  enterPin: string;
+  projectUnavailable: string;
+  /** projectUnavailable with the LAN-share reasons, for a local install. */
+  projectUnavailableLan: string;
+  backToProjects: string;
   recent: string;
   open: string;
   /** Prefixes the project name in the "continue" button's aria-label. */
@@ -188,6 +200,19 @@ const DASH: Record<UiLang, DashStrings> = {
     filters: 'Filtros',
     loading: 'Carregando…',
     loadError: 'Não foi possível carregar os projetos.',
+    guestEmpty: 'Nenhum projeto compartilhado com você ainda.',
+    needPin:
+      'Para abrir este projeto compartilhado, digite o PIN que o anfitrião te enviou. Se já tinha entrado, sua sessão expirou — digite o PIN de novo.',
+    needLink: 'Abra o link que o anfitrião compartilhou com você para digitar o PIN.',
+    serverError: 'Não foi possível falar com o servidor. Tente de novo em instantes.',
+    serverErrorLan:
+      'Não foi possível falar com o servidor. Verifique se está na mesma rede e tente de novo.',
+    tryAgain: 'Tentar de novo',
+    enterPin: 'Digitar o PIN',
+    projectUnavailable: 'Projeto não encontrado, ou você não tem acesso a ele.',
+    projectUnavailableLan:
+      'Este projeto não está disponível. Ele pode não existir, ou você não tem mais acesso (o anfitrião pode ter removido seu acesso ou parado de compartilhar).',
+    backToProjects: 'Voltar aos projetos',
     recent: 'Último projeto',
     open: 'Abrir',
     continuePrefix: 'Continuar projeto',
@@ -236,6 +261,19 @@ const DASH: Record<UiLang, DashStrings> = {
     filters: 'Filters',
     loading: 'Loading…',
     loadError: 'Could not load the projects.',
+    guestEmpty: 'No projects have been shared with you yet.',
+    needPin:
+      'To open this shared project, enter the PIN your host sent you. If you were already in, your session expired — just enter the PIN again.',
+    needLink: 'Open the link your host shared with you to enter the PIN.',
+    serverError: "Couldn't reach the server. Try again in a moment.",
+    serverErrorLan:
+      "Couldn't reach the server. Make sure you're on the same network, then try again.",
+    tryAgain: 'Try again',
+    enterPin: 'Enter the PIN',
+    projectUnavailable: "Project not found, or you don't have access to it.",
+    projectUnavailableLan:
+      "This project isn't available. It may not exist, or you no longer have access (the host may have removed your access or stopped sharing).",
+    backToProjects: 'Back to projects',
     recent: 'Last project',
     open: 'Open',
     continuePrefix: 'Continue project',
@@ -283,6 +321,19 @@ const DASH: Record<UiLang, DashStrings> = {
     filters: 'Filtros',
     loading: 'Cargando…',
     loadError: 'No se pudieron cargar los proyectos.',
+    guestEmpty: 'Aún no se ha compartido ningún proyecto contigo.',
+    needPin:
+      'Para abrir este proyecto compartido, escribe el PIN que te envió el anfitrión. Si ya habías entrado, tu sesión caducó — escribe el PIN otra vez.',
+    needLink: 'Abre el enlace que compartió contigo el anfitrión para escribir el PIN.',
+    serverError: 'No se pudo contactar con el servidor. Inténtalo de nuevo en un momento.',
+    serverErrorLan:
+      'No se pudo contactar con el servidor. Comprueba que estás en la misma red e inténtalo de nuevo.',
+    tryAgain: 'Intentar de nuevo',
+    enterPin: 'Escribir el PIN',
+    projectUnavailable: 'Proyecto no encontrado, o no tienes acceso a él.',
+    projectUnavailableLan:
+      'Este proyecto no está disponible. Puede que no exista o que ya no tengas acceso (el anfitrión pudo quitar tu acceso o dejar de compartir).',
+    backToProjects: 'Volver a los proyectos',
     recent: 'Último proyecto',
     open: 'Abrir',
     continuePrefix: 'Continuar proyecto',
@@ -325,4 +376,108 @@ export function useDash(): DashStrings {
 /** `n` projects, with the current language's singular/plural noun. */
 export function projectCount(d: DashStrings, n: number): string {
   return `${n} ${n === 1 ? d.project : d.projects}`;
+}
+
+interface LanStrings {
+  title: string;
+  description: string;
+  disabled: string;
+  publish: string;
+  unpublish: string;
+  link: string;
+  copy: string;
+  copied: string;
+  people: string;
+  aliasPlaceholder: string;
+  add: string;
+  noPeople: string;
+  remove: string;
+  pinOnce: string;
+  pickUrl: string;
+  joinTitle: string;
+  joinDescription: string;
+  pinLabel: string;
+  join: string;
+  joinError: string;
+  joinLocked: string;
+}
+
+const LAN: Record<UiLang, LanStrings> = {
+  'pt-BR': {
+    title: 'Compartilhar na rede local',
+    description:
+      'Publique este projeto para que amigos na mesma rede editem pelo navegador, com um PIN.',
+    disabled: 'O compartilhamento em rede local está desligado neste servidor.',
+    publish: 'Publicar na rede',
+    unpublish: 'Parar de compartilhar',
+    link: 'Link para compartilhar',
+    copy: 'Copiar',
+    copied: 'Copiado!',
+    people: 'Pessoas com acesso',
+    aliasPlaceholder: 'Nome do amigo',
+    add: 'Adicionar',
+    noPeople: 'Ninguém ainda. Adicione uma pessoa para gerar um PIN.',
+    remove: 'Remover',
+    pinOnce: 'Anote o PIN agora: ele aparece só uma vez.',
+    pickUrl: 'Se o amigo não abrir, tente outro endereço da lista.',
+    joinTitle: 'Entrar no projeto compartilhado',
+    joinDescription: 'Digite o PIN de 4 dígitos que você recebeu.',
+    pinLabel: 'PIN',
+    join: 'Entrar',
+    joinError: 'PIN inválido ou projeto indisponível.',
+    joinLocked: 'Muitas tentativas erradas. Aguarde alguns minutos e tente de novo.',
+  },
+  en: {
+    title: 'Share on the local network',
+    description:
+      'Publish this project so friends on the same network can edit it in a browser, with a PIN.',
+    disabled: 'LAN sharing is turned off on this server.',
+    publish: 'Publish to the network',
+    unpublish: 'Stop sharing',
+    link: 'Link to share',
+    copy: 'Copy',
+    copied: 'Copied!',
+    people: 'People with access',
+    aliasPlaceholder: "Friend's name",
+    add: 'Add',
+    noPeople: 'No one yet. Add a person to generate a PIN.',
+    remove: 'Remove',
+    pinOnce: 'Write the PIN down now: it is shown only once.',
+    pickUrl: 'If a friend cannot open it, try another address from the list.',
+    joinTitle: 'Join the shared project',
+    joinDescription: 'Enter the 4-digit PIN you were given.',
+    pinLabel: 'PIN',
+    join: 'Join',
+    joinError: 'Invalid PIN or project unavailable.',
+    joinLocked: 'Too many wrong attempts. Wait a few minutes and try again.',
+  },
+  es: {
+    title: 'Compartir en la red local',
+    description:
+      'Publica este proyecto para que amigos en la misma red lo editen en el navegador, con un PIN.',
+    disabled: 'El uso compartido en red local está desactivado en este servidor.',
+    publish: 'Publicar en la red',
+    unpublish: 'Dejar de compartir',
+    link: 'Enlace para compartir',
+    copy: 'Copiar',
+    copied: '¡Copiado!',
+    people: 'Personas con acceso',
+    aliasPlaceholder: 'Nombre del amigo',
+    add: 'Añadir',
+    noPeople: 'Nadie todavía. Añade una persona para generar un PIN.',
+    remove: 'Quitar',
+    pinOnce: 'Anota el PIN ahora: se muestra solo una vez.',
+    pickUrl: 'Si un amigo no puede abrirlo, prueba otra dirección de la lista.',
+    joinTitle: 'Entrar al proyecto compartido',
+    joinDescription: 'Escribe el PIN de 4 dígitos que recibiste.',
+    pinLabel: 'PIN',
+    join: 'Entrar',
+    joinError: 'PIN no válido o proyecto no disponible.',
+    joinLocked: 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.',
+  },
+};
+
+/** LAN-share strings for the current language. */
+export function useLan(): LanStrings {
+  return LAN[useUiLang()];
 }
