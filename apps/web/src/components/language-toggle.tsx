@@ -3,25 +3,24 @@ import { UI_LANGS } from '../i18n';
 import { type UiLang, useSettingsStore } from '../settings-store';
 import { Menu } from './menu';
 
-const SHORT: Record<'' | UiLang, string> = { '': 'Auto', 'pt-BR': 'PT', en: 'EN', es: 'ES' };
 const OPTIONS: Array<{ value: '' | UiLang; label: string }> = [
   { value: '', label: 'Automático' },
   ...UI_LANGS,
 ];
 
-/** Header language switcher for the nav menu (the Settings dialog has the same choice). */
+/** Header language switcher for the nav menu (the Settings dialog has the same choice). Icon-only,
+ * like the theme toggle, so it stays compact in the crowded workspace header. */
 export function LanguageToggle() {
   const uiLang = useSettingsStore((s) => s.uiLang);
   const set = useSettingsStore((s) => s.set);
   return (
     <Menu
       className="lang-menu"
-      triggerClassName="btn btn-ghost btn-compact"
+      triggerClassName="btn btn-ghost"
       label={
         <>
-          <Languages size={16} aria-hidden="true" />
+          <Languages size={18} aria-hidden="true" />
           <span className="sr-only">Idioma da interface</span>
-          {SHORT[uiLang]}
         </>
       }
     >

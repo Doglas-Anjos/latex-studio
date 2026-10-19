@@ -13,7 +13,6 @@ describe('LanguageToggle', () => {
 
   it('sets the UI language from the menu', async () => {
     render(<LanguageToggle />);
-    await userEvent.click(screen.getByText('Auto')); // open the menu (default is Automático)
     await userEvent.click(screen.getByText('English'));
     expect(useSettingsStore.getState().uiLang).toBe('en');
   });

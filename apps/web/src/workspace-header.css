@@ -189,14 +189,6 @@
   text-shadow: none;
 }
 
-/* Language menu lives in the dark header: right-align the popover and pin the light surface ink. */
-.lang-menu .menu-list {
-  left: auto;
-  right: 0;
-  min-width: 9rem;
-  color: var(--ink);
-}
-
 /* RoleBadge is styled for the light surface; make it read on the dark bar. */
 .wsh-header .role-badge[data-role] {
   flex: none;

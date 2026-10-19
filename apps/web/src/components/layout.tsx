@@ -4,6 +4,7 @@ import type { User } from '../services/auth.service';
 import { IdentityToken } from '../services/identity';
 import { Brand } from './brand';
 import { Button } from './button';
+import { LanguageToggle } from './language-toggle';
 import { ThemeToggle } from './theme-toggle';
 import { useApplyTheme } from './use-theme';
 
@@ -17,6 +18,7 @@ export function Layout({ user }: { user: User }) {
           <Brand />
         </Link>
         <nav>
+          <LanguageToggle />
           <ThemeToggle />
           <span className="user-email">{user.name || user.email}</span>
           {identity.enabled && (
