@@ -10,8 +10,11 @@ export interface User {
   issuer: string;
 }
 
-/** `/auth/me`: the user plus whether they govern the platform. */
-export type Me = User & { isAdmin: boolean };
+/**
+ * `/auth/me`: the user plus whether they govern the platform, and whether only the host may
+ * compile/export here (a LAN guest on a Windows host: TeX there could read the host's files).
+ */
+export type Me = User & { isAdmin: boolean; hostCompiles?: boolean };
 
 export interface AuthService {
   me(): Promise<Me>;

@@ -23,11 +23,12 @@ const EXPORTS: [ExportFormat, string][] = [
  */
 export function DownloadButton({
   projectId,
-  canEdit,
+  canExport,
   isOwner = false,
 }: {
   projectId: string;
-  canEdit: boolean;
+  /** Editors, unless only the host may run the export tools here (a LAN guest on Windows). */
+  canExport: boolean;
   /** The .git in the history zip holds every author's e-mail, which only the owner sees. */
   isOwner?: boolean;
 }) {
@@ -94,7 +95,7 @@ export function DownloadButton({
             <GitBranch size={16} aria-hidden="true" /> Fonte com histórico (.zip)
           </button>
         )}
-        {canEdit &&
+        {canExport &&
           EXPORTS.map(([format, label]) => (
             <button
               key={format}
