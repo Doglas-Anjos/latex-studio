@@ -1,6 +1,7 @@
 import { StateEffect, StateField } from '@codemirror/state';
 import { type EditorView, GutterMarker, gutter } from '@codemirror/view';
 import type { Blame, BlameRun } from '../services/history.service';
+import { peerSlot } from './presence';
 
 export const setBlame = StateEffect.define<Blame | null>();
 
@@ -58,11 +59,16 @@ class RunMarker extends GutterMarker {
     const c = this.run.sha ? this.blame.commits[this.run.sha] : undefined;
     if (!c) {
       el.textContent = 'não salvo';
+      el.classList.add('cm-blame-unsaved');
       return el;
     }
     const date = new Date(c.date);
     el.textContent = `${c.author.name.split(' ')[0]} · ${ageLabel(date)}`;
     el.title = `${c.author.name}\n${date.toLocaleString('pt-BR')}\n${c.message}`;
+    // Side mark in the author's stable palette slot, so each person's lines read apart at a glance.
+    // Keyed by name (the blame API drops e-mails/ids), so it does not match the cursor colour, which
+    // is keyed by user id; a CSS var (not a resolved hex) keeps the slot right after a theme switch.
+    el.style.setProperty('--blame-color', `var(--peer-${peerSlot(c.author.name) + 1})`);
     return el;
   }
 }
