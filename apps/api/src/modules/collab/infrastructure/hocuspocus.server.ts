@@ -32,7 +32,8 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
         origin: request.headers.get('origin'),
         host: request.headers.get('host'),
         // Set by the upgrade handler from the socket peer; any client-sent copy is stripped there.
-        remoteIp: request.headers.get('x-peer-ip') ?? undefined,
+        // Missing (never, through that handler) is '', which no loopback check accepts.
+        remoteIp: request.headers.get('x-peer-ip') ?? '',
         documentName,
       });
       connectionConfig.readOnly = session.readOnly;

@@ -35,6 +35,27 @@ export interface CollabSession {
 }
 
 /**
+ * The WebSocket Origin rule, shared by the upgrade handler (main.ts) and `authenticate`: the app's
+ * origin, or — only with LAN share on — the origin the peer loaded the app from, which equals the
+ * upgrade's own `Host` (same server on the LAN address, not a foreign site). A cross-site page
+ * keeps its own Origin, which never matches the server's Host, so it stays out.
+ */
+export function allowedOrigin(
+  origin: string | null | undefined,
+  host: string | null | undefined,
+  appUrl: string,
+  lanShare: boolean,
+): boolean {
+  if (!origin) return false;
+  try {
+    const url = new URL(origin);
+    return url.origin === new URL(appUrl).origin || (lanShare && !!host && url.host === host);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Backs the Hocuspocus hooks. WebSocket upgrades bypass Nest guards, so `authenticate` checks
  * the Origin, the bearer token (sent by the provider in its auth message) and the project role.
  */
@@ -79,10 +100,10 @@ export class CollabService {
     token: string;
     origin: string | null;
     host: string | null;
-    remoteIp?: string | undefined;
+    remoteIp: string;
     documentName: string;
   }): Promise<CollabSession> {
-    if (!input.origin || !this.allowedOrigin(input.origin, input.host)) {
+    if (!allowedOrigin(input.origin, input.host, this.config.APP_URL, this.config.LAN_SHARE)) {
       throw new ForbiddenException('Bad origin');
     }
     const { projectId, path } = this.parseDocumentName(input.documentName);
@@ -146,28 +167,5 @@ export class CollabService {
       await this.storage.open(projectId).write(path, text);
       return state.byteLength;
     });
-  }
-
-  private sameOrigin(origin: string): boolean {
-    try {
-      return new URL(origin).origin === new URL(this.config.APP_URL).origin;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * The app origin, or — only with LAN share on — the origin the peer loaded the app from, which
-   * equals the upgrade's own `Host` (same server on the LAN address, not a foreign site). A
-   * cross-site page keeps its own Origin, which never matches the server's Host, so it stays out.
-   */
-  private allowedOrigin(origin: string, host: string | null): boolean {
-    if (this.sameOrigin(origin)) return true;
-    if (!this.config.LAN_SHARE || !host) return false;
-    try {
-      return new URL(origin).host === host;
-    } catch {
-      return false;
-    }
   }
 }

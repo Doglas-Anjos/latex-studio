@@ -1,3 +1,6 @@
+/** The issuer of the synthetic user row backing a LAN-share access (a PIN guest). */
+export const LAN_ISSUER = 'lan';
+
 /** Public view of a user: safe to return from the API. */
 export interface User {
   id: string;

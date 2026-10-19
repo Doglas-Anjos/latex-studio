@@ -19,6 +19,7 @@ import Redis from 'ioredis';
 import { WebSocketServer } from 'ws';
 import { AppModule } from './app.module';
 import { IdentityService, peerIp, rateLimitKey } from './modules/auth/application/identity.service';
+import { allowedOrigin } from './modules/collab/application/collab.service';
 import { HOCUSPOCUS } from './modules/collab/infrastructure/hocuspocus.server';
 
 // Local development reads the repo's .env; containers get their environment from compose.
@@ -83,14 +84,6 @@ async function bootstrap() {
   // Origin is refused here already, before a socket is held open for it.
   const hocuspocus = app.get<Hocuspocus>(HOCUSPOCUS);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
-  const appOrigin = new URL(config.APP_URL).origin;
-  const safeHost = (url: string): string | null => {
-    try {
-      return new URL(url).host;
-    } catch {
-      return null;
-    }
-  };
   app
     .getHttpAdapter()
     .getInstance()
@@ -102,12 +95,15 @@ async function bootstrap() {
         request.headers['x-forwarded-for'] as string | undefined,
         request.socket.remoteAddress ?? '',
       );
-      const host = request.headers.host ?? '';
-      // Same origin as the app, or — with LAN share on — the LAN address the peer loaded it from
-      // (its Origin host equals this upgrade's Host: same server, not a foreign site).
-      const origin = request.headers.origin;
-      const lanOrigin = config.LAN_SHARE && !!origin && !!host && safeHost(origin) === host;
-      if (origin !== appOrigin && !lanOrigin) {
+      // Same origin as the app, or — with LAN share on — the LAN address the peer loaded it from.
+      if (
+        !allowedOrigin(
+          request.headers.origin,
+          request.headers.host,
+          config.APP_URL,
+          config.LAN_SHARE,
+        )
+      ) {
         return socket.end(
           'HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
         );
@@ -137,8 +133,7 @@ async function bootstrap() {
   // peer (IdentityService), so binding all interfaces is safe once that holds. Without a verifier
   // and without LAN share, stay loopback only ('localhost' binds 127.0.0.1 and ::1), which also
   // leaves a proxy in another container (Caddy) unable to reach it.
-  const verifier = config.AUTH_JWKS_URL || config.AUTH_SECRET;
-  await app.listen(config.API_PORT, verifier || config.LAN_SHARE ? '0.0.0.0' : 'localhost');
+  await app.listen(config.API_PORT, hasVerifier || config.LAN_SHARE ? '0.0.0.0' : 'localhost');
 }
 
 void bootstrap();

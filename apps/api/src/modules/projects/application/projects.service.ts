@@ -20,7 +20,7 @@ import {
 import { AuditService } from '../../audit/audit.service';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import { LanService } from '../../lan/application/lan.service';
-import type { User } from '../../users/domain/user';
+import { LAN_ISSUER, type User } from '../../users/domain/user';
 import {
   type Project,
   type ProjectEngine,
@@ -211,7 +211,7 @@ export class ProjectsService {
   async listForUser(user: User, options: ListProjectsOptions = {}): Promise<ListProjectsResult> {
     // A LAN guest owns and is a member of nothing, so the normal query is empty for them: list the
     // projects shared with them instead (always marked published, since access implies published).
-    if (user.issuer === 'lan' && this.lan) {
+    if (user.issuer === LAN_ISSUER && this.lan) {
       const ids = await this.lan.projectsFor(user.id);
       const found = await Promise.all(ids.map((id) => this.projects.findById(id)));
       const items = found
@@ -277,7 +277,9 @@ export class ProjectsService {
   private async assertProjectCap(owner: User) {
     // A LAN guest (joined by PIN) may only edit the project shared with them: never create or import
     // its own on the host. The single chokepoint for both create and import, so neither can leak.
-    if (owner.issuer === 'lan') throw new ForbiddenException('LAN guests cannot create projects');
+    if (owner.issuer === LAN_ISSUER) {
+      throw new ForbiddenException('LAN guests cannot create projects');
+    }
     if ((await this.projects.ownedIds(owner.id)).length >= this.config.MAX_PROJECTS_PER_USER) {
       throw new ConflictException('Project limit reached');
     }

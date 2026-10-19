@@ -16,7 +16,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FakeDocumentSync } from '../../collab/testing/fake-document-sync';
 import { ExportService } from '../../export/application/export.service';
 import { FilesService } from '../../files/application/files.service';
-import type { User } from '../../users/domain/user';
+import { LanService } from '../../lan/application/lan.service';
+import { LanTokenService } from '../../lan/application/lan-token.service';
+import { FakeLan } from '../../lan/testing/fake-lan.repository';
+import { LAN_ISSUER, type User } from '../../users/domain/user';
+import { FakeUsers } from '../../users/testing/fake-user.repository';
 import { FsProjectStorage } from '../infrastructure/fs-project-storage';
 import { FakeProjects } from '../testing/fake-project.repository';
 import { accountRoom, type UploadPart } from './project-files';
@@ -107,6 +111,42 @@ describe('ProjectsService', () => {
     await service.create(ana, 'One');
     await service.create(ana, 'Two');
     await expect(service.create(ana, 'Three')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('lists a LAN guest only the published projects shared with them, and never lets one create', async () => {
+    const repo = new FakeLan();
+    const tokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
+    const lan = new LanService(repo, new FakeUsers(), tokens);
+    const lock = new ProjectLock();
+    const withLan = new ProjectsService(
+      projects,
+      storage,
+      lock,
+      {} as AppConfig,
+      undefined,
+      sync,
+      lan,
+    );
+    const guest = { ...user('00000000-0000-4000-8000-0000000000b1', 'Gus'), issuer: LAN_ISSUER };
+    const shared = '00000000-0000-4000-8000-0000000000a1';
+    const unshared = '00000000-0000-4000-8000-0000000000a2';
+    const unpublished = '00000000-0000-4000-8000-0000000000a3';
+    for (const id of [shared, unshared, unpublished])
+      await projects.create({ id, name: id }, ana.id);
+    await lan.publish(shared);
+    await lan.publish(unshared);
+    await repo.createAccess(shared, guest.id, 'Gus', 'hash');
+    await repo.createAccess(unpublished, guest.id, 'Gus', 'hash');
+
+    const list = await withLan.listForUser(guest);
+    expect(list.items).toEqual([
+      expect.objectContaining({ id: shared, role: 'editor', published: true }),
+    ]);
+    expect(list.total).toBe(1);
+    await expect(withLan.create(guest, 'Mine')).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(withLan.import(guest, parts('Mine', { 'main.tex': 'x' }))).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('pages by timestamp and ID, filters on the server, and rejects mismatched cursors', async () => {
