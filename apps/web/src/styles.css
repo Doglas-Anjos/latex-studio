@@ -3908,6 +3908,26 @@ button.change-row-main:hover .change-name {
 .cm-changes-gutter .cm-line-authored {
   background: var(--author-color);
 }
+
+/* Full-screen session / PIN-entry screens (RequireAuth error, join page). */
+.session-screen {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1rem;
+  text-align: center;
+  padding: 1rem;
+}
+.session-screen .status-note {
+  max-width: 28rem;
+}
+.session-lang {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+}
 .cm-changedLine {
   background: color-mix(in srgb, var(--warn) 18%, transparent);
 }

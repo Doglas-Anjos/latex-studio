@@ -3,6 +3,7 @@ import { KeyRound } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { Button } from '../components/button';
+import { LanguageToggle } from '../components/language-toggle';
 import '../components/lan-share.css';
 import { useService } from '../di/service-provider';
 import { useLan } from '../i18n';
@@ -38,6 +39,9 @@ export function JoinPage() {
 
   return (
     <main className="join-page">
+      <div className="session-lang">
+        <LanguageToggle />
+      </div>
       <form className="join-card" onSubmit={submit}>
         <span className="join-icon" aria-hidden="true">
           <KeyRound size={24} />

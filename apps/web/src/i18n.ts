@@ -139,9 +139,11 @@ interface DashStrings {
   loading: string;
   loadError: string;
   guestEmpty: string;
-  sessionError: string;
+  needPin: string;
+  needLink: string;
+  serverError: string;
   tryAgain: string;
-  joinAgain: string;
+  enterPin: string;
   recent: string;
   open: string;
   /** Prefixes the project name in the "continue" button's aria-label. */
@@ -193,9 +195,13 @@ const DASH: Record<UiLang, DashStrings> = {
     loading: 'Carregando…',
     loadError: 'Não foi possível carregar os projetos.',
     guestEmpty: 'Nenhum projeto compartilhado com você ainda.',
-    sessionError: 'Não foi possível carregar sua sessão.',
+    needPin:
+      'Para abrir este projeto compartilhado, digite o PIN que o anfitrião te enviou. Se já tinha entrado, sua sessão expirou — digite o PIN de novo.',
+    needLink: 'Abra o link que o anfitrião compartilhou com você para digitar o PIN.',
+    serverError:
+      'Não foi possível falar com o servidor. Verifique se está na mesma rede e tente de novo.',
     tryAgain: 'Tentar de novo',
-    joinAgain: 'Entrar com o PIN',
+    enterPin: 'Digitar o PIN',
     recent: 'Último projeto',
     open: 'Abrir',
     continuePrefix: 'Continuar projeto',
@@ -245,9 +251,12 @@ const DASH: Record<UiLang, DashStrings> = {
     loading: 'Loading…',
     loadError: 'Could not load the projects.',
     guestEmpty: 'No projects have been shared with you yet.',
-    sessionError: 'Could not load your session.',
+    needPin:
+      'To open this shared project, enter the PIN your host sent you. If you were already in, your session expired — just enter the PIN again.',
+    needLink: 'Open the link your host shared with you to enter the PIN.',
+    serverError: "Couldn't reach the server. Make sure you're on the same network, then try again.",
     tryAgain: 'Try again',
-    joinAgain: 'Join with a PIN',
+    enterPin: 'Enter the PIN',
     recent: 'Last project',
     open: 'Open',
     continuePrefix: 'Continue project',
@@ -296,9 +305,13 @@ const DASH: Record<UiLang, DashStrings> = {
     loading: 'Cargando…',
     loadError: 'No se pudieron cargar los proyectos.',
     guestEmpty: 'Aún no se ha compartido ningún proyecto contigo.',
-    sessionError: 'No se pudo cargar tu sesión.',
+    needPin:
+      'Para abrir este proyecto compartido, escribe el PIN que te envió el anfitrión. Si ya habías entrado, tu sesión caducó — escribe el PIN otra vez.',
+    needLink: 'Abre el enlace que compartió contigo el anfitrión para escribir el PIN.',
+    serverError:
+      'No se pudo contactar con el servidor. Comprueba que estás en la misma red e inténtalo de nuevo.',
     tryAgain: 'Intentar de nuevo',
-    joinAgain: 'Entrar con un PIN',
+    enterPin: 'Escribir el PIN',
     recent: 'Último proyecto',
     open: 'Abrir',
     continuePrefix: 'Continuar proyecto',
