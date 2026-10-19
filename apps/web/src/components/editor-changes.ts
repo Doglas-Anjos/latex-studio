@@ -4,7 +4,6 @@
 import { Chunk } from '@codemirror/merge';
 import { type Extension, StateEffect, StateField, Text } from '@codemirror/state';
 import { type EditorView, GutterMarker, gutter, ViewPlugin } from '@codemirror/view';
-// Function-level import only (both used inside lineMarker); the modules form a benign cycle.
 import { authorAt, lineAuthorsField } from './editor-authors';
 import { peerSlot } from './presence';
 

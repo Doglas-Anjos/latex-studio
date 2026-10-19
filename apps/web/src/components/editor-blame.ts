@@ -78,9 +78,9 @@ const cont = new (class extends GutterMarker {
 })();
 
 /**
- * Who is editing a line right now, before any commit: the live author's first name + colour at the
- * start of each run, a coloured bar on its other lines. Overrides the committed blame for that line,
- * so an unsaved change shows who made it instead of a blank "não salvo".
+ * Who changed a line since the last commit: the author's full name + colour at the start of each
+ * run, a coloured bar on its other lines. Overrides the committed blame for that line, so an unsaved
+ * change shows who made it instead of a blank "não salvo".
  */
 class LiveMarker extends GutterMarker {
   constructor(
@@ -97,7 +97,8 @@ class LiveMarker extends GutterMarker {
   override toDOM() {
     const el = document.createElement('span');
     el.className = 'cm-blame-run cm-blame-live';
-    if (this.author.color) el.style.setProperty('--blame-color', this.author.color);
+    // A CSS var, not a resolved hex, so the colour follows a theme switch (same slot as the cursor).
+    el.style.setProperty('--blame-color', `var(--peer-${peerSlot(this.author.id) + 1})`);
     if (this.head) {
       // Full name (not just the first word): LAN aliases often share one, e.g. "Teste 1"/"Teste 2".
       el.textContent = `${this.author.name || '—'} · agora`;

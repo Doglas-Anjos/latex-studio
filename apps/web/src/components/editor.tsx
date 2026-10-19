@@ -1,14 +1,7 @@
 import { indentSelection } from '@codemirror/commands';
 import { syntaxHighlighting } from '@codemirror/language';
 import { diff } from '@codemirror/merge';
-import {
-  Compartment,
-  EditorSelection,
-  EditorState,
-  type Extension,
-  Prec,
-  type Transaction,
-} from '@codemirror/state';
+import { Compartment, EditorSelection, EditorState, type Extension, Prec } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { basicSetup } from 'codemirror';
@@ -26,7 +19,6 @@ import { type Comment, CommentServiceToken, type NewComment } from '../services/
 import { FileServiceToken } from '../services/file.service';
 import { HistoryServiceToken } from '../services/history.service';
 import { IdentityToken } from '../services/identity';
-import { effectiveToken } from '../services/lan-session';
 import type { Role } from '../services/project.service';
 import { type ReferenceIndex, ReferenceServiceToken } from '../services/reference.service';
 import { SpellcheckServiceToken } from '../services/spellcheck.service';
@@ -36,9 +28,15 @@ import { Button } from './button';
 import { type CollabSession, dropSession, isOpenSession, openSession } from './collab-sessions';
 import { commentGutter } from './comment-gutter';
 import { CommentMenu } from './comment-menu';
-import { localAuthor, registerAuthor, seedPastAuthors, trackRemoteAuthors } from './editor-authors';
+import {
+  isLocalEdit,
+  localAuthor,
+  registerAuthor,
+  seedPastAuthors,
+  trackRemoteAuthors,
+} from './editor-authors';
 import { blameGutter, blameVisible, setBlame } from './editor-blame';
-import { changeGutter, DIFF_LIMITS, setChangeBase } from './editor-changes';
+import { changeGutter, DIFF_LIMITS, lineClasses, setChangeBase } from './editor-changes';
 import {
   type ComposerRect,
   type ComposerTarget,
@@ -83,10 +81,6 @@ const SCOPE_ICON: Record<CommentScope, typeof Type> = {
   line: Rows,
   section: Heading,
 };
-
-/** Typing, deleting, undo/redo by this user: remote updates and formatting do not count. */
-export const isLocalEdit = (tr: Transaction) =>
-  ['input', 'delete', 'undo', 'redo'].some((e) => tr.isUserEvent(e));
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
@@ -173,18 +167,18 @@ function AuthImage({ projectId, path, zoom }: { projectId: string; path: string;
   ) : null;
 }
 
+type Me = { id: string; name?: string | null; email: string };
+
+/** How this user is shown on their own lines and cursor. */
+const toAuthor = (me: Me) => ({ id: me.id, name: me.name || me.email });
+
 /** The name and colour collaborators see on this client's cursor. */
 function setPresence(
   awareness: { setLocalStateField: (field: string, value: unknown) => void },
-  me: { id: string; name?: string | null; email: string },
+  me: Me,
 ) {
   const color = peerColor(me.id);
-  awareness.setLocalStateField('user', {
-    id: me.id,
-    name: me.name || me.email,
-    color,
-    colorLight: `${color}33`,
-  });
+  awareness.setLocalStateField('user', { ...toAuthor(me), color, colorLight: `${color}33` });
 }
 
 function revealLine(view: EditorView, path: string) {
@@ -262,10 +256,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   });
   const queryClient = useQueryClient();
   const ytextRef = useRef<Y.Text | null>(null);
-  const docRef = useRef<Y.Doc | null>(null);
-  // Reconfigured when /me resolves, so this user's own edits get attributed even if the editor
-  // mounted before /me was known.
-  const localAuthorCmp = useRef<Compartment | null>(null);
+  // Re-attributes the uncommitted lines of the open file (set by the main effect).
+  const seedAuthorsRef = useRef<(() => void) | null>(null);
   const editorBoxRef = useRef<HTMLDivElement | null>(null);
   // True while the popup's own textarea has focus.
   const composingRef = useRef(false);
@@ -372,7 +364,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     const session = openSession(
       projectId,
       path,
-      async () => (await effectiveToken(identity)) ?? '',
+      async () => (await identity.token()) ?? '',
       async (doc) => (await refusal(doc)) !== null,
     );
     const { doc, provider, ytext, undo } = session;
@@ -383,19 +375,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     // Own cursor label from here too: a role change re-runs this effect but not the [me] one.
     if (provider.awareness && meRef.current) setPresence(provider.awareness, meRef.current);
     ytextRef.current = ytext;
-    docRef.current = doc;
     const wrap = new Compartment();
     const ro = new Compartment();
-    const authorCmp = new Compartment();
-    localAuthorCmp.current = authorCmp;
-    const meAuthor = () =>
-      meRef.current
-        ? {
-            id: meRef.current.id,
-            name: meRef.current.name || meRef.current.email,
-            color: peerColor(meRef.current.id),
-          }
-        : null;
     setFrozen(null);
     const wrapping = (on: boolean) => (on ? EditorView.lineWrapping : []);
     const isTex = path.endsWith('.tex');
@@ -531,7 +512,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             : [],
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
-          authorCmp.of(localAuthor.of(meAuthor())),
+          localAuthor.of(() => (meRef.current ? toAuthor(meRef.current) : null)),
           blameGutter(),
           commentExtensions,
           EditorView.updateListener.of((u) => {
@@ -542,7 +523,14 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             if (!u.docChanged) return;
             // A pending cross-file jump reveals once Yjs has flushed enough lines into the doc.
             revealLine(u.view, path);
-            if (u.transactions.some(isLocalEdit)) useWorkspaceStore.getState().bumpDocVersion();
+            if (u.transactions.some(isLocalEdit)) {
+              useWorkspaceStore.getState().bumpDocVersion();
+              // Who this client is, for attributing its unsaved lines in later sessions. Only once
+              // this user has actually typed: never from a read-only connection (the server never
+              // acknowledges that write) and never on open (it would count as an edit of the file).
+              if (!readOnly && meRef.current)
+                registerAuthor(doc, meRef.current.id, meRef.current.name ?? '');
+            }
             clearTimeout(wordTimer);
             wordTimer = setTimeout(
               () => useWorkspaceStore.getState().setWordCount(approxWords(u.state.doc.toString())),
@@ -607,17 +595,20 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
         useWorkspaceStore.getState().goToLine(path, c.line);
       }
     };
-    // A "go to line" request may arrive before or after the first sync. Also record who this client
-    // is in the doc's shared authors map, so its edits can be attributed now and in later sessions.
+    // Uncommitted lines → the author who wrote them, from the shared authors map. Runs on sync and
+    // when the saved version (re)loads; a no-op until that base is known.
+    seedAuthorsRef.current = () => {
+      const base = changeBase.current;
+      if (base === null) return;
+      const changed = new Set<number>();
+      for (const [n, cls] of lineClasses(base, view.state.doc.toString()))
+        if (cls !== 'deleted') changed.add(n);
+      seedPastAuthors(view, ytext, doc, changed);
+    };
+    // A "go to line" request may arrive before or after the first sync.
     const onSynced = () => {
       revealLine(view, path);
-      if (meRef.current) {
-        registerAuthor(doc, {
-          id: meRef.current.id,
-          name: meRef.current.name || meRef.current.email,
-          color: peerColor(meRef.current.id),
-        });
-      }
+      seedAuthorsRef.current?.();
     };
     provider.on('synced', onSynced);
     const unsubWrap = useSettingsStore.subscribe((s, prev) => {
@@ -637,12 +628,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           );
     };
     awareness?.on('change', onAwareness);
-    // Live remote edits → their author (local edits are attributed by the field via userEvent).
+    // Live remote edits → their author (this user's own edits are attributed by the field).
     const stopAuthors = trackRemoteAuthors(view, ytext, awareness);
-    // Past-session unsaved lines → seeded from the shared authors map; re-seed when a peer registers.
-    const reseedAuthors = () => seedPastAuthors(view, ytext, doc, peerColor, changeBase);
-    const authorsMap = doc.getMap('authors');
-    authorsMap.observe(reseedAuthors);
     // The server refuses or drops a document whose file was deleted or renamed (here or by a
     // collaborator), or that is too large: stop reconnecting and keep the text visible but frozen.
     let closed = false;
@@ -671,7 +658,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       unsubWrap();
       awareness?.off('change', onAwareness);
       stopAuthors();
-      authorsMap.unobserve(reseedAuthors);
+      seedAuthorsRef.current = null;
       useWorkspaceStore.getState().setPeers([]);
       clearTimeout(wordTimer);
       useWorkspaceStore.getState().setEditorCommands(null);
@@ -680,7 +667,6 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       viewRef.current = null;
       providerRef.current = null;
       ytextRef.current = null;
-      docRef.current = null;
       composingRef.current = false;
       setIcon(null);
       setPopup(null);
@@ -717,9 +703,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     const text = baseText ?? null;
     changeBase.current = text;
     viewRef.current?.dispatch({ effects: setChangeBase.of(text) });
-    // Now that the committed base is known, attribute the lines that differ from it to their authors.
-    if (viewRef.current && ytextRef.current && docRef.current)
-      seedPastAuthors(viewRef.current, ytextRef.current, docRef.current, peerColor, changeBase);
+    // A new saved version (load, or after a commit): re-attribute only what still differs from it.
+    seedAuthorsRef.current?.();
   }, [baseText]);
 
   const activeBlame = blameVisible(blameOn, blame) ? (blame ?? null) : null;
@@ -734,16 +719,10 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     viewRef.current?.dispatch({ effects: setReferenceIndex.of(null) });
   }, [refIndex]);
 
-  // Own cursor label and self-attribution; separate so a late /me answer does not rebuild the editor.
+  // Own cursor label; separate so a late /me answer does not rebuild the editor.
   useEffect(() => {
     const awareness = providerRef.current?.awareness;
     if (awareness && me) setPresence(awareness, me);
-    if (viewRef.current && localAuthorCmp.current) {
-      const author = me ? { id: me.id, name: me.name || me.email, color: peerColor(me.id) } : null;
-      viewRef.current.dispatch({
-        effects: localAuthorCmp.current.reconfigure(localAuthor.of(author)),
-      });
-    }
   }, [me]);
 
   // Rebuild highlights when comments change.

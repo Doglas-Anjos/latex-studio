@@ -1,27 +1,32 @@
 import {
+  type EditorState,
   Facet,
   type Range,
   RangeSet,
   RangeValue,
   StateEffect,
   StateField,
-  Transaction,
+  type Transaction,
+  type TransactionSpec,
 } from '@codemirror/state';
-import type { EditorView } from '@codemirror/view';
 import type * as Y from 'yjs';
-// Function-level import only (used inside seedPastAuthors); the modules form a benign cycle.
-import { lineClasses } from './editor-changes';
 
-/** Who last touched a line, live (before any commit): the identity, so it has a stable colour. */
+/** The part of EditorView used here (a plain object in tests). */
+type ViewLike = { readonly state: EditorState; dispatch(spec: TransactionSpec): void };
+
+/** Who last touched a line before any commit. The colour is derived from `id` where it is drawn. */
 export interface LineAuthor {
   id: string;
   name: string;
-  color: string;
 }
 
-/** The local user, so this editor can attribute its own edits; null until /me is known. */
-export const localAuthor = Facet.define<LineAuthor | null, LineAuthor | null>({
-  combine: (values) => values.find((v) => v) ?? null,
+/** Typing, deleting, drag-moving, undo/redo by this user: remote updates and formatting do not. */
+export const isLocalEdit = (tr: Transaction) =>
+  ['input', 'delete', 'move', 'undo', 'redo'].some((e) => tr.isUserEvent(e));
+
+/** Reads the local user, so this editor attributes its own edits (a getter: /me may change). */
+export const localAuthor = Facet.define<() => LineAuthor | null, (() => LineAuthor | null) | null>({
+  combine: (values) => values[0] ?? null,
 });
 
 /** Attributes the lines spanning [from, to] to `author` (null clears them). */
@@ -40,14 +45,10 @@ class AuthorMark extends RangeValue {
   }
 }
 
-// A local edit by this user (typing, pasting, deleting, dragging) — not a remote sync or a
-// programmatic change, which carry no userEvent.
-const LOCAL_EDIT = /^(input|delete|move)/;
-
 /**
  * Per-line last editor. One point mark at each attributed line's start, remapped through every edit
- * so attribution follows the text. Fed by local user edits (this user, via userEvent) and by
- * `setLineAuthor` effects (remote peers and the past-session seed). The newest edit of a line wins.
+ * so attribution follows the text. Fed by this user's own edits and by `setLineAuthor` effects
+ * (remote peers, and the seed of earlier sessions). The newest edit of a line wins.
  */
 export const lineAuthorsField = StateField.define<RangeSet<AuthorMark>>({
   create: () => RangeSet.empty,
@@ -64,23 +65,20 @@ export const lineAuthorsField = StateField.define<RangeSet<AuthorMark>>({
     };
     for (const e of tr.effects)
       if (e.is(setLineAuthor)) mark(e.value.from, e.value.to, e.value.author);
-    if (tr.docChanged) {
-      const ue = tr.annotation(Transaction.userEvent);
-      const me = ue && LOCAL_EDIT.test(ue) ? tr.state.facet(localAuthor) : null;
+    if (tr.docChanged && isLocalEdit(tr)) {
+      const me = tr.state.facet(localAuthor)?.();
       if (me) tr.changes.iterChangedRanges((_fa, _ta, fromB, toB) => mark(fromB, toB, me));
     }
     if (byPos.size === 0) return set;
     const positions = [...byPos.keys()].sort((a, b) => a - b);
-    const first = positions[0] ?? 0;
-    const last = positions[positions.length - 1] ?? 0;
     const add: Range<AuthorMark>[] = [];
     for (const pos of positions) {
       const author = byPos.get(pos);
       if (author) add.push(new AuthorMark(author).range(pos));
     }
     return set.update({
-      filterFrom: first,
-      filterTo: last,
+      filterFrom: positions[0] ?? 0,
+      filterTo: positions[positions.length - 1] ?? 0,
       filter: (from) => !byPos.has(from),
       add,
     });
@@ -97,7 +95,11 @@ export function authorAt(set: RangeSet<AuthorMark>, pos: number): LineAuthor | n
   return out;
 }
 
-/** The one client whose clock advanced in a (remote) transaction, or null. */
+/**
+ * The client whose clock advanced in a remote transaction, or null.
+ * ponytail: a batched transaction (a reconnect replaying several peers) is credited to the first;
+ * split the delta per struct if that misattribution ever matters.
+ */
 function advancedClient(tr: Y.Transaction): number | null {
   for (const [client, clock] of tr.afterState) {
     if ((tr.beforeState.get(client) ?? 0) < clock) return client;
@@ -107,54 +109,72 @@ function advancedClient(tr: Y.Transaction): number | null {
 
 /**
  * Attributes remote edits to their author live: on each remote Y.Text change, find the peer whose
- * clock advanced, map it to their awareness identity, and mark the changed span. Local edits are
- * handled by the field itself (via userEvent), so those are skipped here.
+ * clock advanced, take their identity from awareness, and mark each changed span separately, so a
+ * multi-place edit marks only those lines. Display only: the server rebuilds the awareness user
+ * from the token but not per client id, so an editor could claim another peer's client id; commits
+ * and history take the author from the verified session, never from here.
+ * ponytail: a delete-only remote edit advances no clock (Yjs records no deleter), so it stays
+ * unattributed live; the commit still credits it. Send the deleter in awareness if that matters.
  */
 export function trackRemoteAuthors(
-  view: EditorView,
+  view: ViewLike,
   ytext: Y.Text,
-  awareness: { getStates(): Map<number, { user?: Partial<LineAuthor> }> } | null | undefined,
+  awareness:
+    | { getStates(): Map<number, { user?: { id?: unknown; name?: unknown } }> }
+    | null
+    | undefined,
 ): () => void {
   const observer = (event: Y.YTextEvent, tr: Y.Transaction) => {
     if (tr.local || !awareness) return;
     const client = advancedClient(tr);
     if (client == null) return;
-    const u = awareness.getStates().get(client)?.user;
-    if (!u?.id) return;
-    const author: LineAuthor = { id: u.id, name: u.name ?? '', color: u.color ?? '' };
+    const author = toLineAuthor(awareness.getStates().get(client)?.user);
+    if (!author) return;
+    const effects: StateEffect<unknown>[] = [];
     let index = 0;
-    let from = -1;
-    let to = 0;
     for (const op of event.delta) {
       if (op.retain != null) index += op.retain;
       else if (op.insert != null) {
-        if (from < 0) from = index;
-        index += typeof op.insert === 'string' ? op.insert.length : 1;
-        to = index;
+        const len = typeof op.insert === 'string' ? op.insert.length : 1;
+        effects.push(setLineAuthor.of({ from: index, to: index + len, author }));
+        index += len;
       } else if (op.delete != null) {
-        if (from < 0) from = index;
-        to = Math.max(to, index);
+        effects.push(setLineAuthor.of({ from: index, to: index, author }));
       }
     }
-    if (from < 0) return;
-    const span = { from, to: Math.max(to, from), author };
-    queueMicrotask(() => view.dispatch({ effects: setLineAuthor.of(span) }));
+    if (effects.length) queueMicrotask(() => view.dispatch({ effects }));
   };
   ytext.observe(observer);
   return () => ytext.unobserve(observer);
 }
 
 const AUTHORS = 'authors';
-type AuthorEntry = { userId: string; name: string };
 
 /**
- * Record this client's identity in the doc's shared `authors` map (clientId → identity). It syncs to
- * peers and persists with the document, so a later session can attribute this client's past edits.
- * ponytail: a client could write a fake name here (trusted-LAN feature); the server could overwrite
- * each entry from the authenticated identity if that ever needs enforcing.
+ * A LineAuthor from untrusted data (the shared map, awareness), or null when malformed: any editor
+ * can write the map, so one bad entry must not throw for everyone who opens the file.
  */
-export function registerAuthor(doc: Y.Doc, me: LineAuthor): void {
-  doc.getMap<AuthorEntry>(AUTHORS).set(String(doc.clientID), { userId: me.id, name: me.name });
+function toLineAuthor(v: unknown): LineAuthor | null {
+  const e = v as { id?: unknown; userId?: unknown; name?: unknown } | null | undefined;
+  const id = e?.userId ?? e?.id;
+  if (typeof id !== 'string' || id.length === 0 || id.length > 64) return null;
+  return { id, name: typeof e?.name === 'string' ? e.name.slice(0, 80) : '' };
+}
+
+/**
+ * Record this client's identity in the doc's shared `authors` map (clientId → identity), so a later
+ * session can attribute this client's unsaved edits. Call it on the first local edit only: a write
+ * from a read-only connection is never acknowledged, and a write on open would count as an edit.
+ * Stores the display name, never the e-mail (the map persists with the doc for every later reader).
+ * ponytail: any editor can write any entry here (in FasorX too), so the gutter name is a hint that
+ * git history does not depend on; tying clientIds to their connection server-side would close it.
+ */
+export function registerAuthor(doc: Y.Doc, id: string, name: string): void {
+  const map = doc.getMap<{ userId: string; name: string }>(AUTHORS);
+  const key = String(doc.clientID);
+  const cur = map.get(key);
+  if (cur?.userId === id && cur.name === name) return;
+  map.set(key, { userId: id, name });
 }
 
 interface YItem {
@@ -164,51 +184,63 @@ interface YItem {
   id: { client: number };
   right: YItem | null;
 }
-/** A per-char client-id array aligned with the text (who wrote each character). */
-function clientsPerChar(ytext: Y.Text): number[] {
-  const perChar: number[] = [];
+/** The client that wrote the char at each of `offsets` (ascending), walking the Yjs items once. */
+function clientsAt(ytext: Y.Text, offsets: number[]): Map<number, number> {
+  const out = new Map<number, number>();
   // Yjs item linked list (internal, stable in 13.x): each countable, non-deleted item covers
   // `length` chars written by one client, in document order — so it aligns with the text.
   let item = (ytext as unknown as { _start: YItem | null })._start;
-  while (item) {
+  let index = 0;
+  let i = 0;
+  while (item && i < offsets.length) {
     if (!item.deleted && item.countable) {
-      for (let i = 0; i < item.length; i++) perChar.push(item.id.client);
+      const end = index + item.length;
+      while (i < offsets.length && (offsets[i] as number) < end) {
+        out.set(offsets[i] as number, item.id.client);
+        i++;
+      }
+      index = end;
     }
     item = item.right;
   }
-  return perChar;
+  return out;
 }
 
 /**
- * Attributes lines edited in earlier sessions (shown as "unsaved" with no live author yet): walks
- * the Yjs items for who wrote each char, resolved through the shared `authors` map, for the lines
- * that differ from the committed base. Only runs once the base is known, so committed lines keep the
- * git blame. Live edits are layered on top by the field itself and `trackRemoteAuthors`.
+ * Re-attributes the uncommitted lines (`changed`, 1-based line numbers that differ from the saved
+ * version) from who wrote their last character, resolved through the shared `authors` map, and
+ * clears every other line, so a save or an edit typed back to the saved text drops its live mark
+ * and the git blame shows again.
  */
 export function seedPastAuthors(
-  view: EditorView,
+  view: ViewLike,
   ytext: Y.Text,
   doc: Y.Doc,
-  color: (userId: string) => string,
-  base: { current: string | null },
+  changed: ReadonlySet<number>,
 ): void {
-  if (base.current === null) return;
   const authors = new Map<number, LineAuthor>();
-  doc.getMap<AuthorEntry>(AUTHORS).forEach((v, k) => {
-    if (v?.userId)
-      authors.set(Number(k), { id: v.userId, name: v.name ?? '', color: color(v.userId) });
+  doc.getMap(AUTHORS).forEach((v, k) => {
+    const a = toLineAuthor(v);
+    if (a) authors.set(Number(k), a);
   });
-  if (authors.size === 0) return;
   const text = view.state.doc;
-  const changed = lineClasses(base.current, text.toString());
-  const perChar = clientsPerChar(ytext);
-  const effects: StateEffect<unknown>[] = [];
-  for (let n = 1; n <= text.lines; n++) {
-    if (!changed.has(n)) continue;
-    const line = text.line(n);
-    if (line.length === 0) continue;
-    const author = authors.get(perChar[line.to - 1] ?? -1);
-    if (author) effects.push(setLineAuthor.of({ from: line.from, to: line.from, author }));
+  const lines = [...changed]
+    .filter((n) => n >= 1 && n <= text.lines)
+    .sort((a, b) => a - b)
+    .map((n) => text.line(n))
+    .filter((l) => l.length > 0);
+  const who = authors.size
+    ? clientsAt(
+        ytext,
+        lines.map((l) => l.to - 1),
+      )
+    : new Map();
+  const effects: StateEffect<unknown>[] = [
+    setLineAuthor.of({ from: 0, to: text.length, author: null }),
+  ];
+  for (const l of lines) {
+    const author = authors.get(who.get(l.to - 1) ?? -1);
+    if (author) effects.push(setLineAuthor.of({ from: l.from, to: l.from, author }));
   }
-  if (effects.length) view.dispatch({ effects });
+  view.dispatch({ effects });
 }

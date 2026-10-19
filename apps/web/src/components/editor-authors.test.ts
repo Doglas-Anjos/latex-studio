@@ -1,54 +1,133 @@
-import { EditorState } from '@codemirror/state';
+import { EditorState, type TransactionSpec } from '@codemirror/state';
 import { describe, expect, it } from 'vitest';
-import { authorAt, lineAuthorsField, localAuthor, setLineAuthor } from './editor-authors';
+import * as Y from 'yjs';
+import {
+  authorAt,
+  lineAuthorsField,
+  localAuthor,
+  registerAuthor,
+  seedPastAuthors,
+  setLineAuthor,
+  trackRemoteAuthors,
+} from './editor-authors';
 
-const me = { id: 'u1', name: 'Me', color: '#111111' };
-const bob = { id: 'u2', name: 'Bob', color: '#222222' };
+const me = { id: 'u1', name: 'Me' };
+const bob = { id: 'u2', name: 'Bob' };
 
 const make = (doc: string) =>
-  EditorState.create({ doc, extensions: [localAuthor.of(me), lineAuthorsField] });
+  EditorState.create({ doc, extensions: [localAuthor.of(() => me), lineAuthorsField] });
+
+/** A stand-in for EditorView: just `state` and `dispatch`. */
+const fakeView = (doc: string) => {
+  let state = make(doc);
+  return {
+    get state() {
+      return state;
+    },
+    set state(s: EditorState) {
+      state = s;
+    },
+    dispatch: (spec: TransactionSpec) => {
+      state = state.update(spec).state;
+    },
+  };
+};
+const authorOfLine = (state: EditorState, n: number) =>
+  authorAt(state.field(lineAuthorsField), state.doc.line(n).from)?.id ?? null;
+
+/** Two peers that see each other's updates. */
+const pair = (text: string) => {
+  const a = new Y.Doc();
+  const b = new Y.Doc();
+  a.getText('content').insert(0, text);
+  const sync = () => {
+    Y.applyUpdate(b, Y.encodeStateAsUpdate(a));
+    Y.applyUpdate(a, Y.encodeStateAsUpdate(b));
+  };
+  sync();
+  return { a, b, sync };
+};
 
 describe('lineAuthorsField', () => {
   it('attributes a local user edit to the local user, only on the edited line', () => {
     let s = make('aaa\nbbb\nccc');
     s = s.update({ changes: { from: 8, insert: 'X' }, userEvent: 'input.type' }).state; // line 3
-    const set = s.field(lineAuthorsField);
-    expect(authorAt(set, s.doc.line(3).from)?.id).toBe('u1');
-    expect(authorAt(set, s.doc.line(1).from)).toBeNull();
-    expect(authorAt(set, s.doc.line(2).from)).toBeNull();
+    expect(authorOfLine(s, 3)).toBe('u1');
+    expect(authorOfLine(s, 1)).toBeNull();
   });
 
-  it('attributes a remote edit via the effect, and the newest edit of a line wins', () => {
+  it('ignores programmatic and remote edits (no userEvent)', () => {
+    let s = make('a');
+    s = s.update({ changes: { from: 1, insert: 'b' } }).state;
+    expect(authorOfLine(s, 1)).toBeNull();
+  });
+
+  it('lets the newest edit of a line win, and follows the text as lines shift', () => {
     let s = make('aaa\nbbb\nccc');
     const l2 = s.doc.line(2);
     s = s.update({ effects: setLineAuthor.of({ from: l2.from, to: l2.to, author: bob }) }).state;
-    expect(authorAt(s.field(lineAuthorsField), s.doc.line(2).from)?.id).toBe('u2');
-    s = s.update({
-      changes: { from: s.doc.line(2).from, insert: 'Z' },
-      userEvent: 'input.type',
-    }).state;
-    expect(authorAt(s.field(lineAuthorsField), s.doc.line(2).from)?.id).toBe('u1');
+    expect(authorOfLine(s, 2)).toBe('u2');
+    s = s.update({ changes: { from: l2.from, insert: 'Z' }, userEvent: 'input.type' }).state;
+    expect(authorOfLine(s, 2)).toBe('u1');
+    s = s.update({ changes: { from: 0, insert: 'top\n' } }).state;
+    expect(authorOfLine(s, 3)).toBe('u1');
+  });
+});
+
+describe('seedPastAuthors', () => {
+  it('credits each changed line to whoever wrote its last character, and clears the rest', () => {
+    const { a, b, sync } = pair('aaa\nbbb\nccc');
+    const yb = b.getText('content');
+    yb.insert(7, 'X'); // Bob appends to line 2
+    registerAuthor(a, 'id-a', 'Ana');
+    registerAuthor(b, 'id-b', 'Bob');
+    sync();
+    const ya = a.getText('content');
+    const view = fakeView(ya.toString());
+    view.dispatch({ effects: setLineAuthor.of({ from: 0, to: 0, author: me }) }); // a stale mark
+    seedPastAuthors(view, ya, a, new Set([2]));
+    expect(authorOfLine(view.state, 2)).toBe('id-b');
+    expect(authorOfLine(view.state, 1)).toBeNull(); // not changed: the stale mark is gone
   });
 
-  it('follows the text when earlier lines shift it down', () => {
-    let s = make('aaa\nbbb\nccc');
-    s = s.update({ changes: { from: 8, insert: 'X' }, userEvent: 'input.type' }).state; // line 3 -> me
-    s = s.update({ changes: { from: 4, insert: 'mid\n' } }).state; // programmatic insert above it
-    // The originally-edited line is now line 4; the attribution moved with it.
-    expect(authorAt(s.field(lineAuthorsField), s.doc.line(4).from)?.id).toBe('u1');
+  it('survives a malformed entry any editor could write to the shared map', () => {
+    const { a } = pair('aaa');
+    a.getMap('authors').set('1', { userId: 1 });
+    a.getMap('authors').set(String(a.clientID), { userId: { x: 1 }, name: 5 });
+    const view = fakeView('aaa');
+    expect(() => seedPastAuthors(view, a.getText('content'), a, new Set([1]))).not.toThrow();
+    expect(authorOfLine(view.state, 1)).toBeNull();
   });
 
-  it('ignores programmatic (non-user) edits with no author', () => {
-    let s = make('a');
-    s = s.update({ changes: { from: 1, insert: 'b' } }).state; // no userEvent
-    expect(authorAt(s.field(lineAuthorsField), s.doc.line(1).from)).toBeNull();
+  it('registers once: a repeat with the same identity does not write the map again', () => {
+    const { a } = pair('aaa');
+    let writes = 0;
+    a.getMap('authors').observe(() => writes++);
+    registerAuthor(a, 'id-a', 'Ana');
+    registerAuthor(a, 'id-a', 'Ana');
+    expect(writes).toBe(1);
   });
+});
 
-  it('clears a line when attributed to null', () => {
-    let s = make('aaa');
-    s = s.update({ changes: { from: 0, insert: 'X' }, userEvent: 'input.type' }).state;
-    expect(authorAt(s.field(lineAuthorsField), 0)?.id).toBe('u1');
-    s = s.update({ effects: setLineAuthor.of({ from: 0, to: 0, author: null }) }).state;
-    expect(authorAt(s.field(lineAuthorsField), 0)).toBeNull();
+describe('trackRemoteAuthors', () => {
+  it('marks only the lines a remote edit touched, not everything in between', async () => {
+    const { a, b } = pair('aaa\nbbb\nccc\nddd');
+    const ya = a.getText('content');
+    const yb = b.getText('content');
+    const view = fakeView(ya.toString());
+    const awareness = { getStates: () => new Map([[b.clientID, { user: bob }]]) };
+    const stop = trackRemoteAuthors(view, ya, awareness);
+    b.transact(() => {
+      yb.insert(3, 'X'); // end of line 1
+      yb.insert(yb.length, 'Y'); // end of line 4
+    });
+    Y.applyUpdate(a, Y.encodeStateAsUpdate(b));
+    view.state = make(ya.toString()); // what y-codemirror would have applied
+    await Promise.resolve();
+    expect(authorOfLine(view.state, 1)).toBe('u2');
+    expect(authorOfLine(view.state, 4)).toBe('u2');
+    expect(authorOfLine(view.state, 2)).toBeNull();
+    expect(authorOfLine(view.state, 3)).toBeNull();
+    stop();
   });
 });
