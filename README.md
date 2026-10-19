@@ -10,7 +10,7 @@ Mantém o essencial: edição simultânea (Yjs, com cursores nomeados), comentá
 
 A interface segue o modelo do VS Code: barra de atividades, sidebar redimensionável, abas, painel de compilação e barra de status. "Mudanças" mostra o que mudou desde a última versão salva (marcas na margem, lista de arquivos, diff lado a lado), o histórico compara versões, o botão Blame mostra quem alterou cada linha, e Auto-indent formata com `latexindent` (no worker) ou com o indentador do editor quando ele não existe. Tema claro/escuro e cores de sintaxe são editáveis pelo usuário (engrenagem), guardados no navegador.
 
-**Não tem login próprio.** Quem autentica é a aplicação na frente (FasorX): ela emite um JWT curto para o navegador, que o apresenta em `Authorization: Bearer`, e a API só verifica a assinatura. Localmente, sem verificador configurado, tudo roda como um usuário local, sem cadastro; nesse modo a API só escuta em localhost e não sobe com `NODE_ENV=production`, então um servidor (Docker Compose incluso) sempre precisa das variáveis `AUTH_*`.
+**Não tem login próprio.** Quem autentica é a aplicação na frente (FasorX): ela emite um JWT curto para o navegador, que o apresenta em `Authorization: Bearer`, e a API só verifica a assinatura. Localmente, sem verificador configurado, tudo roda como um usuário local, sem cadastro; nesse modo a API só escuta em localhost (salvo com o [compartilhamento em rede local](#compartilhar-um-projeto-na-rede-local-lan) ligado) e não sobe com `NODE_ENV=production`, então um servidor (Docker Compose incluso) sempre precisa das variáveis `AUTH_*`.
 
 Arquitetura completa em [docs/architecture.md](docs/architecture.md).
 
@@ -104,6 +104,67 @@ o `bibtex` não resolve — o efeito é a bibliografia (`.bib`/`.bst`) não ser 
 saírem indefinidas. Em produção (contêiner Linux) isso não acontece.
 
 Verificações: `pnpm lint`, `pnpm typecheck`, `pnpm test`. Os pacotes em `packages/` precisam estar compilados (`pnpm build`) antes do typecheck dos apps.
+
+## Compartilhar um projeto na rede local (LAN)
+
+Rodando localmente, você pode abrir um projeto para outras pessoas na mesma rede (casa, laboratório, sala de aula). Cada pessoa recebe um PIN de 4 dígitos e edita pelo navegador, sem conta e sem instalar nada.
+
+É uma comodidade para rede de confiança, não um login de verdade, por isso só existe no modo local da seção anterior. **Subir o Docker Compose não publica nada:** o compose roda em produção (`NODE_ENV=production`), onde o compartilhamento em rede local é recusado. Além disso, dentro do Docker todo acesso chega pelo IP do Caddy, e a API não teria como saber quem é o anfitrião.
+
+### 1. Ligar no `.env`
+
+Além das linhas do modo local:
+
+```bash
+APP_URL=http://localhost:5173   # o link dos amigos usa esta porta; mude junto se mudar a do Vite
+LAN_SHARE=true
+LAN_SECRET=                     # 32 caracteres ou mais, aleatórios (comando abaixo)
+```
+
+Para gerar o `LAN_SECRET`: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+
+Deixe `NODE_ENV=development` e as variáveis `AUTH_*` vazias. Se algo estiver fora disso, a API não sobe e avisa: `LAN_SHARE needs LAN_SECRET, no AUTH_JWKS_URL/AUTH_SECRET, and is only allowed when APP_URL is localhost and NODE_ENV is not production`.
+
+### 2. Subir com o frontend aberto para a rede
+
+API e worker sobem como na seção anterior; com `LAN_SHARE`, a API passa a escutar em todas as interfaces. O frontend precisa do `--host`, senão só a sua máquina o alcança:
+
+```bash
+pnpm --filter @latex-studio/web dev --host 0.0.0.0
+```
+
+Libere a porta 5173 no firewall. No Windows, aceite o aviso do firewall para o Node marcando **Redes privadas**, e confira se a rede Wi-Fi está como privada. Se você recusou o aviso, libere em Firewall do Windows Defender → Permitir um aplicativo. No Linux: `sudo ufw allow 5173/tcp`.
+
+### 3. Publicar (no seu computador)
+
+Abra o app em **http://localhost:5173**. Só quem acessa pela própria máquina (localhost) é o anfitrião; quem entra pelo IP da rede é sempre convidado.
+
+1. Na tela inicial, ligue **Acesso remoto (LAN)**. Ele começa desligado toda vez que a API sobe, então reiniciar o servidor sempre fecha a porta.
+2. No projeto, clique em **Compartilhar** (no cabeçalho ou no ícone da lista de projetos) e depois em **Publicar na rede**.
+3. Em **Pessoas com acesso**, digite o nome de cada amigo e clique em **Adicionar**. O PIN aparece **uma única vez**: anote ou mande na hora.
+4. Copie o **Link para compartilhar** (`http://<seu-ip>:5173/join/<projeto>`). Se o computador tiver mais de um endereço (Wi-Fi, VPN, WSL), escolha na lista o da rede dos amigos.
+
+### 4. Entrar (no computador do amigo)
+
+O amigo abre o link, digita o PIN e edita o projeto como editor. O nome dele aparece nos avatares e nas linhas que ele altera, com uma cor própria. Ele vê só os projetos compartilhados com ele e não cria nem importa projetos. A sessão dura 12 horas; depois disso, é preciso digitar o PIN de novo.
+
+### Encerrar
+
+- **Todo mundo, na hora:** desligue **Acesso remoto (LAN)**. Ninguém entra, nem com PIN, e quem estiver editando é desconectado. Se você religar em menos de 12 horas, quem já tinha entrado volta sem digitar o PIN.
+- **Um projeto:** **Parar de compartilhar** no diálogo de compartilhamento.
+- **Uma pessoa:** **Remover** (lixeira) ao lado do nome. O PIN dela deixa de valer.
+
+Erros de PIN são limitados: 5 erros seguidos bloqueiam aquele computador por alguns minutos, e 30 erros num projeto bloqueiam o projeto inteiro por um tempo.
+
+### Problemas comuns
+
+- **O amigo não abre o link:**
+  - confira o firewall e o `--host 0.0.0.0`;
+  - confira se ele está na mesma rede (redes Wi-Fi de visitante costumam isolar os aparelhos);
+  - tente outro endereço da lista.
+- **"O anfitrião desligou o acesso remoto":** ligue **Acesso remoto (LAN)** na tela inicial.
+- **O interruptor não aparece:** faltam `LAN_SHARE`/`LAN_SECRET` no `.env`, ou você não está em `http://localhost:5173`.
+- **"PIN inválido ou projeto indisponível":** o PIN está errado, ou o projeto não está publicado.
 
 ## Layout
 
