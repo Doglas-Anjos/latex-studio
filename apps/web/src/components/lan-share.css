@@ -134,11 +134,18 @@
   color: var(--primary);
 }
 
-.join-pin {
-  width: 8ch;
+/* Two classes: beats the shared input rule in styles.css (its `font: inherit` and padding) no
+   matter which stylesheet loads last. */
+.join-card .join-pin {
+  width: 100%;
+  max-width: 13rem;
+  min-height: 4rem;
   text-align: center;
   font-family: ui-monospace, "JetBrains Mono", monospace;
-  font-size: 1.75rem;
-  letter-spacing: 0.4em;
-  padding: 0.4rem 0.2rem;
+  font-size: 2.25rem;
+  font-weight: 600;
+  letter-spacing: 0.5em;
+  /* The left padding balances the spacing after the last digit, so the four sit centred. */
+  padding: 0.5rem 0 0.5rem 0.5em;
+  border-radius: 0.75rem;
 }
