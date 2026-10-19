@@ -209,6 +209,16 @@ export class ProjectsService {
   }
 
   async listForUser(user: User, options: ListProjectsOptions = {}): Promise<ListProjectsResult> {
+    // A LAN guest owns and is a member of nothing, so the normal query is empty for them: list the
+    // projects shared with them instead (always marked published, since access implies published).
+    if (user.issuer === 'lan' && this.lan) {
+      const ids = await this.lan.projectsFor(user.id);
+      const found = await Promise.all(ids.map((id) => this.projects.findById(id)));
+      const items = found
+        .filter((p): p is Project => p !== null)
+        .map((p) => ({ ...p, role: 'editor' as const, published: true }));
+      return { items, total: items.length, nextCursor: null };
+    }
     const limit = options.limit ?? PROJECT_PAGE_SIZE;
     const filter = options.filter ?? 'all';
     const search = foldSearch(options.search ?? '');

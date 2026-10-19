@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { NetworkInterfaceInfo } from 'node:os';
-import { BadRequestException, HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { USER_REPOSITORY, type UserRepository } from '../../users/domain/user.repository';
 import { LAN_REPOSITORY, type LanRepository } from '../domain/lan.repository';
 import { LanTokenService } from './lan-token.service';
@@ -89,6 +96,9 @@ export class LanService {
   }
 
   publish(projectId: string): Promise<void> {
+    // Off everywhere but a local LAN install, so these never create rows in production (where the
+    // routes still exist but LAN is disabled): a NotFound makes the feature invisible there.
+    if (!this.tokens.enabled) throw new NotFoundException();
     return this.repo.publish(projectId);
   }
   unpublish(projectId: string): Promise<void> {
@@ -109,6 +119,7 @@ export class LanService {
     projectId: string,
     alias: string,
   ): Promise<{ id: string; alias: string; pin: string }> {
+    if (!this.tokens.enabled) throw new NotFoundException();
     const clean = alias.trim();
     if (clean.length < 1 || clean.length > 40 || /\p{Cc}/u.test(clean)) {
       throw new BadRequestException('Invalid alias');
@@ -156,6 +167,19 @@ export class LanService {
   /** Every access's backing user id, so unpublish can close those peers' open sockets. */
   async accessUserIds(projectId: string): Promise<string[]> {
     return (await this.repo.accessesOf(projectId)).map((a) => a.userId);
+  }
+
+  /**
+   * The published projects a LAN user may edit, so a guest's dashboard shows what was shared with
+   * them. ponytail: scans the published set (few, local-only); a `lan_access` lookup by user id if
+   * that ever grows.
+   */
+  async projectsFor(userId: string): Promise<string[]> {
+    const published = await this.repo.listPublished();
+    const mine = await Promise.all(
+      published.map(async (id) => ((await this.repo.hasAccess(id, userId)) ? id : null)),
+    );
+    return mine.filter((id): id is string => id !== null);
   }
 
   /**
