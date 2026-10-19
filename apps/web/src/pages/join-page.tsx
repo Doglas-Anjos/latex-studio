@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { KeyRound } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
@@ -17,12 +17,16 @@ export function JoinPage() {
   const lan = useService(LanServiceToken);
   const t = useLan();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [pin, setPin] = useState('');
 
   const join = useMutation({
     mutationFn: () => lan.join(projectId, pin),
-    onSuccess: ({ token }) => {
+    onSuccess: async ({ token }) => {
       lanSession.set(token);
+      // Drop any cached "no session" result from before the token existed, so the guard re-checks
+      // with the new token instead of showing a stale "could not load your session".
+      await queryClient.invalidateQueries();
       navigate(`/projects/${projectId}`, { replace: true });
     },
   });
