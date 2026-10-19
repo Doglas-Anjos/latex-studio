@@ -139,6 +139,9 @@ interface DashStrings {
   loading: string;
   loadError: string;
   guestEmpty: string;
+  sessionError: string;
+  tryAgain: string;
+  joinAgain: string;
   recent: string;
   open: string;
   /** Prefixes the project name in the "continue" button's aria-label. */
@@ -190,6 +193,9 @@ const DASH: Record<UiLang, DashStrings> = {
     loading: 'Carregando…',
     loadError: 'Não foi possível carregar os projetos.',
     guestEmpty: 'Nenhum projeto compartilhado com você ainda.',
+    sessionError: 'Não foi possível carregar sua sessão.',
+    tryAgain: 'Tentar de novo',
+    joinAgain: 'Entrar com o PIN',
     recent: 'Último projeto',
     open: 'Abrir',
     continuePrefix: 'Continuar projeto',
@@ -239,6 +245,9 @@ const DASH: Record<UiLang, DashStrings> = {
     loading: 'Loading…',
     loadError: 'Could not load the projects.',
     guestEmpty: 'No projects have been shared with you yet.',
+    sessionError: 'Could not load your session.',
+    tryAgain: 'Try again',
+    joinAgain: 'Join with a PIN',
     recent: 'Last project',
     open: 'Open',
     continuePrefix: 'Continue project',
@@ -287,6 +296,9 @@ const DASH: Record<UiLang, DashStrings> = {
     loading: 'Cargando…',
     loadError: 'No se pudieron cargar los proyectos.',
     guestEmpty: 'Aún no se ha compartido ningún proyecto contigo.',
+    sessionError: 'No se pudo cargar tu sesión.',
+    tryAgain: 'Intentar de nuevo',
+    joinAgain: 'Entrar con un PIN',
     recent: 'Último proyecto',
     open: 'Abrir',
     continuePrefix: 'Continuar proyecto',
