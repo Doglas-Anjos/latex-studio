@@ -6,9 +6,11 @@ import { Button } from '../components/button';
 import { LanguageToggle } from '../components/language-toggle';
 import '../components/lan-share.css';
 import { useService } from '../di/service-provider';
-import { useLan } from '../i18n';
+import { useDash, useLan } from '../i18n';
+import { ApiError } from '../services/api-client';
 import { LanServiceToken } from '../services/lan.service';
 import { lanSession } from '../services/lan-session';
+import { isProjectId } from '../services/project.service';
 
 const isPin = (v: string) => /^\d{4}$/.test(v);
 
@@ -17,28 +19,40 @@ export function JoinPage() {
   const { projectId = '' } = useParams();
   const lan = useService(LanServiceToken);
   const t = useLan();
+  const d = useDash();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [pin, setPin] = useState('');
 
   const join = useMutation({
     mutationFn: () => lan.join(projectId, pin),
-    onSuccess: async ({ token }) => {
+    onSuccess: ({ token }) => {
       lanSession.set(token);
-      // Drop any cached "no session" result from before the token existed, so the guard re-checks
-      // with the new token instead of showing a stale "could not load your session".
-      await queryClient.invalidateQueries();
+      // A new identity: drop everything cached for the previous one (a 401 "no session", or the
+      // host's own data in the host's tab) so nothing renders under the wrong identity.
+      queryClient.clear();
       navigate(`/projects/${projectId}`, { replace: true });
     },
   });
+  const locked = join.error instanceof ApiError && join.error.status === 429;
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (isPin(pin) && !join.isPending) join.mutate();
   };
 
+  if (!isProjectId(projectId))
+    return (
+      <main className="session-screen">
+        <div className="session-lang">
+          <LanguageToggle />
+        </div>
+        <p className="status-note">{d.needLink}</p>
+      </main>
+    );
+
   return (
-    <main className="join-page">
+    <main className="session-screen">
       <div className="session-lang">
         <LanguageToggle />
       </div>
@@ -58,8 +72,8 @@ export function JoinPage() {
           aria-label={t.pinLabel}
         />
         {join.isError && (
-          <p className="join-error" role="alert">
-            {t.joinError}
+          <p className="form-error" role="alert">
+            {locked ? t.joinLocked : t.joinError}
           </p>
         )}
         <Button

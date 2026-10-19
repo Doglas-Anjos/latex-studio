@@ -1,4 +1,5 @@
 import { createToken } from '../di/container';
+import { lanSession } from './lan-session';
 
 const MARGIN_MS = 30_000;
 const PING_MS = 4 * 60 * 1000;
@@ -17,9 +18,12 @@ export class FasorxIdentity {
     this.enabled = cfg.url !== '';
   }
 
-  /** Current token, renewed when needed. Null only in local mode or without a session. */
+  /**
+   * Current token, renewed when needed. In local mode, the LAN guest's session token if this browser
+   * joined with a PIN (null for the host, who is trusted as loopback). Null without a session.
+   */
   async token(): Promise<string | null> {
-    if (!this.enabled) return null;
+    if (!this.enabled) return lanSession.get();
     if (this.tokenValue !== null && Date.now() < this.expires - MARGIN_MS) return this.tokenValue;
     this.inflight ??= this.fetchToken().finally(() => {
       this.inflight = null;

@@ -1,5 +1,5 @@
 import type { FasorxIdentity } from './identity';
-import { effectiveToken, lanSession } from './lan-session';
+import { lanSession } from './lan-session';
 
 export class ApiError extends Error {
   constructor(
@@ -87,7 +87,7 @@ export class ApiClient {
   }
 
   private async authHeaders(): Promise<Record<string, string>> {
-    const token = await effectiveToken(this.identity);
+    const token = await this.identity.token();
     return token ? { Authorization: `Bearer ${token}` } : {};
   }
 
@@ -95,7 +95,8 @@ export class ApiClient {
     const res = await fetch(this.base + path, init);
     // A LAN guest whose token expired or was revoked: drop it and send them back to the PIN screen
     // for this project, rather than down the FasorX login path (which does not apply to a guest).
-    if (res.status === 401 && lanSession.active()) {
+    // Not for the join call itself: a mistyped PIN must not end a session the guest already has.
+    if (res.status === 401 && lanSession.active() && !path.endsWith('/lan/join')) {
       lanSession.clear();
       const id = location.pathname.match(/\/projects\/([^/]+)/)?.[1];
       if (id) location.assign(`/join/${id}`);

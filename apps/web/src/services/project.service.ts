@@ -61,6 +61,13 @@ export interface ProjectService {
 
 export const ProjectServiceToken = createToken<ProjectService>('ProjectService');
 
+/**
+ * A project id from the URL goes into request paths: anything but a UUID (a decoded "../admin" or
+ * "x/copy?") could steer a request, carrying this browser's bearer, to another route.
+ */
+export const isProjectId = (v: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
 export class HttpProjectService implements ProjectService {
   constructor(private readonly api: ApiClient) {}
 

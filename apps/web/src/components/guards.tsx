@@ -50,7 +50,7 @@ export function RequireAuth() {
           </>
         ) : (
           <>
-            <p className="status-note">{d.serverError}</p>
+            <p className="status-note">{identity.enabled ? d.serverError : d.serverErrorLan}</p>
             <Button variant="secondary" loading={isFetching} onClick={() => refetch()}>
               {d.tryAgain}
             </Button>

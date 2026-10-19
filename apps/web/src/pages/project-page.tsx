@@ -36,7 +36,8 @@ import { useSidebarVisibility } from '../components/workspace/use-sidebar-visibi
 import { useService } from '../di/service-provider';
 import { useDash, useNav } from '../i18n';
 import { FileServiceToken } from '../services/file.service';
-import { ProjectServiceToken, type Role } from '../services/project.service';
+import { IdentityToken } from '../services/identity';
+import { isProjectId, ProjectServiceToken, type Role } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
 import { useWorkspaceStore } from '../workspace-store';
 import '../workspace-header.css';
@@ -48,6 +49,7 @@ type Surface = 'editor' | 'pdf';
 export function ProjectPage() {
   const { projectId = '' } = useParams();
   const projects = useService(ProjectServiceToken);
+  const identity = useService(IdentityToken);
   const root = useRef<HTMLDivElement>(null);
   const shareRef = useRef<HTMLDialogElement>(null);
   const lanShareRef = useRef<HTMLDialogElement>(null);
@@ -65,11 +67,16 @@ export function ProjectPage() {
   const d = useDash();
   const [surface, setSurface] = useState<Surface>('editor');
   const compact = useMatchMedia(COMPACT_QUERY);
+  const validId = isProjectId(projectId);
   const {
     data: project,
     error,
     isPending,
-  } = useQuery({ queryKey: ['project', projectId], queryFn: () => projects.get(projectId) });
+  } = useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => projects.get(projectId),
+    enabled: validId,
+  });
   const mainFile = project?.mainFile;
   const openedFor = useRef<string | null>(null);
 
@@ -125,23 +132,25 @@ export function ProjectPage() {
     if (!wideEnoughForOpenSidebar) setSidebarOpen(true);
   }, [commentDraft, wideEnoughForOpenSidebar, setSidebarOpen, setSettings]);
 
-  if (isPending) return <p className="status-note">{d.loading}</p>;
-  if (error || !project)
+  if (validId && isPending) return <p className="status-note">{d.loading}</p>;
+  // Inside Layout already (header, language toggle); the PIN path exists only without FasorX.
+  if (!validId || error || !project)
     return (
-      <div className="session-screen">
-        <div className="session-lang">
-          <LanguageToggle />
-        </div>
-        <p className="status-note">{d.projectUnavailable}</p>
+      <>
+        <p className="status-note">
+          {identity.enabled ? d.projectUnavailable : d.projectUnavailableLan}
+        </p>
         <div className="actions">
           <Link to="/" className="btn btn-secondary btn-compact">
             {d.backToProjects}
           </Link>
-          <Link to={`/join/${projectId}`} className="btn btn-primary btn-compact">
-            {d.enterPin}
-          </Link>
+          {!identity.enabled && (
+            <Link to={`/join/${projectId}`} className="btn btn-primary btn-compact">
+              {d.enterPin}
+            </Link>
+          )}
         </div>
-      </div>
+      </>
     );
 
   const canEdit = project.role === 'owner' || project.role === 'editor';

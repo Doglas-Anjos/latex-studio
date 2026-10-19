@@ -142,9 +142,13 @@ interface DashStrings {
   needPin: string;
   needLink: string;
   serverError: string;
+  /** serverError plus the LAN hint, for a local install. */
+  serverErrorLan: string;
   tryAgain: string;
   enterPin: string;
   projectUnavailable: string;
+  /** projectUnavailable with the LAN-share reasons, for a local install. */
+  projectUnavailableLan: string;
   backToProjects: string;
   recent: string;
   open: string;
@@ -200,11 +204,13 @@ const DASH: Record<UiLang, DashStrings> = {
     needPin:
       'Para abrir este projeto compartilhado, digite o PIN que o anfitrião te enviou. Se já tinha entrado, sua sessão expirou — digite o PIN de novo.',
     needLink: 'Abra o link que o anfitrião compartilhou com você para digitar o PIN.',
-    serverError:
+    serverError: 'Não foi possível falar com o servidor. Tente de novo em instantes.',
+    serverErrorLan:
       'Não foi possível falar com o servidor. Verifique se está na mesma rede e tente de novo.',
     tryAgain: 'Tentar de novo',
     enterPin: 'Digitar o PIN',
-    projectUnavailable:
+    projectUnavailable: 'Projeto não encontrado, ou você não tem acesso a ele.',
+    projectUnavailableLan:
       'Este projeto não está disponível. Ele pode não existir, ou você não tem mais acesso (o anfitrião pode ter removido seu acesso ou parado de compartilhar).',
     backToProjects: 'Voltar aos projetos',
     recent: 'Último projeto',
@@ -259,10 +265,13 @@ const DASH: Record<UiLang, DashStrings> = {
     needPin:
       'To open this shared project, enter the PIN your host sent you. If you were already in, your session expired — just enter the PIN again.',
     needLink: 'Open the link your host shared with you to enter the PIN.',
-    serverError: "Couldn't reach the server. Make sure you're on the same network, then try again.",
+    serverError: "Couldn't reach the server. Try again in a moment.",
+    serverErrorLan:
+      "Couldn't reach the server. Make sure you're on the same network, then try again.",
     tryAgain: 'Try again',
     enterPin: 'Enter the PIN',
-    projectUnavailable:
+    projectUnavailable: "Project not found, or you don't have access to it.",
+    projectUnavailableLan:
       "This project isn't available. It may not exist, or you no longer have access (the host may have removed your access or stopped sharing).",
     backToProjects: 'Back to projects',
     recent: 'Last project',
@@ -316,11 +325,13 @@ const DASH: Record<UiLang, DashStrings> = {
     needPin:
       'Para abrir este proyecto compartido, escribe el PIN que te envió el anfitrión. Si ya habías entrado, tu sesión caducó — escribe el PIN otra vez.',
     needLink: 'Abre el enlace que compartió contigo el anfitrión para escribir el PIN.',
-    serverError:
+    serverError: 'No se pudo contactar con el servidor. Inténtalo de nuevo en un momento.',
+    serverErrorLan:
       'No se pudo contactar con el servidor. Comprueba que estás en la misma red e inténtalo de nuevo.',
     tryAgain: 'Intentar de nuevo',
     enterPin: 'Escribir el PIN',
-    projectUnavailable:
+    projectUnavailable: 'Proyecto no encontrado, o no tienes acceso a él.',
+    projectUnavailableLan:
       'Este proyecto no está disponible. Puede que no exista o que ya no tengas acceso (el anfitrión pudo quitar tu acceso o dejar de compartir).',
     backToProjects: 'Volver a los proyectos',
     recent: 'Último proyecto',
@@ -388,6 +399,7 @@ interface LanStrings {
   pinLabel: string;
   join: string;
   joinError: string;
+  joinLocked: string;
 }
 
 const LAN: Record<UiLang, LanStrings> = {
@@ -413,6 +425,7 @@ const LAN: Record<UiLang, LanStrings> = {
     pinLabel: 'PIN',
     join: 'Entrar',
     joinError: 'PIN inválido ou projeto indisponível.',
+    joinLocked: 'Muitas tentativas erradas. Aguarde alguns minutos e tente de novo.',
   },
   en: {
     title: 'Share on the local network',
@@ -436,6 +449,7 @@ const LAN: Record<UiLang, LanStrings> = {
     pinLabel: 'PIN',
     join: 'Join',
     joinError: 'Invalid PIN or project unavailable.',
+    joinLocked: 'Too many wrong attempts. Wait a few minutes and try again.',
   },
   es: {
     title: 'Compartir en la red local',
@@ -459,6 +473,7 @@ const LAN: Record<UiLang, LanStrings> = {
     pinLabel: 'PIN',
     join: 'Entrar',
     joinError: 'PIN no válido o proyecto no disponible.',
+    joinLocked: 'Demasiados intentos fallidos. Espera unos minutos e inténtalo de nuevo.',
   },
 };
 
