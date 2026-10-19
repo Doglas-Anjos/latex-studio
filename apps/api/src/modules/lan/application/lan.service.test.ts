@@ -30,7 +30,6 @@ describe('LanService', () => {
     const list = await service.listAccess(P);
     expect(list).toEqual([expect.objectContaining({ id: acc.id, alias: 'Ana' })]);
     expect(JSON.stringify(list)).not.toContain('pinHash');
-    expect(JSON.stringify(list)).not.toContain(acc.pin);
   });
 
   it('rejects a blank or oversized alias', async () => {

@@ -17,7 +17,9 @@ describe('pin', () => {
 
   it('hashes and verifies a pin, rejecting a wrong one', async () => {
     const stored = await hashPin('4821');
-    expect(stored).not.toContain('4821');
+    // `salt:hash`, both 16+ byte hex — not the plaintext. (A substring check would be flaky: the
+    // hex can coincidentally contain the 4 digits.)
+    expect(stored).toMatch(/^[0-9a-f]{32}:[0-9a-f]{64}$/);
     expect(await verifyPin('4821', stored)).toBe(true);
     expect(await verifyPin('4822', stored)).toBe(false);
   });
