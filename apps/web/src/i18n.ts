@@ -144,6 +144,8 @@ interface DashStrings {
   serverError: string;
   tryAgain: string;
   enterPin: string;
+  projectUnavailable: string;
+  backToProjects: string;
   recent: string;
   open: string;
   /** Prefixes the project name in the "continue" button's aria-label. */
@@ -202,6 +204,9 @@ const DASH: Record<UiLang, DashStrings> = {
       'Não foi possível falar com o servidor. Verifique se está na mesma rede e tente de novo.',
     tryAgain: 'Tentar de novo',
     enterPin: 'Digitar o PIN',
+    projectUnavailable:
+      'Este projeto não está disponível. Ele pode não existir, ou você não tem mais acesso (o anfitrião pode ter removido seu acesso ou parado de compartilhar).',
+    backToProjects: 'Voltar aos projetos',
     recent: 'Último projeto',
     open: 'Abrir',
     continuePrefix: 'Continuar projeto',
@@ -257,6 +262,9 @@ const DASH: Record<UiLang, DashStrings> = {
     serverError: "Couldn't reach the server. Make sure you're on the same network, then try again.",
     tryAgain: 'Try again',
     enterPin: 'Enter the PIN',
+    projectUnavailable:
+      "This project isn't available. It may not exist, or you no longer have access (the host may have removed your access or stopped sharing).",
+    backToProjects: 'Back to projects',
     recent: 'Last project',
     open: 'Open',
     continuePrefix: 'Continue project',
@@ -312,6 +320,9 @@ const DASH: Record<UiLang, DashStrings> = {
       'No se pudo contactar con el servidor. Comprueba que estás en la misma red e inténtalo de nuevo.',
     tryAgain: 'Intentar de nuevo',
     enterPin: 'Escribir el PIN',
+    projectUnavailable:
+      'Este proyecto no está disponible. Puede que no exista o que ya no tengas acceso (el anfitrión pudo quitar tu acceso o dejar de compartir).',
+    backToProjects: 'Volver a los proyectos',
     recent: 'Último proyecto',
     open: 'Abrir',
     continuePrefix: 'Continuar proyecto',

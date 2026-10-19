@@ -34,7 +34,7 @@ import { TabBar } from '../components/workspace/tab-bar';
 import { useMatchMedia } from '../components/workspace/use-match-media';
 import { useSidebarVisibility } from '../components/workspace/use-sidebar-visibility';
 import { useService } from '../di/service-provider';
-import { useNav } from '../i18n';
+import { useDash, useNav } from '../i18n';
 import { FileServiceToken } from '../services/file.service';
 import { ProjectServiceToken, type Role } from '../services/project.service';
 import { useSettingsStore } from '../settings-store';
@@ -62,6 +62,7 @@ export function ProjectPage() {
   const sidebarView = useSettingsStore((s) => s.sidebarView);
   const setSettings = useSettingsStore((s) => s.set);
   const sidebarLabels = useNav().labels;
+  const d = useDash();
   const [surface, setSurface] = useState<Surface>('editor');
   const compact = useMatchMedia(COMPACT_QUERY);
   const {
@@ -124,12 +125,23 @@ export function ProjectPage() {
     if (!wideEnoughForOpenSidebar) setSidebarOpen(true);
   }, [commentDraft, wideEnoughForOpenSidebar, setSidebarOpen, setSettings]);
 
-  if (isPending) return <p className="status-note">Carregando…</p>;
+  if (isPending) return <p className="status-note">{d.loading}</p>;
   if (error || !project)
     return (
-      <p className="status-note">
-        Projeto não encontrado. <Link to="/">Voltar aos projetos</Link>
-      </p>
+      <div className="session-screen">
+        <div className="session-lang">
+          <LanguageToggle />
+        </div>
+        <p className="status-note">{d.projectUnavailable}</p>
+        <div className="actions">
+          <Link to="/" className="btn btn-secondary btn-compact">
+            {d.backToProjects}
+          </Link>
+          <Link to={`/join/${projectId}`} className="btn btn-primary btn-compact">
+            {d.enterPin}
+          </Link>
+        </div>
+      </div>
     );
 
   const canEdit = project.role === 'owner' || project.role === 'editor';
