@@ -1,3 +1,5 @@
+import { networkInterfaces } from 'node:os';
+import { APP_CONFIG, type AppConfig } from '@latex-studio/core';
 import {
   Body,
   Controller,
@@ -19,7 +21,7 @@ import {
   CurrentProject,
   RequireProjectRole,
 } from '../../projects/presentation/guards/project-role.guard';
-import { LanService } from '../application/lan.service';
+import { LanService, lanOrigins } from '../application/lan.service';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
 import { CreateAccessDto, JoinDto } from './lan.dto';
 
@@ -32,6 +34,7 @@ import { CreateAccessDto, JoinDto } from './lan.dto';
 export class LanController {
   constructor(
     @Inject(LanService) private readonly lan: LanService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Optional() @Inject(DOCUMENT_SYNC) private readonly sync?: DocumentSync,
   ) {}
 
@@ -39,8 +42,11 @@ export class LanController {
   @RequireProjectRole('owner')
   async status(@CurrentProject() project: Project) {
     return {
+      enabled: this.lan.enabled(),
       published: await this.lan.isPublished(project.id),
       access: await this.lan.listAccess(project.id),
+      // LAN origins the host is reachable at, so the owner can copy a link a friend can open.
+      urls: lanOrigins(this.config.APP_URL, networkInterfaces()),
     };
   }
 

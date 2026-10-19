@@ -29,6 +29,12 @@ function RouteError() {
 
 // The project page (CodeMirror, PDF.js, d3) and admin load on first visit, not with the dashboard.
 export const router = createBrowserRouter([
+  // Public: a LAN guest enters their PIN here (no session yet), then is sent to the project.
+  {
+    path: '/join/:projectId',
+    errorElement: <RouteError />,
+    lazy: async () => ({ Component: (await import('./pages/join-page')).JoinPage }),
+  },
   {
     element: <RequireAuth />,
     errorElement: <RouteError />,

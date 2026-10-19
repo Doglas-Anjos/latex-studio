@@ -29,6 +29,7 @@ import { useService } from '../../di/service-provider';
 import { FileServiceToken } from '../../services/file.service';
 import { HistoryServiceToken } from '../../services/history.service';
 import { IdentityToken } from '../../services/identity';
+import { effectiveToken } from '../../services/lan-session';
 import { useSettingsStore } from '../../settings-store';
 import { closeWhenSynced } from '../collab-sessions';
 import { DIFF_LIMITS } from '../editor-changes';
@@ -145,7 +146,7 @@ function useLiveText(projectId: string, path: string, enabled: boolean) {
       url: `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/collab`,
       name: `${projectId}/${path}`,
       document: doc,
-      token: async () => (await identity.token()) ?? '',
+      token: async () => (await effectiveToken(identity)) ?? '',
     });
     const ytext = doc.getText('content');
     let undo: Y.UndoManager | null = null;

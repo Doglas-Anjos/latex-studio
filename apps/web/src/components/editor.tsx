@@ -26,6 +26,7 @@ import { type Comment, CommentServiceToken, type NewComment } from '../services/
 import { FileServiceToken } from '../services/file.service';
 import { HistoryServiceToken } from '../services/history.service';
 import { IdentityToken } from '../services/identity';
+import { effectiveToken } from '../services/lan-session';
 import type { Role } from '../services/project.service';
 import { type ReferenceIndex, ReferenceServiceToken } from '../services/reference.service';
 import { SpellcheckServiceToken } from '../services/spellcheck.service';
@@ -366,7 +367,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     const session = openSession(
       projectId,
       path,
-      async () => (await identity.token()) ?? '',
+      async () => (await effectiveToken(identity)) ?? '',
       async (doc) => (await refusal(doc)) !== null,
     );
     const { doc, provider, ytext, undo } = session;
@@ -674,7 +675,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
         doc.destroy();
       }
     };
-  }, [projectId, path, readOnly, canComment, identity.token, files, queryClient, spellchecker]);
+  }, [projectId, path, readOnly, canComment, identity, files, queryClient, spellchecker]);
 
   useEffect(() => {
     const text = baseText ?? null;

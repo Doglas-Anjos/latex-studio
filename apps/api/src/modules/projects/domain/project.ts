@@ -28,4 +28,6 @@ export interface Project {
 
 export interface ProjectWithRole extends Project {
   role: ProjectRole;
+  /** Set on listings only: true when the project is shared on the LAN. */
+  published?: boolean;
 }

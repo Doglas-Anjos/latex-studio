@@ -16,6 +16,7 @@ import { Button } from '../components/button';
 import { holdSessions } from '../components/collab-sessions';
 import { DownloadButton } from '../components/download-button';
 import { Editor } from '../components/editor';
+import { LanShareDialog } from '../components/lan-share-dialog';
 import { LanguageToggle } from '../components/language-toggle';
 import { InviteDialog, openInvite } from '../components/members-panel';
 import { PdfViewer } from '../components/pdf-viewer';
@@ -42,12 +43,16 @@ import '../workspace-header.css';
 // Below this, a 3rd column for the PDF has nowhere to go: one main surface at a time instead.
 const COMPACT_QUERY = '(max-width: 75rem)';
 type Surface = 'editor' | 'pdf';
+// Local mode (no FasorX): the owner shares over the LAN instead of inviting FasorX members.
+const LOCAL = !import.meta.env.VITE_FASORX_URL;
 
 export function ProjectPage() {
   const { projectId = '' } = useParams();
   const projects = useService(ProjectServiceToken);
   const root = useRef<HTMLDivElement>(null);
   const shareRef = useRef<HTMLDialogElement>(null);
+  const lanShareRef = useRef<HTMLDialogElement>(null);
+  const [lanOpen, setLanOpen] = useState(false);
   const openTab = useWorkspaceStore((s) => s.openTab);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const pdfWidth = useSettingsStore((s) => s.pdfWidth);
@@ -177,26 +182,6 @@ export function ProjectPage() {
           </fieldset>
         )}
         <div className="wsh-end">
-          <PresenceAvatars />
-          <DownloadButton
-            projectId={project.id}
-            canEdit={canEdit}
-            isOwner={project.role === 'owner'}
-          />
-          <span className="wsh-divider" aria-hidden="true" />
-          {project.role === 'owner' && (
-            <Button
-              variant="ghost"
-              size="compact"
-              className="wsh-share"
-              aria-label="Compartilhar projeto"
-              title="Compartilhar projeto"
-              onClick={() => openInvite(shareRef.current)}
-            >
-              <Share2 size={16} aria-hidden="true" />
-              <span>Compartilhar</span>
-            </Button>
-          )}
           <Link
             to="/"
             className="wsh-back"
@@ -206,6 +191,33 @@ export function ProjectPage() {
             <ArrowLeft size={16} aria-hidden="true" />
             <span>Projetos</span>
           </Link>
+          <span className="wsh-divider" aria-hidden="true" />
+          <PresenceAvatars />
+          <DownloadButton
+            projectId={project.id}
+            canEdit={canEdit}
+            isOwner={project.role === 'owner'}
+          />
+          {project.role === 'owner' && (
+            <Button
+              variant="ghost"
+              size="compact"
+              className="wsh-share"
+              aria-label="Compartilhar projeto"
+              title="Compartilhar projeto"
+              onClick={() => {
+                if (LOCAL) {
+                  setLanOpen(true);
+                  lanShareRef.current?.showModal();
+                } else {
+                  openInvite(shareRef.current);
+                }
+              }}
+            >
+              <Share2 size={16} aria-hidden="true" />
+              <span>Compartilhar</span>
+            </Button>
+          )}
           <span className="wsh-divider" aria-hidden="true" />
           <LanguageToggle />
           <ThemeToggle />
@@ -302,7 +314,17 @@ export function ProjectPage() {
         </div>
       </div>
       <ActiveStatusBar projectId={project.id} role={project.role} />
-      {project.role === 'owner' && <InviteDialog dialogRef={shareRef} project={project} />}
+      {project.role === 'owner' &&
+        (LOCAL ? (
+          <LanShareDialog
+            dialogRef={lanShareRef}
+            project={project}
+            open={lanOpen}
+            onClose={() => setLanOpen(false)}
+          />
+        ) : (
+          <InviteDialog dialogRef={shareRef} project={project} />
+        ))}
     </div>
   );
 }

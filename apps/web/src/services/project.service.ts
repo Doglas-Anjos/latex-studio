@@ -14,6 +14,8 @@ export interface Project {
   role: Role;
   /** True when the current user reached this project as a platform admin, not a member. */
   viaAdmin?: boolean;
+  /** Set on listings only: true when the project is shared on the LAN. */
+  published?: boolean;
 }
 
 export type ProjectFilter = 'all' | 'mine' | 'shared';

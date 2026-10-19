@@ -278,6 +278,11 @@
   border-left-color: var(--primary);
 }
 
+/* Shared on the LAN: a standing green marker (hover still tints with --primary above). */
+.project-table tbody tr[data-published] td:first-child {
+  border-left-color: var(--ok);
+}
+
 .project-link {
   display: inline-flex;
   align-items: center;

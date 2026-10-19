@@ -216,6 +216,15 @@
   .wsh-segmented {
     margin: 0 0.1rem;
   }
+  /* Header actions go icon-only (the aria-label/title keep their names) so they fit one row. */
+  .wsh-back span,
+  .wsh-share span {
+    display: none;
+  }
+  .wsh-back,
+  .wsh-share {
+    padding: 0.4rem;
+  }
 }
 
 /* Phone (down to ~320px): the brand suffix and back-link label are the first
@@ -230,13 +239,6 @@
   }
   .wsh-brand .brand-suffix {
     display: none;
-  }
-  .wsh-back span,
-  .wsh-share span {
-    display: none;
-  }
-  .wsh-back {
-    padding: 0.4rem;
   }
   .wsh-segmented-btn span {
     display: none;

@@ -326,3 +326,103 @@ export function useDash(): DashStrings {
 export function projectCount(d: DashStrings, n: number): string {
   return `${n} ${n === 1 ? d.project : d.projects}`;
 }
+
+interface LanStrings {
+  title: string;
+  description: string;
+  disabled: string;
+  publish: string;
+  unpublish: string;
+  link: string;
+  copy: string;
+  copied: string;
+  people: string;
+  aliasPlaceholder: string;
+  add: string;
+  noPeople: string;
+  remove: string;
+  pinOnce: string;
+  pickUrl: string;
+  joinTitle: string;
+  joinDescription: string;
+  pinLabel: string;
+  join: string;
+  joinError: string;
+}
+
+const LAN: Record<UiLang, LanStrings> = {
+  'pt-BR': {
+    title: 'Compartilhar na rede local',
+    description:
+      'Publique este projeto para que amigos na mesma rede editem pelo navegador, com um PIN.',
+    disabled: 'O compartilhamento em rede local está desligado neste servidor.',
+    publish: 'Publicar na rede',
+    unpublish: 'Parar de compartilhar',
+    link: 'Link para compartilhar',
+    copy: 'Copiar',
+    copied: 'Copiado!',
+    people: 'Pessoas com acesso',
+    aliasPlaceholder: 'Nome do amigo',
+    add: 'Adicionar',
+    noPeople: 'Ninguém ainda. Adicione uma pessoa para gerar um PIN.',
+    remove: 'Remover',
+    pinOnce: 'Anote o PIN agora: ele aparece só uma vez.',
+    pickUrl: 'Se o amigo não abrir, tente outro endereço da lista.',
+    joinTitle: 'Entrar no projeto compartilhado',
+    joinDescription: 'Digite o PIN de 4 dígitos que você recebeu.',
+    pinLabel: 'PIN',
+    join: 'Entrar',
+    joinError: 'PIN inválido ou projeto indisponível.',
+  },
+  en: {
+    title: 'Share on the local network',
+    description:
+      'Publish this project so friends on the same network can edit it in a browser, with a PIN.',
+    disabled: 'LAN sharing is turned off on this server.',
+    publish: 'Publish to the network',
+    unpublish: 'Stop sharing',
+    link: 'Link to share',
+    copy: 'Copy',
+    copied: 'Copied!',
+    people: 'People with access',
+    aliasPlaceholder: "Friend's name",
+    add: 'Add',
+    noPeople: 'No one yet. Add a person to generate a PIN.',
+    remove: 'Remove',
+    pinOnce: 'Write the PIN down now: it is shown only once.',
+    pickUrl: 'If a friend cannot open it, try another address from the list.',
+    joinTitle: 'Join the shared project',
+    joinDescription: 'Enter the 4-digit PIN you were given.',
+    pinLabel: 'PIN',
+    join: 'Join',
+    joinError: 'Invalid PIN or project unavailable.',
+  },
+  es: {
+    title: 'Compartir en la red local',
+    description:
+      'Publica este proyecto para que amigos en la misma red lo editen en el navegador, con un PIN.',
+    disabled: 'El uso compartido en red local está desactivado en este servidor.',
+    publish: 'Publicar en la red',
+    unpublish: 'Dejar de compartir',
+    link: 'Enlace para compartir',
+    copy: 'Copiar',
+    copied: '¡Copiado!',
+    people: 'Personas con acceso',
+    aliasPlaceholder: 'Nombre del amigo',
+    add: 'Añadir',
+    noPeople: 'Nadie todavía. Añade una persona para generar un PIN.',
+    remove: 'Quitar',
+    pinOnce: 'Anota el PIN ahora: se muestra solo una vez.',
+    pickUrl: 'Si un amigo no puede abrirlo, prueba otra dirección de la lista.',
+    joinTitle: 'Entrar al proyecto compartido',
+    joinDescription: 'Escribe el PIN de 4 dígitos que recibiste.',
+    pinLabel: 'PIN',
+    join: 'Entrar',
+    joinError: 'PIN no válido o proyecto no disponible.',
+  },
+};
+
+/** LAN-share strings for the current language. */
+export function useLan(): LanStrings {
+  return LAN[useUiLang()];
+}

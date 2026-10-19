@@ -19,6 +19,7 @@ import {
 } from '@nestjs/common';
 import { AuditService } from '../../audit/audit.service';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
+import { LanService } from '../../lan/application/lan.service';
 import type { User } from '../../users/domain/user';
 import {
   type Project,
@@ -87,6 +88,8 @@ export class ProjectsService {
     @Optional() @Inject(AuditService) private readonly audit?: AuditService,
     // Optional only so tests that never delete can skip it; CollabModule always provides it.
     @Optional() @Inject(DOCUMENT_SYNC) private readonly sync?: DocumentSync,
+    // Marks which listed projects are shared on the LAN, so the dashboard can tint them.
+    @Optional() @Inject(LanService) private readonly lan?: LanService,
   ) {}
 
   create(owner: User, name: string): Promise<Project> {
@@ -211,8 +214,13 @@ export class ProjectsService {
     const search = foldSearch(options.search ?? '');
     const cursor = options.cursor ? decodeProjectCursor(options.cursor, filter, search) : null;
     const page = await this.projects.listPageForUser(user.id, { limit, filter, search, cursor });
+    // Tag the ones published to the LAN so the dashboard can show them in a different colour.
+    const published = this.lan ? new Set(await this.lan.listPublished()) : null;
+    const items = published
+      ? page.items.map((p) => ({ ...p, published: published.has(p.id) }))
+      : page.items;
     return {
-      items: page.items,
+      items,
       total: page.total,
       nextCursor: page.next
         ? Buffer.from(JSON.stringify({ v: 1, ...page.next, filter, search })).toString('base64url')

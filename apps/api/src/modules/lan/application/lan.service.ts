@@ -1,9 +1,34 @@
 import { randomUUID } from 'node:crypto';
+import type { NetworkInterfaceInfo } from 'node:os';
 import { BadRequestException, HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { USER_REPOSITORY, type UserRepository } from '../../users/domain/user.repository';
 import { LAN_REPOSITORY, type LanRepository } from '../domain/lan.repository';
 import { LanTokenService } from './lan-token.service';
 import { generatePin, hashPin, isPin, verifyPin } from './pin';
+
+/**
+ * The app's origin rebased onto each non-internal IPv4 of the host, so the owner (who may have
+ * opened the app on localhost) gets a link a friend on the LAN can actually reach. Pure: the caller
+ * passes `os.networkInterfaces()`. Empty when the host has no LAN address or APP_URL is unparseable.
+ */
+export function lanOrigins(appUrl: string, nets: NodeJS.Dict<NetworkInterfaceInfo[]>): string[] {
+  let origin: { protocol: string; port: string };
+  try {
+    const u = new URL(appUrl);
+    origin = { protocol: u.protocol, port: u.port };
+  } catch {
+    return [];
+  }
+  const urls: string[] = [];
+  for (const list of Object.values(nets)) {
+    for (const ni of list ?? []) {
+      if (ni.family === 'IPv4' && !ni.internal) {
+        urls.push(`${origin.protocol}//${ni.address}${origin.port ? `:${origin.port}` : ''}`);
+      }
+    }
+  }
+  return urls;
+}
 
 /** A person's access as shown to the host (never the PIN hash). */
 export interface LanAccessView {
@@ -56,6 +81,11 @@ export class LanService {
     if (!access) return null;
     const token = await this.tokens.sign(access.userId);
     return token ? { token, alias: access.alias } : null;
+  }
+
+  /** Whether LAN share is configured (flag + secret); the UI greys the controls out when false. */
+  enabled(): boolean {
+    return this.tokens.enabled;
   }
 
   publish(projectId: string): Promise<void> {

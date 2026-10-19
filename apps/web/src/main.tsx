@@ -14,6 +14,7 @@ import { CompileServiceToken, HttpCompileService } from './services/compile.serv
 import { FileServiceToken, HttpFileService } from './services/file.service';
 import { HistoryServiceToken, HttpHistoryService } from './services/history.service';
 import { FasorxIdentity, IdentityToken } from './services/identity';
+import { HttpLanService, LanServiceToken } from './services/lan.service';
 import { HttpMemberService, MemberServiceToken } from './services/member.service';
 import { HttpPackageService, PackageServiceToken } from './services/package.service';
 import { HttpProjectService, ProjectServiceToken } from './services/project.service';
@@ -52,7 +53,8 @@ const container = new Container()
   .register(CommentServiceToken, new HttpCommentService(api))
   .register(HistoryServiceToken, new HttpHistoryService(api))
   .register(ToolsServiceToken, new HttpToolsService(api))
-  .register(MemberServiceToken, new HttpMemberService(api));
+  .register(MemberServiceToken, new HttpMemberService(api))
+  .register(LanServiceToken, new HttpLanService(api));
 const queryClient = new QueryClient();
 
 const root = document.getElementById('root');

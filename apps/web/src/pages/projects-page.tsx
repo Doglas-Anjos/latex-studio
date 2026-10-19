@@ -377,7 +377,7 @@ function ProjectTable({
       </thead>
       <tbody>
         {rows.map((p) => (
-          <tr key={p.id} data-role={p.role}>
+          <tr key={p.id} data-role={p.role} data-published={p.published || undefined}>
             <td>
               <button type="button" className="project-link" onClick={() => onOpen(p.id)}>
                 <span className="project-link-icon">

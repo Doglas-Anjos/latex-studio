@@ -2,7 +2,7 @@ import { BadRequestException, HttpException } from '@nestjs/common';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import { FakeLan } from '../testing/fake-lan.repository';
-import { LanService } from './lan.service';
+import { LanService, lanOrigins } from './lan.service';
 import { LanTokenService } from './lan-token.service';
 
 const P = '00000000-0000-4000-8000-00000000000a';
@@ -117,5 +117,24 @@ describe('LanService', () => {
     expect(joined?.alias).toBe('Ana');
     expect(await tokens.verify(joined?.token ?? '')).toBe(userId);
     expect(await service.join(P, wrongOf(pin), '10.0.0.6')).toBeNull();
+  });
+});
+
+describe('lanOrigins', () => {
+  // biome-ignore lint/suspicious/noExplicitAny: a minimal stub of os.networkInterfaces()
+  const nets: any = {
+    lo: [{ address: '127.0.0.1', family: 'IPv4', internal: true }],
+    eth0: [
+      { address: '192.168.0.12', family: 'IPv4', internal: false },
+      { address: 'fe80::1', family: 'IPv6', internal: false },
+    ],
+  };
+
+  it('rebases the app origin onto each non-internal IPv4, dropping loopback and IPv6', () => {
+    expect(lanOrigins('http://localhost:5175/', nets)).toEqual(['http://192.168.0.12:5175']);
+  });
+
+  it('returns nothing for an unparseable app url', () => {
+    expect(lanOrigins('not a url', nets)).toEqual([]);
   });
 });
