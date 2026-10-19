@@ -91,7 +91,7 @@ BUILDS_DIR=/caminho/absoluto/latex-studio/data/builds
 ```
 
 ```bash
-docker compose -f docker-compose.dev.yml up -d    # Postgres em 5432 e Redis em 6379 (POSTGRES_PORT/REDIS_PORT mudam)
+docker compose -f docker-compose.dev.yml up -d    # Postgres em 5432 e Redis em 6379, só em localhost (POSTGRES_PORT/REDIS_PORT mudam)
 pnpm build                      # compila os pacotes compartilhados (packages/*)
 pnpm --filter @latex-studio/api dev               # lê o .env da raiz automaticamente
 pnpm --filter @latex-studio/worker dev
@@ -111,40 +111,41 @@ Rodando localmente, você pode abrir um projeto para outras pessoas na mesma red
 
 É uma comodidade para rede de confiança, não um login de verdade, por isso só existe no modo local da seção anterior. **Subir o Docker Compose não publica nada:** o compose roda em produção (`NODE_ENV=production`), onde o compartilhamento em rede local é recusado. Além disso, dentro do Docker todo acesso chega pelo IP do Caddy, e a API não teria como saber quem é o anfitrião.
 
-### 1. Ligar no `.env`
+### 1. Subir
 
-Além das linhas do modo local:
-
-```bash
-APP_URL=http://localhost:5173   # o link dos amigos usa esta porta; mude junto se mudar a do Vite
-LAN_SHARE=true
-LAN_SECRET=                     # 32 caracteres ou mais, aleatórios (comando abaixo)
-```
-
-Para gerar o `LAN_SECRET`: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
-
-Deixe `NODE_ENV=development` e as variáveis `AUTH_*` vazias. Se algo estiver fora disso, a API não sobe e avisa: `LAN_SHARE needs LAN_SECRET, no AUTH_JWKS_URL/AUTH_SECRET, and is only allowed when APP_URL is localhost and NODE_ENV is not production`.
-
-### 2. Subir com o frontend aberto para a rede
-
-API e worker sobem como na seção anterior; com `LAN_SHARE`, a API passa a escutar em todas as interfaces. O frontend precisa do `--host`, senão só a sua máquina o alcança:
+Requisitos: Node e pnpm (como em Desenvolvimento) e o Docker aberto. Depois:
 
 ```bash
-pnpm --filter @latex-studio/web dev --host 0.0.0.0
+pnpm lan
 ```
 
-Libere a porta 5173 no firewall. No Windows, aceite o aviso do firewall para o Node marcando **Redes privadas**, e confira se a rede Wi-Fi está como privada. Se você recusou o aviso, libere em Firewall do Windows Defender → Permitir um aplicativo. No Linux: `sudo ufw allow 5173/tcp`.
+O script faz toda a configuração e, no fim, mostra o seu endereço e os endereços na rede. **Ctrl+C** encerra o app; Postgres e Redis continuam no Docker (para parar: `docker compose -f docker-compose.dev.yml stop`). Ele:
 
-### 3. Publicar (no seu computador)
+- cria o `.env` num clone novo, já apontando para esta máquina;
+- num `.env` existente, só grava o `LAN_SECRET`, que gera uma vez;
+- liga o modo LAN só para os processos que inicia, sem mudar o arquivo. Um `.env` com FasorX (`AUTH_*`) continua como está e é ignorado enquanto o `pnpm lan` roda;
+- sobe Postgres e Redis (só no loopback, longe da rede) e compila os pacotes compartilhados;
+- inicia API e worker, gera o build de produção do frontend e o serve para a rede na porta do `APP_URL` (5173 por padrão). O build carrega mais rápido nos aparelhos dos amigos e não expõe o servidor de desenvolvimento.
 
-Abra o app em **http://localhost:5173**. Só quem acessa pela própria máquina (localhost) é o anfitrião; quem entra pelo IP da rede é sempre convidado.
+Só o firewall fica com você: libere a porta mostrada no fim (5173 por padrão) para a rede privada. No Windows, aceite o aviso do firewall para o Node marcando **Redes privadas**, e confira se a rede Wi-Fi está como privada. Se você recusou o aviso, libere em Firewall do Windows Defender → Permitir um aplicativo. No Linux: `sudo ufw allow 5173/tcp`.
+
+Para subir à mão, as três variáveis são:
+- `APP_URL=http://localhost:<porta>`: o link dos amigos usa essa porta;
+- `LAN_SHARE=true`;
+- `LAN_SECRET`: 32 caracteres ou mais.
+
+Também é preciso `NODE_ENV=development`, as variáveis `AUTH_*` vazias e o frontend com `--host 0.0.0.0`. O passo a passo está em [scripts/lan.mjs](scripts/lan.mjs).
+
+### 2. Publicar (no seu computador)
+
+Abra o app no endereço local que o `pnpm lan` mostrou (**http://localhost:5173** por padrão). Só quem acessa pela própria máquina (localhost) é o anfitrião; quem entra pelo IP da rede é sempre convidado.
 
 1. Na tela inicial, ligue **Acesso remoto (LAN)**. Ele começa desligado toda vez que a API sobe, então reiniciar o servidor sempre fecha a porta.
 2. No projeto, clique em **Compartilhar** (no cabeçalho ou no ícone da lista de projetos) e depois em **Publicar na rede**.
 3. Em **Pessoas com acesso**, digite o nome de cada amigo e clique em **Adicionar**. O PIN aparece **uma única vez**: anote ou mande na hora.
 4. Copie o **Link para compartilhar** (`http://<seu-ip>:5173/join/<projeto>`). Se o computador tiver mais de um endereço (Wi-Fi, VPN, WSL), escolha na lista o da rede dos amigos.
 
-### 4. Entrar (no computador do amigo)
+### 3. Entrar (no computador do amigo)
 
 O amigo abre o link, digita o PIN e edita o projeto como editor. O nome dele aparece nos avatares e nas linhas que ele altera, com uma cor própria. Ele vê só os projetos compartilhados com ele e não cria nem importa projetos. A sessão dura 12 horas; depois disso, é preciso digitar o PIN de novo.
 
@@ -159,11 +160,12 @@ Erros de PIN são limitados: 5 erros seguidos bloqueiam aquele computador por al
 ### Problemas comuns
 
 - **O amigo não abre o link:**
-  - confira o firewall e o `--host 0.0.0.0`;
+  - confira o firewall;
   - confira se ele está na mesma rede (redes Wi-Fi de visitante costumam isolar os aparelhos);
   - tente outro endereço da lista.
 - **"O anfitrião desligou o acesso remoto":** ligue **Acesso remoto (LAN)** na tela inicial.
-- **O interruptor não aparece:** faltam `LAN_SHARE`/`LAN_SECRET` no `.env`, ou você não está em `http://localhost:5173`.
+- **O interruptor não aparece:** o app não foi iniciado pelo `pnpm lan`, ou você abriu pelo IP da rede em vez de `localhost`.
+- **`pnpm lan` diz que a porta está em uso:** outro programa ocupa a porta (talvez outra cópia do app); encerre-o e tente de novo.
 - **"PIN inválido ou projeto indisponível":** o PIN está errado, ou o projeto não está publicado.
 
 ## Layout
