@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { useMe } from '../auth-hooks';
 import { Brand } from '../components/brand';
 import { Button } from '../components/button';
 import { holdSessions } from '../components/collab-sessions';
@@ -43,8 +44,6 @@ import '../workspace-header.css';
 // Below this, a 3rd column for the PDF has nowhere to go: one main surface at a time instead.
 const COMPACT_QUERY = '(max-width: 75rem)';
 type Surface = 'editor' | 'pdf';
-// Local mode (no FasorX): the owner shares over the LAN instead of inviting FasorX members.
-const LOCAL = !import.meta.env.VITE_FASORX_URL;
 
 export function ProjectPage() {
   const { projectId = '' } = useParams();
@@ -53,6 +52,8 @@ export function ProjectPage() {
   const shareRef = useRef<HTMLDialogElement>(null);
   const lanShareRef = useRef<HTMLDialogElement>(null);
   const [lanOpen, setLanOpen] = useState(false);
+  // A local install (no FasorX) shares over the LAN; a FasorX deployment invites members by e-mail.
+  const local = useMe().data?.issuer === 'local';
   const openTab = useWorkspaceStore((s) => s.openTab);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const pdfWidth = useSettingsStore((s) => s.pdfWidth);
@@ -206,7 +207,7 @@ export function ProjectPage() {
               aria-label="Compartilhar projeto"
               title="Compartilhar projeto"
               onClick={() => {
-                if (LOCAL) {
+                if (local) {
                   setLanOpen(true);
                   lanShareRef.current?.showModal();
                 } else {
@@ -315,7 +316,7 @@ export function ProjectPage() {
       </div>
       <ActiveStatusBar projectId={project.id} role={project.role} />
       {project.role === 'owner' &&
-        (LOCAL ? (
+        (local ? (
           <LanShareDialog
             dialogRef={lanShareRef}
             project={project}
