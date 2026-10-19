@@ -61,6 +61,8 @@ describe('IdentityService', () => {
     const verifier: TokenVerifier = { verify };
     const identity = new IdentityService(users, verifier);
     const host = 'latex.example.com';
+    // A client on the internet (online mode). 203.0.113.0/24 is reserved for documentation
+    // (RFC 5737, like example.com above): never a real host.
     const ip = '203.0.113.7';
     expect(await identity.resolve(null, host, ip)).toBeNull();
     expect(await identity.resolve('bad', host, ip)).toBeNull();
