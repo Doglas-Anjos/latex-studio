@@ -327,7 +327,10 @@ a {
   font-weight: 600;
 }
 .field input,
-.field select {
+.field select,
+.lan-share input,
+.lan-share select,
+.join-pin {
   font: inherit;
   min-height: 2.5rem;
   padding: 0.55rem 0.7rem;
@@ -340,7 +343,10 @@ a {
     box-shadow 0.12s;
 }
 .field input:focus-visible,
-.field select:focus-visible {
+.field select:focus-visible,
+.lan-share input:focus-visible,
+.lan-share select:focus-visible,
+.join-pin:focus-visible {
   outline: none;
   border-color: var(--focus);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent);

@@ -11,6 +11,7 @@ import './lan-share.css';
 /**
  * Owner-only LAN share panel: publish the project, then hand each friend a link + a one-time PIN.
  * Shown instead of the FasorX invite dialog in local mode. The status query runs only while open.
+ * `project` may be null so a list page can mount it before the first pick (showModal needs the node).
  */
 export function LanShareDialog({
   dialogRef,
@@ -19,28 +20,30 @@ export function LanShareDialog({
   onClose,
 }: {
   dialogRef: RefObject<HTMLDialogElement | null>;
-  project: { id: string; name: string };
+  project: { id: string; name: string } | null;
   open: boolean;
   onClose: () => void;
 }) {
   const lan = useService(LanServiceToken);
   const t = useLan();
   const qc = useQueryClient();
-  const queryKey = ['lan', project.id];
+  const id = project?.id ?? '';
+  const queryKey = ['lan', id];
   const [alias, setAlias] = useState('');
   // A created PIN is returned once; keep it on screen (keyed by access id) until the dialog closes.
   const [pins, setPins] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
+  const [origin, setOrigin] = useState<string>();
 
-  const { data } = useQuery({ queryKey, queryFn: () => lan.status(project.id), enabled: open });
+  const { data } = useQuery({ queryKey, queryFn: () => lan.status(id), enabled: open && !!id });
   const invalidate = () => qc.invalidateQueries({ queryKey });
 
   const publish = useMutation({
-    mutationFn: () => (data?.published ? lan.unpublish(project.id) : lan.publish(project.id)),
+    mutationFn: () => (data?.published ? lan.unpublish(id) : lan.publish(id)),
     onSuccess: invalidate,
   });
   const add = useMutation({
-    mutationFn: () => lan.createAccess(project.id, alias.trim()),
+    mutationFn: () => lan.createAccess(id, alias.trim()),
     onSuccess: (acc) => {
       setPins((p) => ({ ...p, [acc.id]: acc.pin }));
       setAlias('');
@@ -48,7 +51,7 @@ export function LanShareDialog({
     },
   });
   const revoke = useMutation({
-    mutationFn: (id: string) => lan.revoke(project.id, id),
+    mutationFn: (accessId: string) => lan.revoke(id, accessId),
     onSuccess: invalidate,
   });
 
@@ -60,14 +63,16 @@ export function LanShareDialog({
       setPins({});
       setAlias('');
       setCopied(false);
+      setOrigin(undefined);
       onClose();
     };
     dialog.addEventListener('close', closed);
     return () => dialog.removeEventListener('close', closed);
   }, [dialogRef, onClose]);
 
-  const origin = data?.urls[0];
-  const link = origin ? `${origin}/join/${project.id}` : '';
+  // Several adapters (Wi-Fi, VPN, WSL) each get an address; only one may reach the friend.
+  const base = origin ?? data?.urls[0];
+  const link = base ? `${base}/join/${id}` : '';
   const copy = () => {
     if (!link) return;
     navigator.clipboard?.writeText(link).then(
@@ -89,7 +94,7 @@ export function LanShareDialog({
       ref={dialogRef}
       title={t.title}
       icon={<Wifi size={18} aria-hidden="true" />}
-      kicker={project.name}
+      kicker={project?.name}
       description={t.description}
     >
       {data && !data.enabled && <p className="status-note">{t.disabled}</p>}
@@ -123,8 +128,21 @@ export function LanShareDialog({
                     )}
                   </Button>
                 </span>
-                {data.urls.length > 1 && <small>{t.pickUrl}</small>}
               </label>
+              {data.urls.length > 1 && (
+                <>
+                  <select
+                    aria-label={t.pickUrl}
+                    value={base}
+                    onChange={(e) => setOrigin(e.target.value)}
+                  >
+                    {data.urls.map((u) => (
+                      <option key={u}>{u}</option>
+                    ))}
+                  </select>
+                  <small className="lan-share-note">{t.pickUrl}</small>
+                </>
+              )}
 
               <h3 className="lan-share-label">{t.people}</h3>
               <form className="lan-share-add" onSubmit={addPerson}>

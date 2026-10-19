@@ -248,7 +248,7 @@ export function ProjectsPage() {
       <CreateDialog dialogRef={createRef} onDone={open} />
       <ImportDialog dialogRef={importRef} mode={importMode} setMode={setImportMode} onDone={open} />
       <CopyDialog dialogRef={copyRef} project={copying} onDone={open} />
-      {local && sharing ? (
+      {local ? (
         <LanShareDialog
           dialogRef={lanShareRef}
           project={sharing}

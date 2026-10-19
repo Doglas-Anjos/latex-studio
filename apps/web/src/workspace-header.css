@@ -228,8 +228,8 @@
   }
 }
 
-/* Phone (down to ~320px): the brand suffix and back-link label are the first
-   things to drop so the project name, surface switch and theme action keep
+/* Phone (down to ~320px): the brand suffix drops (the back link and share went
+   icon-only at 48rem) so the project name, surface switch and theme action keep
    to one row without pushing the header wider than the viewport. The
    surface switch goes icon-only too; each button keeps an aria-label/title
    so its accessible name and hover tooltip survive losing the visible text. */
