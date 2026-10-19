@@ -9,7 +9,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { LAN_ISSUER } from '../../users/domain/user';
+import { LAN_ISSUER, type User } from '../../users/domain/user';
 import { USER_REPOSITORY, type UserRepository } from '../../users/domain/user.repository';
 import { LAN_REPOSITORY, type LanRepository } from '../domain/lan.repository';
 import { LanTokenService } from './lan-token.service';
@@ -37,6 +37,25 @@ export function lanOrigins(appUrl: string, nets: NodeJS.Dict<NetworkInterfaceInf
     }
   }
   return urls;
+}
+
+/**
+ * Whether `user` may start TeX or the export tools (compile, export, word count) on this host. Not
+ * a LAN guest on Windows: the worker has no OS sandbox there and MiKTeX ignores kpathsea's paranoid
+ * mode, so `\input{C:/...}` would put any file the host can read into the guest's PDF or log. The
+ * host compiles for them; guests still edit and read the latest PDF.
+ * This narrows the hole, it does not close it: the host's own compile still runs what guests wrote,
+ * unfenced (MiKTeX's AllowUnsafeInputFiles=f stops `\input` but not `\openin`), and its PDF and log
+ * reach them. The README tells hosts to share only with people they trust with their files.
+ * ponytail: by platform, not engine (TeX Live on Windows honours paranoid mode, `\openin` included);
+ * the real fix is compiling in the Linux worker container (bubblewrap) when sharing from Windows.
+ */
+export function mayRunTools(user: Pick<User, 'issuer'>, platform = process.platform): boolean {
+  return !(user.issuer === LAN_ISSUER && platform === 'win32');
+}
+
+export function assertMayRunTools(user: Pick<User, 'issuer'>): void {
+  if (!mayRunTools(user)) throw new ForbiddenException('On this computer only the host compiles');
 }
 
 /** A person's access as shown to the host (never the PIN hash). */

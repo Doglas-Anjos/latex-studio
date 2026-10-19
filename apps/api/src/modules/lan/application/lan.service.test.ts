@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { LAN_ISSUER } from '../../users/domain/user';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import { FakeLan } from '../testing/fake-lan.repository';
-import { LanService, lanOrigins } from './lan.service';
+import { LanService, lanOrigins, mayRunTools } from './lan.service';
 import { LanTokenService } from './lan-token.service';
 
 const P = '00000000-0000-4000-8000-00000000000a';
@@ -171,6 +171,15 @@ describe('LanService', () => {
     expect(await off.roleOf(P, userId)).toBeNull();
     expect(await off.listPublished()).toEqual([]);
     expect(await off.projectsFor(userId)).toEqual([]);
+  });
+});
+
+describe('mayRunTools', () => {
+  it('keeps a LAN guest off TeX and the export tools on Windows only', () => {
+    expect(mayRunTools({ issuer: LAN_ISSUER }, 'win32')).toBe(false); // MiKTeX, no sandbox
+    expect(mayRunTools({ issuer: LAN_ISSUER }, 'linux')).toBe(true);
+    expect(mayRunTools({ issuer: 'local' }, 'win32')).toBe(true); // the host compiles
+    expect(mayRunTools({ issuer: 'https://fasorx.example' }, 'win32')).toBe(true);
   });
 });
 

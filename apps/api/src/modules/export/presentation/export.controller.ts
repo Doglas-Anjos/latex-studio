@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { RouteConfig } from '@nestjs/platform-fastify';
 import { CurrentUser } from '../../auth/presentation/decorators';
+import { assertMayRunTools } from '../../lan/application/lan.service';
 import type { Project } from '../../projects/domain/project';
 import {
   CurrentProject,
@@ -79,7 +80,11 @@ export class ExportController {
   @Post('wordcount')
   @RequireProjectRole('editor')
   @HttpCode(202)
-  wordCount(@CurrentProject() project: Project): Promise<{ jobId: string }> {
+  wordCount(
+    @CurrentProject() project: Project,
+    @CurrentUser() user: User,
+  ): Promise<{ jobId: string }> {
+    assertMayRunTools(user); // texcount follows \input like TeX does
     return this.exporter.requestWordCount(project);
   }
 
@@ -89,8 +94,10 @@ export class ExportController {
   @HttpCode(202)
   requestExport(
     @CurrentProject() project: Project,
+    @CurrentUser() user: User,
     @Param('format') format: string,
   ): Promise<{ jobId: string }> {
+    assertMayRunTools(user); // pandoc follows \input like TeX does
     if (!Object.hasOwn(TYPES, format)) throw new BadRequestException('Unknown format');
     return this.exporter.requestExport(project, format as ExportFormat);
   }
