@@ -3,5 +3,6 @@ export * from './builds';
 export * from './collab';
 export * from './comments';
 export * from './file-edits';
+export * from './lan';
 export * from './projects';
 export * from './users';
