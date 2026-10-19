@@ -2,6 +2,11 @@ packages:
   - apps/*
   - packages/*
 
+# Dedupe fastify to one copy: @nestjs/platform-fastify pins 5.12.5 while apps/api and the @fastify/*
+# plugins want 5.12.7, and two copies give incompatible FastifyInstance types at build.
+overrides:
+  fastify: 5.12.7
+
 # Supply-chain policy: refuse versions published less than 24h ago
 minimumReleaseAge: 1440
 
