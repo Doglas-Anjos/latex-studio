@@ -73,7 +73,10 @@ export function ProjectsPage() {
   const lanShareRef = useRef<HTMLDialogElement>(null);
   const [lanOpen, setLanOpen] = useState(false);
   // A local install (no FasorX) shares over the LAN; a FasorX deployment invites members by e-mail.
-  const local = useMe().data?.issuer === 'local';
+  const issuer = useMe().data?.issuer;
+  const local = issuer === 'local';
+  // A LAN guest (joined by PIN) only edits what was shared with them: no creating/importing projects.
+  const guest = issuer === 'lan';
   const helpRef = useRef<HTMLDialogElement>(null);
 
   const search = useDebounced(query.trim());
@@ -158,25 +161,27 @@ export function ProjectsPage() {
                 onChange={(e) => changeQuery(e.target.value)}
               />
             </label>
-            <Menu
-              className="new-menu"
-              triggerClassName="btn btn-secondary btn-compact"
-              label={
-                <>
-                  <Plus size={16} aria-hidden="true" /> {d.newProject}
-                </>
-              }
-            >
-              <button type="button" onClick={openCreate}>
-                {d.blankProject}
-              </button>
-              <button type="button" onClick={() => openImport('zip')}>
-                {d.importZip}
-              </button>
-              <button type="button" onClick={() => openImport('folder')}>
-                {d.importFolder}
-              </button>
-            </Menu>
+            {!guest && (
+              <Menu
+                className="new-menu"
+                triggerClassName="btn btn-secondary btn-compact"
+                label={
+                  <>
+                    <Plus size={16} aria-hidden="true" /> {d.newProject}
+                  </>
+                }
+              >
+                <button type="button" onClick={openCreate}>
+                  {d.blankProject}
+                </button>
+                <button type="button" onClick={() => openImport('zip')}>
+                  {d.importZip}
+                </button>
+                <button type="button" onClick={() => openImport('folder')}>
+                  {d.importFolder}
+                </button>
+              </Menu>
+            )}
           </div>
         </div>
 
@@ -200,9 +205,10 @@ export function ProjectsPage() {
         {isPending && <p className="status-note">{d.loading}</p>}
         {error && <Alert>{d.loadError}</Alert>}
         {download.error && <Alert>{download.error.message}</Alert>}
-        {data?.total === 0 && !filtered && (
+        {data?.total === 0 && !filtered && !guest && (
           <EmptyLibrary onCreate={openCreate} onImport={() => openImport('zip')} />
         )}
+        {data?.total === 0 && !filtered && guest && <p className="status-note">{d.guestEmpty}</p>}
         {data && rows.length === 0 && (data.total > 0 || filtered) && (
           <NoResults onClear={clearSearch} />
         )}

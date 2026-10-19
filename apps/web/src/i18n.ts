@@ -138,6 +138,7 @@ interface DashStrings {
   filters: string;
   loading: string;
   loadError: string;
+  guestEmpty: string;
   recent: string;
   open: string;
   /** Prefixes the project name in the "continue" button's aria-label. */
@@ -188,6 +189,7 @@ const DASH: Record<UiLang, DashStrings> = {
     filters: 'Filtros',
     loading: 'Carregando…',
     loadError: 'Não foi possível carregar os projetos.',
+    guestEmpty: 'Nenhum projeto compartilhado com você ainda.',
     recent: 'Último projeto',
     open: 'Abrir',
     continuePrefix: 'Continuar projeto',
@@ -236,6 +238,7 @@ const DASH: Record<UiLang, DashStrings> = {
     filters: 'Filters',
     loading: 'Loading…',
     loadError: 'Could not load the projects.',
+    guestEmpty: 'No projects have been shared with you yet.',
     recent: 'Last project',
     open: 'Open',
     continuePrefix: 'Continue project',
@@ -283,6 +286,7 @@ const DASH: Record<UiLang, DashStrings> = {
     filters: 'Filtros',
     loading: 'Cargando…',
     loadError: 'No se pudieron cargar los proyectos.',
+    guestEmpty: 'Aún no se ha compartido ningún proyecto contigo.',
     recent: 'Último proyecto',
     open: 'Abrir',
     continuePrefix: 'Continuar proyecto',
