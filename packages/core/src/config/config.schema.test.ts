@@ -56,6 +56,17 @@ describe('loadConfig', () => {
     expect(jwks('http://localhost:8000/jwks.json').AUTH_JWKS_URL).toBeDefined();
   });
 
+  it('gates LAN share to a non-production localhost with a secret', () => {
+    const secret = 'l'.repeat(32);
+    expect(loadConfig(valid).LAN_SHARE).toBe(false);
+    expect(() => loadConfig({ ...valid, LAN_SHARE: '1' })).toThrow(/LAN_SHARE needs LAN_SECRET/);
+    expect(loadConfig({ ...valid, LAN_SHARE: '1', LAN_SECRET: secret }).LAN_SHARE).toBe(true);
+    for (const bad of [{ NODE_ENV: 'production' }, { APP_URL: 'https://latex.example.com' }])
+      expect(() => loadConfig({ ...valid, LAN_SHARE: '1', LAN_SECRET: secret, ...bad })).toThrow(
+        /LAN_SHARE/,
+      );
+  });
+
   it('leaves the subject graph size automatic unless a count is set', () => {
     expect(loadConfig({ ...valid, SUBJECT_GRAPH_AREAS: '' }).SUBJECT_GRAPH_AREAS).toBeUndefined();
     expect(loadConfig({ ...valid, SUBJECT_GRAPH_AREAS: '10' }).SUBJECT_GRAPH_AREAS).toBe(10);

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException, HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { USER_REPOSITORY, type UserRepository } from '../../users/domain/user.repository';
 import { LAN_REPOSITORY, type LanRepository } from '../domain/lan.repository';
+import { LanTokenService } from './lan-token.service';
 import { generatePin, hashPin, isPin, verifyPin } from './pin';
 
 /** A person's access as shown to the host (never the PIN hash). */
@@ -37,7 +38,25 @@ export class LanService {
   constructor(
     @Inject(LAN_REPOSITORY) private readonly repo: LanRepository,
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
+    @Inject(LanTokenService) private readonly tokens: LanTokenService,
   ) {}
+
+  /**
+   * A friend joins with a PIN: verify it, then mint a session token carrying the backing user id.
+   * Null when the PIN is wrong or the project is not published; throws 429 when locked out.
+   */
+  async join(
+    projectId: string,
+    pin: string,
+    clientKey: string,
+  ): Promise<{ token: string; alias: string } | null> {
+    // When LAN share is off, bail before verify so a disabled feature never burns a PIN attempt.
+    if (!this.tokens.enabled) return null;
+    const access = await this.verify(projectId, pin, clientKey);
+    if (!access) return null;
+    const token = await this.tokens.sign(access.userId);
+    return token ? { token, alias: access.alias } : null;
+  }
 
   publish(projectId: string): Promise<void> {
     return this.repo.publish(projectId);
