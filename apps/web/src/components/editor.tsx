@@ -36,7 +36,7 @@ import { Button } from './button';
 import { type CollabSession, dropSession, isOpenSession, openSession } from './collab-sessions';
 import { commentGutter } from './comment-gutter';
 import { CommentMenu } from './comment-menu';
-import { authorshipSource, registerAuthor } from './editor-authors';
+import { localAuthor, registerAuthor, seedPastAuthors, trackRemoteAuthors } from './editor-authors';
 import { blameGutter, blameVisible, setBlame } from './editor-blame';
 import { changeGutter, DIFF_LIMITS, setChangeBase } from './editor-changes';
 import {
@@ -262,6 +262,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   });
   const queryClient = useQueryClient();
   const ytextRef = useRef<Y.Text | null>(null);
+  const docRef = useRef<Y.Doc | null>(null);
   const editorBoxRef = useRef<HTMLDivElement | null>(null);
   // True while the popup's own textarea has focus.
   const composingRef = useRef(false);
@@ -379,6 +380,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     // Own cursor label from here too: a role change re-runs this effect but not the [me] one.
     if (provider.awareness && meRef.current) setPresence(provider.awareness, meRef.current);
     ytextRef.current = ytext;
+    docRef.current = doc;
     const wrap = new Compartment();
     const ro = new Compartment();
     setFrozen(null);
@@ -516,7 +518,15 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             : [],
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
-          authorshipSource({ doc, ytext, color: peerColor, base: changeBase }),
+          localAuthor.of(
+            meRef.current
+              ? {
+                  id: meRef.current.id,
+                  name: meRef.current.name || meRef.current.email,
+                  color: peerColor(meRef.current.id),
+                }
+              : null,
+          ),
           blameGutter(),
           commentExtensions,
           EditorView.updateListener.of((u) => {
@@ -622,6 +632,12 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           );
     };
     awareness?.on('change', onAwareness);
+    // Live remote edits → their author (local edits are attributed by the field via userEvent).
+    const stopAuthors = trackRemoteAuthors(view, ytext, awareness);
+    // Past-session unsaved lines → seeded from the shared authors map; re-seed when a peer registers.
+    const reseedAuthors = () => seedPastAuthors(view, ytext, doc, peerColor, changeBase);
+    const authorsMap = doc.getMap('authors');
+    authorsMap.observe(reseedAuthors);
     // The server refuses or drops a document whose file was deleted or renamed (here or by a
     // collaborator), or that is too large: stop reconnecting and keep the text visible but frozen.
     let closed = false;
@@ -649,6 +665,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       unsubscribe();
       unsubWrap();
       awareness?.off('change', onAwareness);
+      stopAuthors();
+      authorsMap.unobserve(reseedAuthors);
       useWorkspaceStore.getState().setPeers([]);
       clearTimeout(wordTimer);
       useWorkspaceStore.getState().setEditorCommands(null);
@@ -657,6 +675,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       viewRef.current = null;
       providerRef.current = null;
       ytextRef.current = null;
+      docRef.current = null;
       composingRef.current = false;
       setIcon(null);
       setPopup(null);
@@ -693,6 +712,9 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     const text = baseText ?? null;
     changeBase.current = text;
     viewRef.current?.dispatch({ effects: setChangeBase.of(text) });
+    // Now that the committed base is known, attribute the lines that differ from it to their authors.
+    if (viewRef.current && ytextRef.current && docRef.current)
+      seedPastAuthors(viewRef.current, ytextRef.current, docRef.current, peerColor, changeBase);
   }, [baseText]);
 
   const activeBlame = blameVisible(blameOn, blame) ? (blame ?? null) : null;
