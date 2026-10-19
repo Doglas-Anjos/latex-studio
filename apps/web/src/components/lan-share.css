@@ -4,6 +4,28 @@
   gap: 1rem;
 }
 
+/* Match the app's form inputs (.field input): same border, radius, surface and focus ring. */
+.lan-share input,
+.join-pin {
+  font: inherit;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+
+.lan-share input:focus-visible,
+.join-pin:focus-visible {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 25%, transparent);
+}
+
 .lan-share-label {
   font-weight: 600;
   font-size: 0.85rem;
