@@ -1,5 +1,6 @@
 import { BadRequestException, HttpException } from '@nestjs/common';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { FakeUsers } from '../../users/testing/fake-user.repository';
 import { FakeLan } from '../testing/fake-lan.repository';
 import { LanService } from './lan.service';
 
@@ -8,10 +9,12 @@ const wrongOf = (pin: string) => (pin === '0000' ? '0001' : '0000');
 
 describe('LanService', () => {
   let repo: FakeLan;
+  let users: FakeUsers;
   let service: LanService;
   beforeEach(() => {
     repo = new FakeLan();
-    service = new LanService(repo);
+    users = new FakeUsers();
+    service = new LanService(repo, users);
   });
 
   it('publishes and unpublishes a project', async () => {
@@ -23,13 +26,26 @@ describe('LanService', () => {
     expect(await service.isPublished(P)).toBe(false);
   });
 
-  it('creates an access with a one-time pin and never exposes the hash', async () => {
+  it('creates an access backed by a lan user, with a one-time pin and no hash exposed', async () => {
     const acc = await service.createAccess(P, '  Ana  ');
     expect(acc.alias).toBe('Ana');
     expect(acc.pin).toMatch(/^\d{4}$/);
+    // A real user row backs the access, named after the alias.
+    expect(users.rows).toEqual([expect.objectContaining({ issuer: 'lan', name: 'Ana' })]);
     const list = await service.listAccess(P);
     expect(list).toEqual([expect.objectContaining({ id: acc.id, alias: 'Ana' })]);
     expect(JSON.stringify(list)).not.toContain('pinHash');
+    expect(JSON.stringify(list)).not.toContain('userId');
+  });
+
+  it('grants editor to a lan user only while the project stays published', async () => {
+    await service.publish(P);
+    await service.createAccess(P, 'Ana');
+    const userId = repo.access[0]?.userId ?? '';
+    expect(await service.roleOf(P, userId)).toBe('editor');
+    expect(await service.roleOf(P, '00000000-0000-4000-8000-0000000000ff')).toBeNull();
+    await service.unpublish(P);
+    expect(await service.roleOf(P, userId)).toBeNull(); // access kept, but not published
   });
 
   it('rejects a blank or oversized alias', async () => {
@@ -43,7 +59,9 @@ describe('LanService', () => {
     const { pin, id } = await service.createAccess(P, 'Ana');
     expect(await service.verify(P, pin, '10.0.0.5')).toBeNull(); // not published yet
     await service.publish(P);
-    expect(await service.verify(P, pin, '10.0.0.5')).toEqual({ id, alias: 'Ana' });
+    expect(await service.verify(P, pin, '10.0.0.5')).toEqual(
+      expect.objectContaining({ id, alias: 'Ana', userId: expect.any(String) }),
+    );
     expect(await service.verify(P, wrongOf(pin), '10.0.0.5')).toBeNull();
     expect(await service.verify(P, '123', '10.0.0.5')).toBeNull(); // malformed
   });

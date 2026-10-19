@@ -17,13 +17,24 @@ export class FakeLan implements LanRepository {
   async listPublished() {
     return [...this.published];
   }
-  async createAccess(projectId: string, alias: string, pinHash: string) {
+  async createAccess(projectId: string, userId: string, alias: string, pinHash: string) {
     const id = randomUUID();
-    this.access.push({ id, projectId, alias, pinHash, createdAt: new Date(), lastSeen: null });
+    this.access.push({
+      id,
+      projectId,
+      userId,
+      alias,
+      pinHash,
+      createdAt: new Date(),
+      lastSeen: null,
+    });
     return { id };
   }
   async accessesOf(projectId: string) {
     return this.access.filter((a) => a.projectId === projectId);
+  }
+  async hasAccess(projectId: string, userId: string) {
+    return this.access.some((a) => a.projectId === projectId && a.userId === userId);
   }
   async deleteAccess(id: string) {
     this.access = this.access.filter((a) => a.id !== id);

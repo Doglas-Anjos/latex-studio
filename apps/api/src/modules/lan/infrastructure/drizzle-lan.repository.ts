@@ -1,7 +1,7 @@
 import { DATABASE, type Database } from '@latex-studio/core';
 import { lanAccess, publishedProjects } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { LanAccessRow, LanRepository } from '../domain/lan.repository';
 
 @Injectable()
@@ -30,10 +30,15 @@ export class DrizzleLanRepository implements LanRepository {
     return rows.map((r) => r.id);
   }
 
-  async createAccess(projectId: string, alias: string, pinHash: string): Promise<{ id: string }> {
+  async createAccess(
+    projectId: string,
+    userId: string,
+    alias: string,
+    pinHash: string,
+  ): Promise<{ id: string }> {
     const [row] = await this.db
       .insert(lanAccess)
-      .values({ projectId, alias, pinHash })
+      .values({ projectId, userId, alias, pinHash })
       .returning({ id: lanAccess.id });
     if (!row) throw new Error('Failed to create LAN access');
     return { id: row.id };
@@ -41,6 +46,15 @@ export class DrizzleLanRepository implements LanRepository {
 
   accessesOf(projectId: string): Promise<LanAccessRow[]> {
     return this.db.select().from(lanAccess).where(eq(lanAccess.projectId, projectId));
+  }
+
+  async hasAccess(projectId: string, userId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: lanAccess.id })
+      .from(lanAccess)
+      .where(and(eq(lanAccess.projectId, projectId), eq(lanAccess.userId, userId)))
+      .limit(1);
+    return rows.length > 0;
   }
 
   async deleteAccess(id: string): Promise<void> {
