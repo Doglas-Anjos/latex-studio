@@ -70,6 +70,11 @@ const envSchema = baseSchema
     // same on the hosted instance and on a self-hosted university install. Empty = no admins
     // (except the local user in local mode).
     SUPERADMIN_EMAILS: optional(z.string()),
+    // LAN share: let friends on the local network edit a published project with a 4-digit PIN. A
+    // trusted-network convenience, never real auth, so it is gated to non-production localhost and
+    // needs its own ≥32-char secret for the short session tokens it signs (see LanTokenService).
+    LAN_SHARE: z.preprocess((v) => v === '1' || v === 'true', z.boolean()),
+    LAN_SECRET: optional(z.string().min(32)),
     // Subject graph size: areas around the document, and terms around each area. Unset = scaled
     // to the document (a short article gets a few, a thesis or book more); set = fixed.
     SUBJECT_GRAPH_AREAS: optionalCount,
@@ -88,7 +93,19 @@ const envSchema = baseSchema
   // The same key signs tokens for every app of that issuer: pin who signs and for whom.
   .refine((c) => !(c.AUTH_JWKS_URL || c.AUTH_SECRET) || (c.AUTH_ISSUER && c.AUTH_AUDIENCE), {
     message: 'AUTH_ISSUER and AUTH_AUDIENCE are required with a verifier',
-  });
+  })
+  // Opening the app to the network has no real login, so keep it to a trusted local machine.
+  .refine(
+    (c) =>
+      !c.LAN_SHARE ||
+      (!!c.LAN_SECRET &&
+        new URL(c.APP_URL).hostname === 'localhost' &&
+        c.NODE_ENV?.toLowerCase() !== 'production'),
+    {
+      message:
+        'LAN_SHARE needs LAN_SECRET and is only allowed when APP_URL is localhost and NODE_ENV is not production',
+    },
+  );
 
 export type AppConfig = z.output<typeof envSchema>;
 export type WorkerConfig = z.output<typeof baseSchema>;

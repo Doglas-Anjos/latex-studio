@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import { FakeLan } from '../testing/fake-lan.repository';
 import { LanService } from './lan.service';
+import { LanTokenService } from './lan-token.service';
 
 const P = '00000000-0000-4000-8000-00000000000a';
 const wrongOf = (pin: string) => (pin === '0000' ? '0001' : '0000');
@@ -10,11 +11,13 @@ const wrongOf = (pin: string) => (pin === '0000' ? '0001' : '0000');
 describe('LanService', () => {
   let repo: FakeLan;
   let users: FakeUsers;
+  let tokens: LanTokenService;
   let service: LanService;
   beforeEach(() => {
     repo = new FakeLan();
     users = new FakeUsers();
-    service = new LanService(repo, users);
+    tokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
+    service = new LanService(repo, users, tokens);
   });
 
   it('publishes and unpublishes a project', async () => {
@@ -85,5 +88,15 @@ describe('LanService', () => {
     await service.revokeAccess(id);
     expect(await service.listAccess(P)).toEqual([]);
     expect(await service.verify(P, pin, '10.0.0.5')).toBeNull();
+  });
+
+  it('join mints a token for the backing user on a valid pin', async () => {
+    await service.publish(P);
+    const { pin } = await service.createAccess(P, 'Ana');
+    const userId = repo.access[0]?.userId ?? '';
+    const joined = await service.join(P, pin, '10.0.0.5');
+    expect(joined?.alias).toBe('Ana');
+    expect(await tokens.verify(joined?.token ?? '')).toBe(userId);
+    expect(await service.join(P, wrongOf(pin), '10.0.0.6')).toBeNull();
   });
 });
