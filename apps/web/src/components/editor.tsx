@@ -263,6 +263,9 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
   const queryClient = useQueryClient();
   const ytextRef = useRef<Y.Text | null>(null);
   const docRef = useRef<Y.Doc | null>(null);
+  // Reconfigured when /me resolves, so this user's own edits get attributed even if the editor
+  // mounted before /me was known.
+  const localAuthorCmp = useRef<Compartment | null>(null);
   const editorBoxRef = useRef<HTMLDivElement | null>(null);
   // True while the popup's own textarea has focus.
   const composingRef = useRef(false);
@@ -383,6 +386,16 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     docRef.current = doc;
     const wrap = new Compartment();
     const ro = new Compartment();
+    const authorCmp = new Compartment();
+    localAuthorCmp.current = authorCmp;
+    const meAuthor = () =>
+      meRef.current
+        ? {
+            id: meRef.current.id,
+            name: meRef.current.name || meRef.current.email,
+            color: peerColor(meRef.current.id),
+          }
+        : null;
     setFrozen(null);
     const wrapping = (on: boolean) => (on ? EditorView.lineWrapping : []);
     const isTex = path.endsWith('.tex');
@@ -518,15 +531,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             : [],
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
-          localAuthor.of(
-            meRef.current
-              ? {
-                  id: meRef.current.id,
-                  name: meRef.current.name || meRef.current.email,
-                  color: peerColor(meRef.current.id),
-                }
-              : null,
-          ),
+          authorCmp.of(localAuthor.of(meAuthor())),
           blameGutter(),
           commentExtensions,
           EditorView.updateListener.of((u) => {
@@ -729,10 +734,16 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
     viewRef.current?.dispatch({ effects: setReferenceIndex.of(null) });
   }, [refIndex]);
 
-  // Own cursor label; separate so a late /me answer does not rebuild the editor.
+  // Own cursor label and self-attribution; separate so a late /me answer does not rebuild the editor.
   useEffect(() => {
     const awareness = providerRef.current?.awareness;
     if (awareness && me) setPresence(awareness, me);
+    if (viewRef.current && localAuthorCmp.current) {
+      const author = me ? { id: me.id, name: me.name || me.email, color: peerColor(me.id) } : null;
+      viewRef.current.dispatch({
+        effects: localAuthorCmp.current.reconfigure(localAuthor.of(author)),
+      });
+    }
   }, [me]);
 
   // Rebuild highlights when comments change.

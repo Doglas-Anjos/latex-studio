@@ -3904,9 +3904,31 @@ button.change-row-main:hover .change-name {
 .cm-changes-gutter .cm-line-deleted {
   border-bottom: 2px solid var(--danger);
 }
-/* Added/modified bar tinted by its author (editor-changes.ts) instead of the semantic colour. */
-.cm-changes-gutter .cm-line-authored {
-  background: var(--author-color);
+/* Added/modified bar tinted by its author's palette slot (editor-changes.ts), matching the cursor
+   colour, instead of the semantic added/modified colour. */
+.cm-changes-gutter .cm-author-0 {
+  background: var(--peer-1);
+}
+.cm-changes-gutter .cm-author-1 {
+  background: var(--peer-2);
+}
+.cm-changes-gutter .cm-author-2 {
+  background: var(--peer-3);
+}
+.cm-changes-gutter .cm-author-3 {
+  background: var(--peer-4);
+}
+.cm-changes-gutter .cm-author-4 {
+  background: var(--peer-5);
+}
+.cm-changes-gutter .cm-author-5 {
+  background: var(--peer-6);
+}
+.cm-changes-gutter .cm-author-6 {
+  background: var(--peer-7);
+}
+.cm-changes-gutter .cm-author-7 {
+  background: var(--peer-8);
 }
 
 /* Full-screen session / PIN-entry screens (RequireAuth error, join page). */
