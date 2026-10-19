@@ -131,6 +131,7 @@ export function PdfViewer({ projectId }: { projectId: string }) {
       )}
       <div ref={body} className="pdf-viewer-body">
         {!buildId && <p className="status-note">Compile o projeto para ver o PDF.</p>}
+        {buildId && !doc && !error && <p className="status-note">Carregando PDF…</p>}
         {error && <p className="form-error">Não foi possível exibir o PDF.</p>}
         <div ref={host} className="pdf-pages">
           {/* ponytail: every placeholder has page 1's size; a mixed-size document letterboxes

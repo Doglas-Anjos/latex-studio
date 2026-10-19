@@ -1,5 +1,6 @@
 import { useWorkspaceStore } from '../../workspace-store';
 import { peerSlot } from '../presence';
+import { useMatchMedia } from './use-match-media';
 
 /** One or two initials from a display name, for a presence circle. */
 export function initials(name: string): string {
@@ -10,18 +11,17 @@ export function initials(name: string): string {
   return (first + last).toUpperCase();
 }
 
-const MAX = 3;
-
 /**
  * Collaborators editing the open file right now, as Google-Docs-style initial circles in the
- * header. Deduped by account (two tabs of one person are one avatar) and capped with a "+N".
- * The circle colour comes from the account's palette slot, so it matches that person's cursor.
+ * header. Deduped by account (two tabs of one person are one avatar) and capped with a "+N" — fewer
+ * on a phone, where the header has no room. The circle colour comes from the account's palette slot.
  */
 export function PresenceAvatars() {
   const peers = useWorkspaceStore((s) => s.peers);
+  const phone = useMatchMedia('(max-width: 26rem)');
   const people = [...new Map(peers.map((p) => [p.userId, p])).values()];
   if (people.length === 0) return null;
-  const shown = people.slice(0, MAX);
+  const shown = people.slice(0, phone ? 1 : 3);
   const extra = people.length - shown.length;
   return (
     <ul
