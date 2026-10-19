@@ -3957,6 +3957,12 @@ button.change-row-main:hover .change-name {
   border-left-color: color-mix(in srgb, var(--muted) 55%, transparent);
   font-style: italic;
 }
+/* Being edited right now by a known person: a solid mark in their colour (overrides "não salvo"). */
+.cm-blame-run.cm-blame-live {
+  border-left-style: solid;
+  font-style: normal;
+  color: var(--blame-color);
+}
 
 /* Comment gutter: a "+" per line, hidden until the line is hovered (mouse) or
    always shown on touch, where hover has no meaning. */

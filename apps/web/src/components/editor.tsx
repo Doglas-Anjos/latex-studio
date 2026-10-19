@@ -36,6 +36,7 @@ import { Button } from './button';
 import { type CollabSession, dropSession, isOpenSession, openSession } from './collab-sessions';
 import { commentGutter } from './comment-gutter';
 import { CommentMenu } from './comment-menu';
+import { localAuthor, trackRemoteAuthors } from './editor-authors';
 import { blameGutter, blameVisible, setBlame } from './editor-blame';
 import { changeGutter, DIFF_LIMITS, setChangeBase } from './editor-changes';
 import {
@@ -515,6 +516,15 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
             : [],
           commentHighlights(ytext, commentsRef),
           changeGutter(changeBase),
+          localAuthor.of(
+            meRef.current
+              ? {
+                  id: meRef.current.id,
+                  name: meRef.current.name || meRef.current.email,
+                  color: peerColor(meRef.current.id),
+                }
+              : null,
+          ),
           blameGutter(),
           commentExtensions,
           EditorView.updateListener.of((u) => {
@@ -610,6 +620,8 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           );
     };
     awareness?.on('change', onAwareness);
+    // Attribute each peer's live (uncommitted) edits so the blame gutter shows who is editing.
+    const stopAuthors = trackRemoteAuthors(view, ytext, awareness);
     // The server refuses or drops a document whose file was deleted or renamed (here or by a
     // collaborator), or that is too large: stop reconnecting and keep the text visible but frozen.
     let closed = false;
@@ -637,6 +649,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
       unsubscribe();
       unsubWrap();
       awareness?.off('change', onAwareness);
+      stopAuthors();
       useWorkspaceStore.getState().setPeers([]);
       clearTimeout(wordTimer);
       useWorkspaceStore.getState().setEditorCommands(null);
