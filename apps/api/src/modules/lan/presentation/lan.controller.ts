@@ -8,6 +8,7 @@ import {
   Inject,
   Optional,
   Param,
+  ParseUUIDPipe,
   Post,
   Req,
   UnauthorizedException,
@@ -78,7 +79,10 @@ export class LanController {
 
   @Delete('access/:accessId')
   @RequireProjectRole('owner')
-  async revoke(@CurrentProject() project: Project, @Param('accessId') accessId: string) {
+  async revoke(
+    @CurrentProject() project: Project,
+    @Param('accessId', ParseUUIDPipe) accessId: string,
+  ) {
     const userId = await this.lan.revokeAccess(project.id, accessId);
     // Close that peer's open sockets so they cannot keep editing the live doc after being revoked.
     if (userId) this.sync?.revoke(project.id, userId);
@@ -90,7 +94,7 @@ export class LanController {
   @Public()
   @RouteConfig({ rateLimit: { max: 10, timeWindow: '1 minute' } })
   async join(
-    @Param('projectId') projectId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
     @Body() dto: JoinDto,
     @Req() req: FastifyRequest,
   ) {

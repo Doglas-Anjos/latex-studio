@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { LanTokenService } from '../../lan/application/lan-token.service';
+import { LAN_ISSUER } from '../../users/domain/user';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import type { TokenVerifier } from '../domain/token-verifier';
 import {
@@ -27,8 +29,28 @@ describe('IdentityService', () => {
     expect(await identity.resolve(null, undefined, '127.0.0.1')).toBeNull();
     // A LAN peer spoofing Host: localhost is refused: its socket address is not loopback.
     expect(await identity.resolve(null, 'localhost:3001', '192.168.0.9')).toBeNull();
-    expect(await identity.resolve(null, 'localhost:3001', undefined)).toBeNull();
+    expect(await identity.resolve(null, 'localhost:3001', '')).toBeNull();
     expect(users.rows).toHaveLength(1);
+  });
+
+  it('resolves a valid LAN token to its backing user, from any address', async () => {
+    const users = new FakeUsers();
+    const lanTokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
+    const identity = new IdentityService(users, undefined, lanTokens);
+    const guest = await users.upsert({
+      issuer: LAN_ISSUER,
+      subject: 's-1',
+      email: 'lan+s-1@localhost',
+      name: 'Gus',
+    });
+    const token = (await lanTokens.sign(guest.id)) ?? '';
+    expect(await identity.resolve(token, '192.168.0.5:5175', '192.168.0.9')).toBe(guest);
+    // A forged token falls through to local mode, which a LAN peer never passes.
+    expect(await identity.resolve('forged', '192.168.0.5:5175', '192.168.0.9')).toBeNull();
+    // A validly signed token naming a non-LAN account (the host's) is refused, even from loopback.
+    const host = await users.upsert(LOCAL_IDENTITY);
+    const asHost = (await lanTokens.sign(host.id)) ?? '';
+    expect(await identity.resolve(asHost, 'localhost:5175', '127.0.0.1')).toBeNull();
   });
 
   it('verifies the token once per lifetime, upserting the user, and refuses bad ones', async () => {
@@ -39,11 +61,12 @@ describe('IdentityService', () => {
     const verifier: TokenVerifier = { verify };
     const identity = new IdentityService(users, verifier);
     const host = 'latex.example.com';
-    expect(await identity.resolve(null, host)).toBeNull();
-    expect(await identity.resolve('bad', host)).toBeNull();
-    const user = await identity.resolve('good', host);
+    const ip = '203.0.113.7';
+    expect(await identity.resolve(null, host, ip)).toBeNull();
+    expect(await identity.resolve('bad', host, ip)).toBeNull();
+    const user = await identity.resolve('good', host, ip);
     expect(user?.email).toBe('ana@example.com');
-    expect((await identity.resolve('good', host))?.id).toBe(user?.id);
+    expect((await identity.resolve('good', host, ip))?.id).toBe(user?.id);
     expect(verify).toHaveBeenCalledTimes(2);
     expect(users.rows).toHaveLength(1);
   });
@@ -56,7 +79,7 @@ describe('IdentityService', () => {
     const req = (authorization?: string, ip = '10.0.0.1') => ({ headers: { authorization }, ip });
     // Before the guard verified it, a token counts against its IP; the key never verifies.
     expect(rateLimitKey(identity, req('Bearer good'))).toBe('10.0.0.1');
-    await identity.resolve('good', 'latex.example.com');
+    await identity.resolve('good', 'latex.example.com', '10.0.0.1');
     const key = rateLimitKey(identity, req('Bearer good'));
     expect(key).toMatch(/^user:/);
     expect(rateLimitKey(identity, req('Bearer good', '10.0.0.2'))).toBe(key);

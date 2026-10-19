@@ -61,7 +61,12 @@ describe('loadConfig', () => {
     expect(loadConfig(valid).LAN_SHARE).toBe(false);
     expect(() => loadConfig({ ...valid, LAN_SHARE: '1' })).toThrow(/LAN_SHARE needs LAN_SECRET/);
     expect(loadConfig({ ...valid, LAN_SHARE: '1', LAN_SECRET: secret }).LAN_SHARE).toBe(true);
-    for (const bad of [{ NODE_ENV: 'production' }, { APP_URL: 'https://latex.example.com' }])
+    const verifier = { AUTH_SECRET: 's'.repeat(32), AUTH_ISSUER: 'fx', AUTH_AUDIENCE: 'latex' };
+    for (const bad of [
+      { NODE_ENV: 'production' },
+      { APP_URL: 'https://latex.example.com' },
+      verifier, // FasorX mode trusts the peer's X-Forwarded-For: no PIN lockout to rely on
+    ])
       expect(() => loadConfig({ ...valid, LAN_SHARE: '1', LAN_SECRET: secret, ...bad })).toThrow(
         /LAN_SHARE/,
       );

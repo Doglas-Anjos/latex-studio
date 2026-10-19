@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { LanTokenService } from '../../lan/application/lan-token.service';
-import type { User } from '../../users/domain/user';
+import { LAN_ISSUER, type User } from '../../users/domain/user';
 import { USER_REPOSITORY, type UserRepository } from '../../users/domain/user.repository';
 import { TOKEN_VERIFIER, type TokenVerifier } from '../domain/token-verifier';
 
@@ -53,20 +53,28 @@ export class IdentityService {
    * In local mode the request must be addressed to localhost (`host`, against DNS rebinding) AND
    * arrive from a loopback peer (`remoteIp`): with LAN share the API binds the LAN interface, and a
    * peer there could otherwise spoof `Host: localhost` over a raw socket to be granted the owner.
-   * ponytail: through the dev Vite proxy the peer address is always loopback, so there the Host
-   * header is the only host/friend signal — fine for this trusted-network feature (the PIN gates
-   * access). A hardened topology serves the app from the API itself (one origin, true peer IPs).
+   * `remoteIp` is the real client even through the dev Vite proxy: Vite appends it to
+   * X-Forwarded-For (`xfwd`), Fastify reads that header only from a loopback socket (trustProxy
+   * 'loopback') and the WebSocket upgrade takes only its right-most entry (`peerIp`).
+   * ponytail: that trusts whatever listens on loopback to append the client. A loopback proxy that
+   * does not (Vite without `xfwd`, another local reverse proxy) makes every client look like
+   * loopback, leaving the Host header, which a non-browser client can forge, as the only gate. Fine
+   * for this trusted-network feature; a hardened topology serves the app from the API itself.
    */
   async resolve(
     token: string | null,
     host: string | undefined,
-    remoteIp?: string,
+    remoteIp: string,
   ): Promise<User | null> {
-    // A LAN peer presents a LAN session token (minted after a PIN). It identifies them in any mode,
-    // and before the local-mode fallback, so a peer on the LAN IP is never auto-granted the host.
+    // A LAN peer presents a LAN session token (minted after a PIN), checked before the local-mode
+    // fallback so a peer on the LAN IP is never auto-granted the host. Only a LAN user row counts:
+    // even a forged token (leaked LAN_SECRET) cannot name the host's own account.
     if (token && this.lanTokens?.enabled) {
       const userId = await this.lanTokens.verify(token);
-      if (userId) return this.users.findById(userId);
+      if (userId) {
+        const user = await this.users.findById(userId);
+        return user?.issuer === LAN_ISSUER ? user : null;
+      }
     }
     if (!this.verifier) {
       if (!LOCAL_HOST.test(host ?? '') || !isLoopback(remoteIp)) return null;

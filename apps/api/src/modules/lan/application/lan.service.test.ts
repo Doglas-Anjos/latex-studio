@@ -1,5 +1,6 @@
 import { BadRequestException, HttpException } from '@nestjs/common';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { LAN_ISSUER } from '../../users/domain/user';
 import { FakeUsers } from '../../users/testing/fake-user.repository';
 import { FakeLan } from '../testing/fake-lan.repository';
 import { LanService, lanOrigins } from './lan.service';
@@ -34,7 +35,7 @@ describe('LanService', () => {
     expect(acc.alias).toBe('Ana');
     expect(acc.pin).toMatch(/^\d{4}$/);
     // A real user row backs the access, named after the alias.
-    expect(users.rows).toEqual([expect.objectContaining({ issuer: 'lan', name: 'Ana' })]);
+    expect(users.rows).toEqual([expect.objectContaining({ issuer: LAN_ISSUER, name: 'Ana' })]);
     const list = await service.listAccess(P);
     expect(list).toEqual([expect.objectContaining({ id: acc.id, alias: 'Ana' })]);
     expect(JSON.stringify(list)).not.toContain('pinHash');
@@ -75,11 +76,24 @@ describe('LanService', () => {
     const bad = wrongOf(pin);
     for (let i = 0; i < 5; i++) expect(await service.verify(P, bad, '10.0.0.9')).toBeNull();
     await expect(service.verify(P, bad, '10.0.0.9')).rejects.toBeInstanceOf(HttpException);
+    // Postgres matches the id in any case: an uppercase twin must share the lock, not reset it.
+    await expect(service.verify(P.toUpperCase(), bad, '10.0.0.9')).rejects.toBeInstanceOf(
+      HttpException,
+    );
     // the right pin is now locked out too, but only for that client
     await expect(service.verify(P, pin, '10.0.0.9')).rejects.toBeInstanceOf(HttpException);
     expect(await service.verify(P, pin, '10.0.0.10')).toEqual(
       expect.objectContaining({ alias: 'Ana' }),
     );
+  });
+
+  it('locks a concurrent burst of wrong pins, not only sequential ones', async () => {
+    await service.publish(P);
+    const { pin } = await service.createAccess(P, 'Ana');
+    const burst = await Promise.allSettled(
+      Array.from({ length: 6 }, () => service.verify(P, wrongOf(pin), '10.0.0.7')),
+    );
+    expect(burst.filter((r) => r.status === 'rejected')).toHaveLength(1); // the 6th, past the cap of 5
   });
 
   it('revokes an access and returns its backing user id', async () => {
@@ -117,6 +131,27 @@ describe('LanService', () => {
     expect(joined?.alias).toBe('Ana');
     expect(await tokens.verify(joined?.token ?? '')).toBe(userId);
     expect(await service.join(P, wrongOf(pin), '10.0.0.6')).toBeNull();
+  });
+
+  it('lists the published projects a lan user has an access to', async () => {
+    const Q = '00000000-0000-4000-8000-00000000000b';
+    const R = '00000000-0000-4000-8000-00000000000c';
+    await service.publish(P);
+    await service.publish(Q);
+    await service.createAccess(P, 'Ana');
+    const userId = repo.access[0]?.userId ?? '';
+    await repo.createAccess(R, userId, 'Ana', 'hash'); // access, but R is not published
+    expect(await service.projectsFor(userId)).toEqual([P]);
+  });
+
+  it('answers empty without reading the LAN tables when LAN share is off', async () => {
+    await service.publish(P);
+    await service.createAccess(P, 'Ana');
+    const userId = repo.access[0]?.userId ?? '';
+    const off = new LanService(repo, users, new LanTokenService({ LAN_SHARE: false }));
+    expect(await off.roleOf(P, userId)).toBeNull();
+    expect(await off.listPublished()).toEqual([]);
+    expect(await off.projectsFor(userId)).toEqual([]);
   });
 });
 
