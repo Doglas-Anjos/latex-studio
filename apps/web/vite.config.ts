@@ -7,6 +7,9 @@ const api = `localhost:${process.env.API_PORT ?? 3000}`;
 export default defineConfig({
   plugins: [react()],
   server: {
+    // Only the web app and the dependencies. The default is the whole repo, and `/@fs/<path>` would
+    // hand anyone on the LAN (with `--host`) the projects in data/, with no PIN or token.
+    fs: { allow: ['.', '../../node_modules'] },
     proxy: {
       // xfwd forwards the real client IP/host (X-Forwarded-*) so the API can tell a LAN peer from
       // the host machine; without it the proxy (on loopback) makes every request look like localhost.
