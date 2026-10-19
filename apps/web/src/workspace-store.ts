@@ -184,7 +184,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
       s.peers.length === peers.length &&
       s.peers.every((p, i) => {
         const q = peers[i];
-        return q && p.id === q.id && p.name === q.name && p.color === q.color;
+        return (
+          q && p.id === q.id && p.userId === q.userId && p.name === q.name && p.color === q.color
+        );
       })
         ? s
         : { peers },
