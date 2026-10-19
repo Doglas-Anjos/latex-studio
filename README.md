@@ -149,6 +149,13 @@ Abra o app no endereço local que o `pnpm lan` mostrou (**http://localhost:5173*
 
 O amigo abre o link, digita o PIN e edita o projeto como editor. O nome dele aparece nos avatares e nas linhas que ele altera, com uma cor própria. Ele vê só os projetos compartilhados com ele e não cria nem importa projetos. A sessão dura 12 horas; depois disso, é preciso digitar o PIN de novo.
 
+**Anfitrião no Windows: só compartilhe com quem você confiaria seus arquivos.**
+
+- **Só o anfitrião compila e exporta.** O convidado edita e vê o último PDF, que se atualiza sozinho em até 10 s quando o anfitrião compila, mas os botões de compilar, exportar e contar palavras ficam desabilitados para ele.
+- **O motivo:** no Windows a compilação roda sem sandbox, e o MiKTeX não impede o LaTeX de ler arquivos fora do projeto. Um `\input` ou `\openin` com um caminho como `C:/...` lê qualquer arquivo que o seu usuário do Windows alcança.
+- **O risco que sobra:** quem compila é o anfitrião, mas o texto compilado inclui o que o convidado escreveu, e o PDF e o log voltam para ele. Ou seja, um convidado mal-intencionado ainda consegue ler arquivos do anfitrião.
+- **Linux e macOS não têm essa limitação:** lá o TeX Live bloqueia esses caminhos.
+
 ### Encerrar
 
 - **Todo mundo, na hora:** desligue **Acesso remoto (LAN)**. Ninguém entra, nem com PIN, e quem estiver editando é desconectado. Se você religar em menos de 12 horas, quem já tinha entrado volta sem digitar o PIN.
