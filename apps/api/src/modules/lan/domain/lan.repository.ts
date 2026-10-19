@@ -2,6 +2,8 @@
 export interface LanAccessRow {
   id: string;
   projectId: string;
+  /** The real user row backing this access. */
+  userId: string;
   alias: string;
   pinHash: string;
   createdAt: Date;
@@ -18,9 +20,16 @@ export interface LanRepository {
   isPublished(projectId: string): Promise<boolean>;
   /** Project ids currently published. */
   listPublished(): Promise<string[]>;
-  createAccess(projectId: string, alias: string, pinHash: string): Promise<{ id: string }>;
+  createAccess(
+    projectId: string,
+    userId: string,
+    alias: string,
+    pinHash: string,
+  ): Promise<{ id: string }>;
   /** Every access of a project, with its PIN hash (for verification). */
   accessesOf(projectId: string): Promise<LanAccessRow[]>;
+  /** Whether `userId` has an access to `projectId` (the LAN authz check). */
+  hasAccess(projectId: string, userId: string): Promise<boolean>;
   deleteAccess(id: string): Promise<void>;
   /** Records that an access was just used. */
   touchAccess(id: string): Promise<void>;
