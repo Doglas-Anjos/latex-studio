@@ -1,5 +1,6 @@
 import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 import { projects } from './projects';
+import { users } from './users';
 
 /** Projects the host has shared on the local network (LAN share mode). A row = published. */
 export const publishedProjects = pgTable('published_projects', {
@@ -15,6 +16,10 @@ export const lanAccess = pgTable('lan_access', {
   projectId: uuid('project_id')
     .notNull()
     .references(() => projects.id, { onDelete: 'cascade' }),
+  // The real user row backing this access (name = alias), so presence/blame/history credit it.
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
   alias: text('alias').notNull(),
   // scrypt `salt:hash` (hex); never the plaintext PIN.
   pinHash: text('pin_hash').notNull(),

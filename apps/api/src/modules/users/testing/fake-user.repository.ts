@@ -22,7 +22,9 @@ export class FakeUsers implements UserRepository {
   async list({ search, limit, offset }: { search?: string; limit: number; offset: number }) {
     const t = search?.toLowerCase();
     const all = this.rows.filter(
-      (u) => !t || u.email.toLowerCase().includes(t) || u.name.toLowerCase().includes(t),
+      (u) =>
+        u.issuer !== 'lan' &&
+        (!t || u.email.toLowerCase().includes(t) || u.name.toLowerCase().includes(t)),
     );
     return { items: all.slice(offset, offset + limit), total: all.length };
   }

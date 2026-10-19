@@ -1,4 +1,6 @@
+import { randomUUID } from 'node:crypto';
 import { BadRequestException, HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { USER_REPOSITORY, type UserRepository } from '../../users/domain/user.repository';
 import { LAN_REPOSITORY, type LanRepository } from '../domain/lan.repository';
 import { generatePin, hashPin, isPin, verifyPin } from './pin';
 
@@ -32,7 +34,10 @@ export class LanService {
   // `lan_pin_attempts` table if it ever runs clustered. Keyed per client and per project.
   private readonly attempts = new Map<string, { failed: number; last: number }>();
 
-  constructor(@Inject(LAN_REPOSITORY) private readonly repo: LanRepository) {}
+  constructor(
+    @Inject(LAN_REPOSITORY) private readonly repo: LanRepository,
+    @Inject(USER_REPOSITORY) private readonly users: UserRepository,
+  ) {}
 
   publish(projectId: string): Promise<void> {
     return this.repo.publish(projectId);
@@ -47,7 +52,10 @@ export class LanService {
     return this.repo.listPublished();
   }
 
-  /** Creates a person's access and returns the one-time plaintext PIN for the host to share. */
+  /**
+   * Creates a person's access and returns the one-time plaintext PIN for the host to share. Each
+   * access is backed by a real user row (name = alias) so presence, blame and history credit it.
+   */
   async createAccess(
     projectId: string,
     alias: string,
@@ -56,14 +64,37 @@ export class LanService {
     if (clean.length < 1 || clean.length > 40 || /\p{Cc}/u.test(clean)) {
       throw new BadRequestException('Invalid alias');
     }
+    const sub = randomUUID();
+    const user = await this.users.upsert({
+      issuer: 'lan',
+      subject: sub,
+      email: `lan+${sub}@localhost`,
+      name: clean,
+    });
     const pin = generatePin();
-    const { id } = await this.repo.createAccess(projectId, clean, await hashPin(pin));
+    const { id } = await this.repo.createAccess(projectId, user.id, clean, await hashPin(pin));
     return { id, alias: clean, pin };
+  }
+
+  /**
+   * The role a LAN user has on a project: `editor` when they hold an access and the project is still
+   * published, else null. The guard (phase 3) consults this after a normal membership check.
+   * Argument order mirrors `ProjectRepository.roleOf(projectId, userId)` so the two can't be swapped.
+   */
+  async roleOf(projectId: string, userId: string): Promise<'editor' | null> {
+    if (
+      (await this.repo.hasAccess(projectId, userId)) &&
+      (await this.repo.isPublished(projectId))
+    ) {
+      return 'editor';
+    }
+    return null;
   }
 
   async listAccess(projectId: string): Promise<LanAccessView[]> {
     const rows = await this.repo.accessesOf(projectId);
-    return rows.map(({ pinHash: _pinHash, ...rest }) => rest);
+    // Drop the PIN hash and the internal backing user id.
+    return rows.map(({ pinHash: _pinHash, userId: _userId, ...rest }) => rest);
   }
 
   revokeAccess(id: string): Promise<void> {
@@ -79,7 +110,7 @@ export class LanService {
     projectId: string,
     pin: string,
     clientKey: string,
-  ): Promise<{ id: string; alias: string } | null> {
+  ): Promise<{ id: string; userId: string; alias: string } | null> {
     if (!isPin(pin)) return null;
     const now = Date.now();
     const client: [string, number] = [`c:${projectId}:${clientKey}`, CLIENT_FAILS];
@@ -96,7 +127,7 @@ export class LanService {
         this.attempts.delete(client[0]);
         this.attempts.delete(project[0]);
         await this.repo.touchAccess(row.id);
-        return { id: row.id, alias: row.alias };
+        return { id: row.id, userId: row.userId, alias: row.alias };
       }
     }
     this.prune(now);
