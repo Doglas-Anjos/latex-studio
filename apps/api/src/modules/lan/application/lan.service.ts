@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { NetworkInterfaceInfo } from 'node:os';
 import {
   BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Inject,
@@ -62,7 +63,8 @@ const MEMORY_MS = 60 * 60_000;
  * PIN verification, hashing and the brute-force lockout live here; LanController exposes them over
  * HTTP, and ProjectRoleGuard/CollabService consult `roleOf` for a guest's editor role. The reads on
  * every request (`roleOf`, `listPublished`, `projectsFor`) answer empty when LAN share is off, so
- * production never queries the LAN tables for them.
+ * production never queries the LAN tables for them. Two gates: the host's side (publish, PINs)
+ * needs LAN share configured; the guest's side (join, role) also needs remote access switched on.
  */
 @Injectable()
 export class LanService {
@@ -78,30 +80,55 @@ export class LanService {
 
   /**
    * A friend joins with a PIN: verify it, then mint a session token carrying the backing user id.
-   * Null when the PIN is wrong or the project is not published; throws 429 when locked out.
+   * Null when the PIN is wrong or the project is not published; throws 429 when locked out and 403
+   * while the host has remote access off.
    */
   async join(
     projectId: string,
     pin: string,
     clientKey: string,
   ): Promise<{ token: string; alias: string } | null> {
-    // When LAN share is off, bail before verify so a disabled feature never burns a PIN attempt.
-    if (!this.tokens.enabled) return null;
+    // When LAN share or remote access is off, bail before verify so no PIN attempt is burnt. Off by
+    // the host is said plainly (403), so the friend knows to ask rather than retype the PIN.
+    if (!this.tokens.configured) return null;
+    if (!this.tokens.enabled) throw new ForbiddenException('Remote access is off');
     const access = await this.verify(projectId, pin, clientKey);
     if (!access) return null;
-    // Non-null: sign returns null only when disabled, checked above.
-    return { token: (await this.tokens.sign(access.userId)) as string, alias: access.alias };
+    // Null when the host switched remote access off while the PIN was being checked.
+    const token = await this.tokens.sign(access.userId);
+    if (!token) throw new ForbiddenException('Remote access is off');
+    return { token, alias: access.alias };
   }
 
   /** Whether LAN share is configured (flag + secret); the UI greys the controls out when false. */
-  enabled(): boolean {
+  configured(): boolean {
+    return this.tokens.configured;
+  }
+
+  /** Whether the host has remote access on (guests can join and edit). */
+  remote(): boolean {
     return this.tokens.enabled;
+  }
+
+  /**
+   * Switches remote access for the whole install. Turning it off returns every guest's
+   * [projectId, userId], so the caller closes their open sockets (their tokens already stop working).
+   */
+  async setRemote(on: boolean): Promise<Array<[string, string]>> {
+    if (!this.tokens.configured) throw new NotFoundException();
+    this.tokens.setRemote(on);
+    if (on) return [];
+    const guests: Array<[string, string]> = [];
+    for (const projectId of await this.repo.listPublished()) {
+      for (const a of await this.repo.accessesOf(projectId)) guests.push([projectId, a.userId]);
+    }
+    return guests;
   }
 
   publish(projectId: string): Promise<void> {
     // Off everywhere but a local LAN install, so these never create rows in production (where the
     // routes still exist but LAN is disabled): a NotFound makes the feature invisible there.
-    if (!this.tokens.enabled) throw new NotFoundException();
+    if (!this.tokens.configured) throw new NotFoundException();
     return this.repo.publish(projectId);
   }
   unpublish(projectId: string): Promise<void> {
@@ -112,7 +139,7 @@ export class LanService {
   }
   /** Read on every project listing: empty, without a query, when LAN share is off. */
   async listPublished(): Promise<string[]> {
-    if (!this.tokens.enabled) return [];
+    if (!this.tokens.configured) return [];
     return this.repo.listPublished();
   }
 
@@ -124,7 +151,7 @@ export class LanService {
     projectId: string,
     alias: string,
   ): Promise<{ id: string; alias: string; pin: string }> {
-    if (!this.tokens.enabled) throw new NotFoundException();
+    if (!this.tokens.configured) throw new NotFoundException();
     const clean = alias.trim();
     if (clean.length < 1 || clean.length > 40 || /\p{Cc}/u.test(clean)) {
       throw new BadRequestException('Invalid alias');
@@ -183,6 +210,7 @@ export class LanService {
    * that ever grows.
    */
   async projectsFor(userId: string): Promise<string[]> {
+    if (!this.tokens.enabled) return [];
     const published = await this.listPublished();
     const mine = await Promise.all(
       published.map(async (id) => ((await this.repo.hasAccess(id, userId)) ? id : null)),

@@ -5,10 +5,7 @@ import { PROJECT_STORAGE, type ProjectStorage } from '../../projects/domain/proj
 import { type CollabSession, MAX_DOC_CHARS } from '../application/collab.service';
 import type { DocumentSync } from '../domain/document-sync';
 import { YJS_DOC_REPOSITORY, type YjsDocRepository } from '../domain/yjs-doc.repository';
-import { HOCUSPOCUS } from './hocuspocus.server';
-
-/** `ResetConnection` from @hocuspocus/common, as `closeConnections` sends it. */
-const RESET = { code: 4205, reason: 'Reset Connection' };
+import { HOCUSPOCUS, RESET } from './hocuspocus.server';
 
 const isHigh = (s: string, i: number) => /[\uD800-\uDBFF]/.test(s[i] ?? '');
 const isLow = (s: string, i: number) => /[\uDC00-\uDFFF]/.test(s[i] ?? '');

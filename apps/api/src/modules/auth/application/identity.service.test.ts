@@ -36,6 +36,7 @@ describe('IdentityService', () => {
   it('resolves a valid LAN token to its backing user, from any address', async () => {
     const users = new FakeUsers();
     const lanTokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
+    lanTokens.setRemote(true);
     const identity = new IdentityService(users, undefined, lanTokens);
     const guest = await users.upsert({
       issuer: LAN_ISSUER,
@@ -45,6 +46,9 @@ describe('IdentityService', () => {
     });
     const token = (await lanTokens.sign(guest.id)) ?? '';
     expect(await identity.resolve(token, '192.168.0.5:5175', '192.168.0.9')).toBe(guest);
+    lanTokens.setRemote(false); // the host switched remote access off: the same token is refused
+    expect(await identity.resolve(token, '192.168.0.5:5175', '192.168.0.9')).toBeNull();
+    lanTokens.setRemote(true);
     // A forged token falls through to local mode, which a LAN peer never passes.
     expect(await identity.resolve('forged', '192.168.0.5:5175', '192.168.0.9')).toBeNull();
     // A validly signed token naming a non-LAN account (the host's) is refused, even from loopback.

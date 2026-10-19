@@ -6,6 +6,7 @@ import {
   Delete,
   Get,
   Inject,
+  NotFoundException,
   Optional,
   Param,
   ParseUUIDPipe,
@@ -15,16 +16,52 @@ import {
 } from '@nestjs/common';
 import { RouteConfig } from '@nestjs/platform-fastify';
 import type { FastifyRequest } from 'fastify';
-import { Public } from '../../auth/presentation/decorators';
+import { LOCAL_IDENTITY } from '../../auth/application/identity.service';
+import { CurrentUser, Public } from '../../auth/presentation/decorators';
 import { DOCUMENT_SYNC, type DocumentSync } from '../../collab/domain/document-sync';
 import type { Project } from '../../projects/domain/project';
 import {
   CurrentProject,
   RequireProjectRole,
 } from '../../projects/presentation/guards/project-role.guard';
+import type { User } from '../../users/domain/user';
 import { LanService, lanOrigins } from '../application/lan.service';
 // biome-ignore lint/style/useImportType: ValidationPipe needs the DTO classes in design:paramtypes
-import { CreateAccessDto, JoinDto } from './lan.dto';
+import { CreateAccessDto, JoinDto, RemoteDto } from './lan.dto';
+
+/**
+ * The install-wide remote-access switch (off on every boot). Only the local host may read or flip
+ * it; a LAN guest, a FasorX user or an install without LAN share gets a 404.
+ */
+@Controller('lan')
+export class LanRemoteController {
+  constructor(
+    @Inject(LanService) private readonly lan: LanService,
+    @Optional() @Inject(DOCUMENT_SYNC) private readonly sync?: DocumentSync,
+  ) {}
+
+  @Get()
+  status(@CurrentUser() user: User) {
+    this.assertHost(user);
+    return { remote: this.lan.remote() };
+  }
+
+  @Post('remote')
+  async setRemote(@CurrentUser() user: User, @Body() dto: RemoteDto) {
+    this.assertHost(user);
+    // Their tokens stop working at once; open docs would keep taking edits until the socket drops.
+    for (const [projectId, userId] of await this.lan.setRemote(dto.on)) {
+      this.sync?.revoke(projectId, userId);
+    }
+    return { remote: dto.on };
+  }
+
+  private assertHost(user: User): void {
+    if (user.issuer !== LOCAL_IDENTITY.issuer || !this.lan.configured()) {
+      throw new NotFoundException();
+    }
+  }
+}
 
 /**
  * LAN share endpoints. The host (project owner) publishes and manages per-person PIN accesses; a
@@ -43,7 +80,7 @@ export class LanController {
   @RequireProjectRole('owner')
   async status(@CurrentProject() project: Project) {
     return {
-      enabled: this.lan.enabled(),
+      enabled: this.lan.configured(),
       published: await this.lan.isPublished(project.id),
       access: await this.lan.listAccess(project.id),
       // LAN origins the host is reachable at, so the owner can copy a link a friend can open.

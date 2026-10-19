@@ -116,6 +116,7 @@ describe('ProjectsService', () => {
   it('lists a LAN guest only the published projects shared with them, and never lets one create', async () => {
     const repo = new FakeLan();
     const tokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
+    tokens.setRemote(true);
     const lan = new LanService(repo, new FakeUsers(), tokens);
     const lock = new ProjectLock();
     const withLan = new ProjectsService(

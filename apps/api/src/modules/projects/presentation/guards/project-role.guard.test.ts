@@ -64,6 +64,7 @@ describe('ProjectRoleGuard', () => {
 
   it('makes a LAN guest an editor only while the project stays published', async () => {
     const tokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
+    tokens.setRemote(true);
     const repo = new FakeLan();
     const lan = new LanService(repo, new FakeUsers(), tokens);
     guard = new ProjectRoleGuard(
