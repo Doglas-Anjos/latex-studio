@@ -3932,7 +3932,14 @@ button.change-row-main:hover .change-name {
   overflow: hidden;
   text-overflow: ellipsis;
   padding-left: 0.4rem;
-  border-left: 2px solid color-mix(in srgb, var(--primary) 30%, transparent);
+  /* Per-author colour set inline (editor-blame.ts); the fallback matches the old single colour. */
+  border-left: 3px solid var(--blame-color, color-mix(in srgb, var(--primary) 30%, transparent));
+}
+/* Lines not yet in a saved version: a muted, dashed mark that reads apart from the authored ones. */
+.cm-blame-run.cm-blame-unsaved {
+  border-left-style: dashed;
+  border-left-color: color-mix(in srgb, var(--muted) 55%, transparent);
+  font-style: italic;
 }
 
 /* Comment gutter: a "+" per line, hidden until the line is hovered (mouse) or
