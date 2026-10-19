@@ -4,6 +4,8 @@ export interface User {
   email: string;
   name: string;
   createdAt: Date;
+  /** Which authenticator vouched for them: 'local', 'lan' (a PIN guest), or the SSO issuer URL. */
+  issuer: string;
 }
 
 /** What the authenticator in front vouches for. */

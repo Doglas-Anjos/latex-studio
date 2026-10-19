@@ -10,6 +10,7 @@ const publicColumns = {
   email: users.email,
   name: users.name,
   createdAt: users.createdAt,
+  issuer: users.issuer,
 };
 
 @Injectable()

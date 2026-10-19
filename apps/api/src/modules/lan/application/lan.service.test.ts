@@ -82,12 +82,31 @@ describe('LanService', () => {
     );
   });
 
-  it('revokes an access', async () => {
+  it('revokes an access and returns its backing user id', async () => {
     await service.publish(P);
     const { id, pin } = await service.createAccess(P, 'Ana');
-    await service.revokeAccess(id);
+    const userId = repo.access[0]?.userId ?? '';
+    expect(await service.revokeAccess(P, id)).toBe(userId);
     expect(await service.listAccess(P)).toEqual([]);
     expect(await service.verify(P, pin, '10.0.0.5')).toBeNull();
+    expect(await service.revokeAccess(P, id)).toBeNull(); // already gone
+  });
+
+  it('keeps the project-wide failure budget across a successful login', async () => {
+    await service.publish(P);
+    const { pin } = await service.createAccess(P, 'Ana');
+    const bad = wrongOf(pin);
+    // 29 wrong guesses, at most 4 per client so no single client locks (cap is 5).
+    for (let i = 0; i < 29; i++) {
+      expect(await service.verify(P, bad, `c${Math.floor(i / 4)}`)).toBeNull();
+    }
+    // A valid login clears only that client's counter, never the project's — else a friend could
+    // reset the budget and walk the PIN space.
+    expect(await service.verify(P, pin, 'friend')).toEqual(
+      expect.objectContaining({ alias: 'Ana' }),
+    );
+    expect(await service.verify(P, bad, 'zz')).toBeNull(); // the 30th failure trips the project lock
+    await expect(service.verify(P, bad, 'yy')).rejects.toBeInstanceOf(HttpException);
   });
 
   it('join mints a token for the backing user on a valid pin', async () => {

@@ -116,8 +116,16 @@ export class LanService {
     return rows.map(({ pinHash: _pinHash, userId: _userId, ...rest }) => rest);
   }
 
-  revokeAccess(id: string): Promise<void> {
-    return this.repo.deleteAccess(id);
+  /** Deletes an access and returns the backing user id, so the caller can close its open sockets. */
+  async revokeAccess(projectId: string, id: string): Promise<string | null> {
+    const row = (await this.repo.accessesOf(projectId)).find((a) => a.id === id);
+    await this.repo.deleteAccess(projectId, id);
+    return row?.userId ?? null;
+  }
+
+  /** Every access's backing user id, so unpublish can close those peers' open sockets. */
+  async accessUserIds(projectId: string): Promise<string[]> {
+    return (await this.repo.accessesOf(projectId)).map((a) => a.userId);
   }
 
   /**
@@ -143,8 +151,12 @@ export class LanService {
     if (!(await this.repo.isPublished(projectId))) return null;
     for (const row of await this.repo.accessesOf(projectId)) {
       if (await verifyPin(pin, row.pinHash)) {
+        // Clear only this client's counter. Keep the project-wide one: a friend who holds one PIN
+        // must not be able to reset the whole project's failure budget by logging in between runs
+        // and so walk the 10k PIN space to impersonate other friends.
+        // ponytail: still heals after MEMORY_MS idle (~30 guesses/h/project); rotating/expiring PINs
+        // is the real cap, add it when the UI manages accesses (phase 4).
         this.attempts.delete(client[0]);
-        this.attempts.delete(project[0]);
         await this.repo.touchAccess(row.id);
         return { id: row.id, userId: row.userId, alias: row.alias };
       }

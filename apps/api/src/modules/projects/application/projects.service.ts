@@ -257,6 +257,9 @@ export class ProjectsService {
   }
 
   private async assertProjectCap(owner: User) {
+    // A LAN guest (joined by PIN) may only edit the project shared with them: never create or import
+    // its own on the host. The single chokepoint for both create and import, so neither can leak.
+    if (owner.issuer === 'lan') throw new ForbiddenException('LAN guests cannot create projects');
     if ((await this.projects.ownedIds(owner.id)).length >= this.config.MAX_PROJECTS_PER_USER) {
       throw new ConflictException('Project limit reached');
     }

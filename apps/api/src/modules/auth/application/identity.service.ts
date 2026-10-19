@@ -1,9 +1,16 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { LanTokenService } from '../../lan/application/lan-token.service';
 import type { User } from '../../users/domain/user';
 import { USER_REPOSITORY, type UserRepository } from '../../users/domain/user.repository';
 import { TOKEN_VERIFIER, type TokenVerifier } from '../domain/token-verifier';
 
 const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i;
+const LOOPBACK_IP = /^(?:127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)$/;
+
+/** True only for a loopback peer address (unspoofable, unlike the Host header). */
+function isLoopback(ip: string | undefined): boolean {
+  return !!ip && LOOPBACK_IP.test(ip);
+}
 
 /** Who every request is in local mode (no verifier configured; config allows that only on localhost). */
 export const LOCAL_IDENTITY = {
@@ -27,16 +34,31 @@ export class IdentityService {
   constructor(
     @Inject(USER_REPOSITORY) private readonly users: UserRepository,
     @Optional() @Inject(TOKEN_VERIFIER) private readonly verifier?: TokenVerifier,
+    @Optional() @Inject(LanTokenService) private readonly lanTokens?: LanTokenService,
   ) {}
 
   /**
    * The user behind `Authorization: Bearer <token>`, or null when the token is missing or bad.
-   * In local mode the request must also be addressed to localhost (`host`): the config gate only
-   * sees APP_URL, and a page on another site could otherwise reach the API by DNS rebinding.
+   * In local mode the request must be addressed to localhost (`host`, against DNS rebinding) AND
+   * arrive from a loopback peer (`remoteIp`): with LAN share the API binds the LAN interface, and a
+   * peer there could otherwise spoof `Host: localhost` over a raw socket to be granted the owner.
+   * ponytail: through the dev Vite proxy the peer address is always loopback, so there the Host
+   * header is the only host/friend signal — fine for this trusted-network feature (the PIN gates
+   * access). A hardened topology serves the app from the API itself (one origin, true peer IPs).
    */
-  async resolve(token: string | null, host: string | undefined): Promise<User | null> {
+  async resolve(
+    token: string | null,
+    host: string | undefined,
+    remoteIp?: string,
+  ): Promise<User | null> {
+    // A LAN peer presents a LAN session token (minted after a PIN). It identifies them in any mode,
+    // and before the local-mode fallback, so a peer on the LAN IP is never auto-granted the host.
+    if (token && this.lanTokens?.enabled) {
+      const userId = await this.lanTokens.verify(token);
+      if (userId) return this.users.findById(userId);
+    }
     if (!this.verifier) {
-      if (!LOCAL_HOST.test(host ?? '')) return null;
+      if (!LOCAL_HOST.test(host ?? '') || !isLoopback(remoteIp)) return null;
       this.local ??= this.users.upsert(LOCAL_IDENTITY).catch((e) => {
         this.local = undefined;
         throw e;

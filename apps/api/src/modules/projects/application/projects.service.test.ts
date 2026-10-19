@@ -38,6 +38,7 @@ const user = (id: string, name: string): User => ({
   email: `${name.toLowerCase()}@example.com`,
   name,
   createdAt: new Date(),
+  issuer: 'local',
 });
 
 describe('ProjectsService', () => {

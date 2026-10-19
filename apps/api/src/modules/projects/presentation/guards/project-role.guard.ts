@@ -8,6 +8,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
   SetMetadata,
   UseGuards,
 } from '@nestjs/common';
@@ -15,6 +16,7 @@ import { Reflector } from '@nestjs/core';
 import { isUUID } from 'class-validator';
 import type { FastifyRequest } from 'fastify';
 import { isSuperadmin } from '../../../auth/superadmin';
+import { LanService } from '../../../lan/application/lan.service';
 import { type Project, type ProjectRole, ROLE_RANK } from '../../domain/project';
 import { PROJECT_REPOSITORY, type ProjectRepository } from '../../domain/project.repository';
 
@@ -39,6 +41,7 @@ export class ProjectRoleGuard implements CanActivate {
     @Inject(Reflector) private readonly reflector: Reflector,
     @Inject(PROJECT_REPOSITORY) private readonly projects: ProjectRepository,
     @Inject(APP_CONFIG) private readonly config: AppConfig,
+    @Optional() @Inject(LanService) private readonly lan?: LanService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -56,10 +59,15 @@ export class ProjectRoleGuard implements CanActivate {
     // missing project, so project ids cannot be probed.
     const validId = !!projectId && isUUID(projectId);
     const membership = validId && userId ? await this.projects.roleOf(projectId, userId) : null;
+    // A LAN peer (no membership row) gets editor while their access and the project's publish hold.
+    const lanRole =
+      !membership && validId && userId && this.lan
+        ? await this.lan.roleOf(projectId, userId)
+        : null;
     // A platform superadmin reads any project (view and govern): membership role if any, else
     // viewer. Write routes needing editor/owner still 403, since governance is on /admin routes.
     const admin = !!request.user?.email && isSuperadmin(request.user.email, this.config);
-    const role = membership ?? (admin && validId ? ('viewer' as ProjectRole) : null);
+    const role = membership ?? lanRole ?? (admin && validId ? ('viewer' as ProjectRole) : null);
     const project = role && projectId ? await this.projects.findById(projectId) : null;
     if (!role || !project) throw new NotFoundException('Project not found');
     if (ROLE_RANK[role] < ROLE_RANK[required]) {
@@ -67,7 +75,7 @@ export class ProjectRoleGuard implements CanActivate {
     }
     request.project = project;
     request.projectRole = role;
-    request.viaAdmin = !membership && admin;
+    request.viaAdmin = !membership && !lanRole && admin;
     return true;
   }
 }

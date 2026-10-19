@@ -30,7 +30,8 @@ export interface LanRepository {
   accessesOf(projectId: string): Promise<LanAccessRow[]>;
   /** Whether `userId` has an access to `projectId` (the LAN authz check). */
   hasAccess(projectId: string, userId: string): Promise<boolean>;
-  deleteAccess(id: string): Promise<void>;
+  /** Removes one access, scoped to its project so an id from another project cannot be deleted. */
+  deleteAccess(projectId: string, id: string): Promise<void>;
   /** Records that an access was just used. */
   touchAccess(id: string): Promise<void>;
 }

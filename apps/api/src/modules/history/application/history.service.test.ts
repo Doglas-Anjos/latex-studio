@@ -22,6 +22,7 @@ const ana: User = {
   email: 'ana@example.com',
   name: 'Ana',
   createdAt: new Date(),
+  issuer: 'local',
 };
 const project = { id: '00000000-0000-4000-8000-0000000000aa' } as Project;
 const text = (b: Uint8Array) => Buffer.from(b).toString();

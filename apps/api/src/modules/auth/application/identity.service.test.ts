@@ -11,14 +11,17 @@ const ana = {
 };
 
 describe('IdentityService', () => {
-  it('is the local user for every request when no verifier is configured', async () => {
+  it('is the local user for a loopback request when no verifier is configured', async () => {
     const users = new FakeUsers();
     const identity = new IdentityService(users);
-    const user = await identity.resolve(null, 'localhost:3001');
+    const user = await identity.resolve(null, 'localhost:3001', '127.0.0.1');
     expect(user?.email).toBe(LOCAL_IDENTITY.email);
-    expect((await identity.resolve('anything', '127.0.0.1'))?.id).toBe(user?.id);
-    expect(await identity.resolve(null, 'latex.example.com')).toBeNull();
-    expect(await identity.resolve(null, undefined)).toBeNull();
+    expect((await identity.resolve('anything', '127.0.0.1', '::1'))?.id).toBe(user?.id);
+    expect(await identity.resolve(null, 'latex.example.com', '127.0.0.1')).toBeNull();
+    expect(await identity.resolve(null, undefined, '127.0.0.1')).toBeNull();
+    // A LAN peer spoofing Host: localhost is refused: its socket address is not loopback.
+    expect(await identity.resolve(null, 'localhost:3001', '192.168.0.9')).toBeNull();
+    expect(await identity.resolve(null, 'localhost:3001', undefined)).toBeNull();
     expect(users.rows).toHaveLength(1);
   });
 

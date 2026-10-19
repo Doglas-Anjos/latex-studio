@@ -27,10 +27,14 @@ try {
 } catch {}
 
 async function bootstrap() {
-  // Exactly one trusted hop (Caddy), so request.ip is the real client for rate limiting.
+  // With a verifier the API sits behind exactly one trusted hop (Caddy), so request.ip is the real
+  // client for rate limiting. In local/LAN mode nothing fronts it (it binds the interface directly),
+  // so trust no hop: request.ip is the socket peer and a forged X-Forwarded-For is ignored — else a
+  // LAN peer could send `X-Forwarded-For: 127.0.0.1` to fake a loopback address and be granted owner.
+  const hasVerifier = !!(process.env.AUTH_JWKS_URL || process.env.AUTH_SECRET);
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ trustProxy: (_address, hop) => hop < 1 }),
+    new FastifyAdapter({ trustProxy: hasVerifier ? (_address, hop) => hop < 1 : false }),
   );
   const config = app.get<AppConfig>(APP_CONFIG);
   const identity = app.get(IdentityService);
@@ -80,12 +84,28 @@ async function bootstrap() {
   const hocuspocus = app.get<Hocuspocus>(HOCUSPOCUS);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 4 * 1024 * 1024 });
   const appOrigin = new URL(config.APP_URL).origin;
+  const safeHost = (url: string): string | null => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return null;
+    }
+  };
   app
     .getHttpAdapter()
     .getInstance()
     .server.on('upgrade', (request, socket, head) => {
       if (!request.url?.startsWith('/collab')) return socket.destroy();
-      if (request.headers.origin !== appOrigin) {
+      // Same origin as the app, or — with LAN share on — the LAN address the peer loaded it from
+      // (its Origin host equals this upgrade's Host: same server, not a foreign site). onAuthenticate
+      // re-checks origin against host; a cross-site page keeps its own Origin and is refused there.
+      const origin = request.headers.origin;
+      const lanOrigin =
+        config.LAN_SHARE &&
+        !!origin &&
+        !!request.headers.host &&
+        safeHost(origin) === request.headers.host;
+      if (origin !== appOrigin && !lanOrigin) {
         return socket.end(
           'HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n',
         );
@@ -95,6 +115,10 @@ async function bootstrap() {
         for (let i = 0; i < request.rawHeaders.length; i += 2) {
           headers.append(request.rawHeaders[i] as string, request.rawHeaders[i + 1] as string);
         }
+        // The socket peer address, as a header the client cannot forge: drop any copy it sent, then
+        // set the real one. onAuthenticate uses it to gate the local-mode owner grant to loopback.
+        headers.delete('x-peer-ip');
+        if (request.socket.remoteAddress) headers.set('x-peer-ip', request.socket.remoteAddress);
         const connection = hocuspocus.handleConnection(
           ws,
           new Request(`http://localhost${request.url}`, { headers }),
@@ -109,11 +133,12 @@ async function bootstrap() {
       });
     });
 
-  // Local mode trusts any request addressed to localhost, so it must not be reachable from the
-  // network at all: loopback only ('localhost' binds 127.0.0.1 and ::1), which also leaves a
-  // proxy in another container (Caddy) unable to reach it.
+  // Local mode trusts a request only when it is addressed to localhost AND arrives from a loopback
+  // peer (IdentityService), so binding all interfaces is safe once that holds. Without a verifier
+  // and without LAN share, stay loopback only ('localhost' binds 127.0.0.1 and ::1), which also
+  // leaves a proxy in another container (Caddy) unable to reach it.
   const verifier = config.AUTH_JWKS_URL || config.AUTH_SECRET;
-  await app.listen(config.API_PORT, verifier ? '0.0.0.0' : 'localhost');
+  await app.listen(config.API_PORT, verifier || config.LAN_SHARE ? '0.0.0.0' : 'localhost');
 }
 
 void bootstrap();

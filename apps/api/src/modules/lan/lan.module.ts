@@ -1,12 +1,15 @@
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { UsersModule } from '../users/users.module';
 import { LanService } from './application/lan.service';
 import { LanTokenService } from './application/lan-token.service';
 import { LAN_REPOSITORY } from './domain/lan.repository';
 import { DrizzleLanRepository } from './infrastructure/drizzle-lan.repository';
 
-/** LAN share (phases 1–3a): persistence, PIN logic, authz decisions and session tokens. The guard,
- * WebSocket and HTTP wiring (3b) and the network bind (3c) are not here yet. */
+/**
+ * LAN share. Global so the ProjectRoleGuard (used across every project module) and the
+ * IdentityService can consult LanService/LanTokenService without each module importing this one.
+ */
+@Global()
 @Module({
   imports: [UsersModule],
   providers: [

@@ -22,7 +22,8 @@ export class IdentityGuard implements CanActivate {
     if (isPublic(this.reflector, context)) return true;
     const request = context.switchToHttp().getRequest<FastifyRequest>();
     const { authorization, host } = request.headers;
-    const user = await this.identity.resolve(bearerToken(authorization), host);
+    // request.ip is the socket peer (trustProxy is off), so it cannot be spoofed by a header.
+    const user = await this.identity.resolve(bearerToken(authorization), host, request.ip);
     if (!user) throw new UnauthorizedException();
     request.user = user;
     return true;
