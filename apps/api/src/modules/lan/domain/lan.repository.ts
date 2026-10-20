@@ -1,10 +1,16 @@
-/** A person's LAN editor access as stored (the PIN hash stays in the infrastructure layer). */
+import type { ProjectRole } from '../../projects/domain/project';
+
+/** What a LAN guest may do while the project is published: any member role but owner. */
+export type LanRole = Exclude<ProjectRole, 'owner'>;
+
+/** A person's LAN access as stored (the PIN hash stays in the infrastructure layer). */
 export interface LanAccessRow {
   id: string;
   projectId: string;
   /** The real user row backing this access. */
   userId: string;
   alias: string;
+  role: LanRole;
   pinHash: string;
   createdAt: Date;
   lastSeen: Date | null;
@@ -25,11 +31,12 @@ export interface LanRepository {
     userId: string,
     alias: string,
     pinHash: string,
+    role: LanRole,
   ): Promise<{ id: string }>;
   /** Every access of a project, with its PIN hash (for verification). */
   accessesOf(projectId: string): Promise<LanAccessRow[]>;
-  /** Whether `userId` has an access to `projectId` (the LAN authz check). */
-  hasAccess(projectId: string, userId: string): Promise<boolean>;
+  /** The role `userId` holds through an access to `projectId`, or null (the LAN authz check). */
+  accessRole(projectId: string, userId: string): Promise<LanRole | null>;
   /** Removes one access, scoped to its project so an id from another project cannot be deleted. */
   deleteAccess(projectId: string, id: string): Promise<void>;
   /** Records that an access was just used. */

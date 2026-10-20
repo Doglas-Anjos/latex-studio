@@ -1,15 +1,97 @@
+import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
-import { type ExecutionContext, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  type ExecutionContext,
+  ForbiddenException,
+  NotFoundException,
+  RequestMethod,
+} from '@nestjs/common';
+import { METHOD_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import type { FastifyRequest } from 'fastify';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { CommentsController } from '../../../comments/presentation/comments.controller';
+import { CompileController } from '../../../compile/presentation/compile.controller';
+import { ExportController } from '../../../export/presentation/export.controller';
+import { FilesController } from '../../../files/presentation/files.controller';
+import { HistoryController } from '../../../history/presentation/history.controller';
 import { LanService } from '../../../lan/application/lan.service';
 import { LanTokenService } from '../../../lan/application/lan-token.service';
+import { LanController } from '../../../lan/presentation/lan.controller';
 import { FakeLan } from '../../../lan/testing/fake-lan.repository';
+import { MembersController } from '../../../members/presentation/members.controller';
+import { PackagesController } from '../../../packages/presentation/packages.controller';
+import { SpellcheckController } from '../../../spellcheck/presentation/spellcheck.controller';
 import type { User } from '../../../users/domain/user';
 import { FakeUsers } from '../../../users/testing/fake-user.repository';
 import { FakeProjects } from '../../testing/fake-project.repository';
+import { ProjectsController } from '../projects.controller';
 import { ProjectRoleGuard, RequireProjectRole } from './project-role.guard';
+
+it('pins the role every non-GET project route requires (viewers write nothing)', () => {
+  const actual: Record<string, string> = {};
+  for (const C of [
+    FilesController,
+    PackagesController,
+    HistoryController,
+    ProjectsController,
+    CompileController,
+    ExportController,
+    CommentsController,
+    MembersController,
+    LanController,
+    SpellcheckController,
+  ]) {
+    for (const name of Object.getOwnPropertyNames(C.prototype)) {
+      const handler = (C.prototype as unknown as Record<string, object>)[name] as object;
+      const method = Reflect.getMetadata(METHOD_METADATA, handler);
+      if (method === undefined || method === RequestMethod.GET) continue;
+      const key = Reflect.getMetadataKeys(handler).find(
+        (k) => String(k) === 'Symbol(PROJECT_ROLE)',
+      );
+      actual[`${C.name}.${name}`] = key ? Reflect.getMetadata(key, handler) : 'none';
+    }
+  }
+  const editor = (c: string, ...names: string[]) => names.map((n) => [`${c}.${n}`, 'editor']);
+  expect(actual).toEqual({
+    ...Object.fromEntries([
+      ...editor(
+        'FilesController',
+        'create',
+        'rename',
+        'update',
+        'remove',
+        'createFolder',
+        'upload',
+      ),
+      ...editor('PackagesController', 'set', 'migrate'),
+      ...editor('HistoryController', 'commit', 'commitFile', 'restore'),
+      ...editor('ProjectsController', 'update'),
+      ...editor('CompileController', 'request', 'cancel'),
+      ...editor('ExportController', 'copy', 'wordCount', 'requestExport', 'format'),
+    ]),
+    // Not project-scoped (the project does not exist yet) or public (PIN join).
+    'ProjectsController.create': 'none',
+    'ProjectsController.import': 'none',
+    'LanController.join': 'none',
+    'ProjectsController.remove': 'owner',
+    'MembersController.invite': 'owner',
+    'MembersController.setRole': 'owner',
+    'MembersController.remove': 'owner',
+    'LanController.publish': 'owner',
+    'LanController.unpublish': 'owner',
+    'LanController.createAccess': 'owner',
+    'LanController.revoke': 'owner',
+    'CommentsController.create': 'reviewer',
+    'CommentsController.update': 'reviewer',
+    'CommentsController.remove': 'reviewer',
+    'CommentsController.reply': 'reviewer',
+    'CommentsController.removeReply': 'reviewer',
+    // POST only to carry the words; reads nothing but the dictionary.
+    'SpellcheckController.check': 'viewer',
+    'SpellcheckController.suggest': 'viewer',
+  });
+});
 
 class Routes {
   @RequireProjectRole('editor')
@@ -62,7 +144,7 @@ describe('ProjectRoleGuard', () => {
     expect(request.projectRole).toBe('editor');
   });
 
-  it('makes a LAN guest an editor only while the project stays published', async () => {
+  it('gives a LAN guest their access role only while the project stays published', async () => {
     const tokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
     tokens.setRemote(true);
     const repo = new FakeLan();
@@ -80,6 +162,14 @@ describe('ProjectRoleGuard', () => {
     await expect(result).resolves.toBe(true);
     expect(request.projectRole).toBe('editor');
     expect(request.viaAdmin).toBe(false);
+    // A viewer access writes nothing, nor does a guest made a viewer member (membership wins).
+    await lan.createAccess(projectId, 'Leo', 'viewer');
+    await expect(run(repo.access[1]?.userId ?? '').result).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    projects.members.push({ projectId, userId: guestId, role: 'viewer' });
+    await expect(run(guestId).result).rejects.toBeInstanceOf(ForbiddenException);
+    projects.members.pop();
     await lan.unpublish(projectId);
     await expect(run(guestId).result).rejects.toBeInstanceOf(NotFoundException);
   });

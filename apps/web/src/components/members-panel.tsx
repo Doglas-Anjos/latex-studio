@@ -7,9 +7,7 @@ import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { Dialog } from './dialog';
 import { Form } from './form';
-import { ROLE_HINT, ROLE_LABEL } from './role-badge';
-
-const ASSIGNABLE: AssignableRole[] = ['editor', 'reviewer', 'viewer'];
+import { ASSIGNABLE, ROLE_HINT, ROLE_LABEL } from './role-badge';
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);

@@ -92,6 +92,13 @@
       "when": 1792380610256,
       "tag": "0012_lan_access_user",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792457699917,
+      "tag": "0013_lan_access_role",
+      "breakpoints": true
     }
   ]
 }

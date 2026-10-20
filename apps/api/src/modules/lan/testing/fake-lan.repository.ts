@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { LanAccessRow, LanRepository } from '../domain/lan.repository';
+import type { LanAccessRow, LanRepository, LanRole } from '../domain/lan.repository';
 
 export class FakeLan implements LanRepository {
   readonly published = new Set<string>();
@@ -17,13 +17,20 @@ export class FakeLan implements LanRepository {
   async listPublished() {
     return [...this.published];
   }
-  async createAccess(projectId: string, userId: string, alias: string, pinHash: string) {
+  async createAccess(
+    projectId: string,
+    userId: string,
+    alias: string,
+    pinHash: string,
+    role: LanRole = 'editor',
+  ) {
     const id = randomUUID();
     this.access.push({
       id,
       projectId,
       userId,
       alias,
+      role,
       pinHash,
       createdAt: new Date(),
       lastSeen: null,
@@ -33,8 +40,8 @@ export class FakeLan implements LanRepository {
   async accessesOf(projectId: string) {
     return this.access.filter((a) => a.projectId === projectId);
   }
-  async hasAccess(projectId: string, userId: string) {
-    return this.access.some((a) => a.projectId === projectId && a.userId === userId);
+  async accessRole(projectId: string, userId: string) {
+    return this.access.find((a) => a.projectId === projectId && a.userId === userId)?.role ?? null;
   }
   async deleteAccess(projectId: string, id: string) {
     this.access = this.access.filter((a) => !(a.projectId === projectId && a.id === id));

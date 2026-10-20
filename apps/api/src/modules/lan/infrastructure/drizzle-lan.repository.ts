@@ -2,7 +2,7 @@ import { DATABASE, type Database } from '@latex-studio/core';
 import { lanAccess, publishedProjects } from '@latex-studio/core/schema';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
-import type { LanAccessRow, LanRepository } from '../domain/lan.repository';
+import type { LanAccessRow, LanRepository, LanRole } from '../domain/lan.repository';
 
 @Injectable()
 export class DrizzleLanRepository implements LanRepository {
@@ -35,26 +35,29 @@ export class DrizzleLanRepository implements LanRepository {
     userId: string,
     alias: string,
     pinHash: string,
+    role: LanRole,
   ): Promise<{ id: string }> {
     const [row] = await this.db
       .insert(lanAccess)
-      .values({ projectId, userId, alias, pinHash })
+      .values({ projectId, userId, alias, pinHash, role })
       .returning({ id: lanAccess.id });
     if (!row) throw new Error('Failed to create LAN access');
     return { id: row.id };
   }
 
-  accessesOf(projectId: string): Promise<LanAccessRow[]> {
-    return this.db.select().from(lanAccess).where(eq(lanAccess.projectId, projectId));
+  async accessesOf(projectId: string): Promise<LanAccessRow[]> {
+    const rows = await this.db.select().from(lanAccess).where(eq(lanAccess.projectId, projectId));
+    // The column is the shared project_role enum; owner is never written (LanRole).
+    return rows.map((r) => ({ ...r, role: r.role as LanRole }));
   }
 
-  async hasAccess(projectId: string, userId: string): Promise<boolean> {
-    const rows = await this.db
-      .select({ id: lanAccess.id })
+  async accessRole(projectId: string, userId: string): Promise<LanRole | null> {
+    const [row] = await this.db
+      .select({ role: lanAccess.role })
       .from(lanAccess)
       .where(and(eq(lanAccess.projectId, projectId), eq(lanAccess.userId, userId)))
       .limit(1);
-    return rows.length > 0;
+    return (row?.role as LanRole | undefined) ?? null;
   }
 
   async deleteAccess(projectId: string, id: string): Promise<void> {

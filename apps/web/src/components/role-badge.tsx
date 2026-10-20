@@ -12,6 +12,7 @@ export const ROLE_HINT = {
   reviewer: 'Comenta e acompanha alterações, sem editar arquivos.',
   viewer: 'Apenas visualiza o projeto.',
 } satisfies Record<Exclude<Role, 'owner'>, string>;
+export const ASSIGNABLE = ['editor', 'reviewer', 'viewer'] as const;
 export const ROLE_ICON = { editor: PencilLine, reviewer: MessageSquareText, viewer: Eye };
 
 export function RoleBadge({ role }: { role: Role }) {

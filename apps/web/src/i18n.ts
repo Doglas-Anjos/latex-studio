@@ -389,6 +389,8 @@ interface LanStrings {
   copied: string;
   people: string;
   aliasPlaceholder: string;
+  role: string;
+  roles: Record<'editor' | 'reviewer' | 'viewer', string>;
   add: string;
   noPeople: string;
   remove: string;
@@ -419,6 +421,8 @@ const LAN: Record<UiLang, LanStrings> = {
     copied: 'Copiado!',
     people: 'Pessoas com acesso',
     aliasPlaceholder: 'Nome do amigo',
+    role: 'O que a pessoa pode fazer',
+    roles: { editor: 'Pode editar', reviewer: 'Só comenta', viewer: 'Só lê' },
     add: 'Adicionar',
     noPeople: 'Ninguém ainda. Adicione uma pessoa para gerar um PIN.',
     remove: 'Remover',
@@ -448,6 +452,8 @@ const LAN: Record<UiLang, LanStrings> = {
     copied: 'Copied!',
     people: 'People with access',
     aliasPlaceholder: "Friend's name",
+    role: 'What they can do',
+    roles: { editor: 'Can edit', reviewer: 'Comment only', viewer: 'Read only' },
     add: 'Add',
     noPeople: 'No one yet. Add a person to generate a PIN.',
     remove: 'Remove',
@@ -477,6 +483,8 @@ const LAN: Record<UiLang, LanStrings> = {
     copied: '¡Copiado!',
     people: 'Personas con acceso',
     aliasPlaceholder: 'Nombre del amigo',
+    role: 'Qué puede hacer',
+    roles: { editor: 'Puede editar', reviewer: 'Solo comenta', viewer: 'Solo lee' },
     add: 'Añadir',
     noPeople: 'Nadie todavía. Añade una persona para generar un PIN.',
     remove: 'Quitar',

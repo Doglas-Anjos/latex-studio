@@ -4,8 +4,10 @@ import { type FormEvent, type RefObject, useEffect, useId, useState } from 'reac
 import { useService } from '../di/service-provider';
 import { useLan } from '../i18n';
 import { LanServiceToken } from '../services/lan.service';
+import type { AssignableRole } from '../services/member.service';
 import { Button } from './button';
 import { Dialog } from './dialog';
+import { ASSIGNABLE, RoleBadge } from './role-badge';
 import './lan-share.css';
 
 /**
@@ -71,6 +73,7 @@ export function LanShareDialog({
   const id = project?.id ?? '';
   const queryKey = ['lan', id];
   const [alias, setAlias] = useState('');
+  const [role, setRole] = useState<AssignableRole>('editor');
   // A created PIN is returned once; keep it on screen (keyed by access id) until the dialog closes.
   const [pins, setPins] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
@@ -84,7 +87,7 @@ export function LanShareDialog({
     onSuccess: invalidate,
   });
   const add = useMutation({
-    mutationFn: () => lan.createAccess(id, alias.trim()),
+    mutationFn: () => lan.createAccess(id, alias.trim(), role),
     onSuccess: (acc) => {
       setPins((p) => ({ ...p, [acc.id]: acc.pin }));
       setAlias('');
@@ -195,6 +198,17 @@ export function LanShareDialog({
                   maxLength={40}
                   aria-label={t.aliasPlaceholder}
                 />
+                <select
+                  aria-label={t.role}
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as AssignableRole)}
+                >
+                  {ASSIGNABLE.map((r) => (
+                    <option key={r} value={r}>
+                      {t.roles[r]}
+                    </option>
+                  ))}
+                </select>
                 <Button
                   type="submit"
                   variant="secondary"
@@ -212,6 +226,7 @@ export function LanShareDialog({
                   {data.access.map((a) => (
                     <li key={a.id}>
                       <span className="lan-share-alias">{a.alias}</span>
+                      <RoleBadge role={a.role} />
                       {pins[a.id] && <code className="lan-share-pin">{pins[a.id]}</code>}
                       <Button
                         variant="ghost"
