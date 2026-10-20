@@ -38,7 +38,7 @@ describe('CollabService', () => {
   let projectId: string;
 
   /** A token the fake verifier maps to a fresh user with the given project role. */
-  const login = async (role: 'owner' | 'viewer' | null) => {
+  const login = async (role: 'owner' | 'reviewer' | 'viewer' | null) => {
     const subject = randomUUID();
     const user = await users.upsert({
       issuer: 'i',
@@ -104,7 +104,8 @@ describe('CollabService', () => {
   it('lets a LAN guest edit from the LAN origin, only with LAN share on and a matching Host', async () => {
     const lanTokens = new LanTokenService({ LAN_SHARE: true, LAN_SECRET: 'x'.repeat(32) });
     lanTokens.setRemote(true);
-    const lan = new LanService(new FakeLan(), users, lanTokens);
+    const lanRepo = new FakeLan();
+    const lan = new LanService(lanRepo, users, lanTokens);
     const identity = new IdentityService(users, undefined, lanTokens);
     const service = (LAN_SHARE: boolean) =>
       new CollabService(
@@ -141,6 +142,19 @@ describe('CollabService', () => {
     const { user: guest } = await lanAuth(service(true), '192.168.0.5:5175');
     const doc = `${projectId}/main.tex`;
     expect(await service(true).stillAllowed(guest, doc)).toBe(true);
+    // A guest the host gave a viewer access is read-only, and so is one made a viewer member
+    // (a membership outranks the access role).
+    const access = lanRepo.access[0];
+    if (access) access.role = 'viewer';
+    await expect(lanAuth(service(true), '192.168.0.5:5175')).resolves.toMatchObject({
+      readOnly: true,
+    });
+    if (access) access.role = 'editor';
+    projects.members.push({ projectId, userId: guest.id, role: 'viewer' });
+    await expect(lanAuth(service(true), '192.168.0.5:5175')).resolves.toMatchObject({
+      readOnly: true,
+    });
+    projects.members.pop();
     lanTokens.setRemote(false);
     expect(await service(true).stillAllowed(guest, doc)).toBe(false);
     // Anyone else is not re-checked (the LAN revoke paths are the only ones that race).
@@ -152,8 +166,9 @@ describe('CollabService', () => {
     expect(collab.parseDocumentName(`${projectId}/main.tex`).projectId).toBe(projectId);
   });
 
-  it('makes viewers read-only', async () => {
+  it('makes viewers and reviewers read-only', async () => {
     await expect(auth(await login('viewer'))).resolves.toMatchObject({ readOnly: true });
+    await expect(auth(await login('reviewer'))).resolves.toMatchObject({ readOnly: true });
   });
 
   it('loads the file when no state is saved, and refuses a missing file', async () => {

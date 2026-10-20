@@ -8,6 +8,9 @@ export const ROLE_RANK: Record<ProjectRole, number> = {
   owner: 3,
 };
 
+/** The roles an owner can hand out (to a member or a LAN guest); there is only ever one owner. */
+export const ASSIGNABLE = ['editor', 'reviewer', 'viewer'] as const;
+
 export const INVALID_PROJECT_NAME = 'name must be 1-100 characters without control characters';
 
 /** The trimmed name if it is 1..100 characters without control characters, else null. */

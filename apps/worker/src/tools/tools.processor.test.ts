@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { Job } from 'bullmq';
 import { afterAll, beforeAll, describe, expect, it, type Mock, vi } from 'vitest';
-import { Sandbox } from '../compile/sandbox';
+import { Sandbox, toolEnv } from '../compile/sandbox';
 import {
   assertNoUnsafeIncludes,
   findUnsafeInclude,
@@ -161,7 +161,8 @@ describe('format', () => {
     expect(args).toEqual(["-y=defaultIndent: '  '", '-g=indent.log', 'in.tex']);
     expect(opts).toMatchObject({ timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
     expect(opts).not.toHaveProperty('shell');
-    expect(opts.env).toEqual({ PATH: process.env.PATH, HOME: opts.cwd });
+    // Exactly the minimal tool env (no worker secrets), with a private HOME.
+    expect(opts.env).toEqual(toolEnv(opts.cwd as string));
   });
 
   it('rejects other extensions and oversized text before running', async () => {

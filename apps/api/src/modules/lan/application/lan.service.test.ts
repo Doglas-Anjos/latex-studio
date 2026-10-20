@@ -69,6 +69,16 @@ describe('LanService', () => {
     expect(await service.roleOf(P, userId)).toBeNull(); // access kept, but not published
   });
 
+  it('keeps the role the host picked for each person', async () => {
+    await service.publish(P);
+    const acc = await service.createAccess(P, 'Leo', 'viewer');
+    const userId = repo.access[0]?.userId ?? '';
+    expect(acc.role).toBe('viewer');
+    expect(await service.roleOf(P, userId)).toBe('viewer');
+    expect(await service.listAccess(P)).toEqual([expect.objectContaining({ role: 'viewer' })]);
+    expect(await service.projectsFor(userId)).toEqual([{ id: P, role: 'viewer' }]);
+  });
+
   it('rejects a blank or oversized alias', async () => {
     await expect(service.createAccess(P, '   ')).rejects.toBeInstanceOf(BadRequestException);
     await expect(service.createAccess(P, 'x'.repeat(41))).rejects.toBeInstanceOf(
@@ -158,7 +168,7 @@ describe('LanService', () => {
     await service.createAccess(P, 'Ana');
     const userId = repo.access[0]?.userId ?? '';
     await repo.createAccess(R, userId, 'Ana', 'hash'); // access, but R is not published
-    expect(await service.projectsFor(userId)).toEqual([P]);
+    expect(await service.projectsFor(userId)).toEqual([{ id: P, role: 'editor' }]);
   });
 
   it('answers empty without reading the LAN tables when LAN share is off', async () => {

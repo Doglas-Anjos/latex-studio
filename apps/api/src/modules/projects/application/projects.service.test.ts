@@ -136,12 +136,12 @@ describe('ProjectsService', () => {
       await projects.create({ id, name: id }, ana.id);
     await lan.publish(shared);
     await lan.publish(unshared);
-    await repo.createAccess(shared, guest.id, 'Gus', 'hash');
+    await repo.createAccess(shared, guest.id, 'Gus', 'hash', 'viewer');
     await repo.createAccess(unpublished, guest.id, 'Gus', 'hash');
 
     const list = await withLan.listForUser(guest);
     expect(list.items).toEqual([
-      expect.objectContaining({ id: shared, role: 'editor', published: true }),
+      expect.objectContaining({ id: shared, role: 'viewer', published: true }),
     ]);
     expect(list.total).toBe(1);
     await expect(withLan.create(guest, 'Mine')).rejects.toBeInstanceOf(ForbiddenException);

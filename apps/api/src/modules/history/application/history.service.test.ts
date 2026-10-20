@@ -70,10 +70,19 @@ describe('HistoryService', () => {
 
     await expect(service.commit(project, ana, 'again')).rejects.toBeInstanceOf(ConflictException);
 
-    const { sha } = await service.restore(project, ana, first, 'a.tex');
+    const sha = (await service.restore(project, ana, first, 'a.tex')).sha ?? 'no commit';
     expect(text(await files.repo.readFile('a.tex'))).toBe('one');
     expect(sync.texts.get('a.tex')).toBe('one');
     expect(text(await service.fileAt(project, sha, 'a.tex'))).toBe('one');
+    expect(await service.log(project)).toHaveLength(3);
+
+    // Discarding uncommitted edits restores the latest version: nothing to commit, but the doc
+    // must still drop the edits, or its next store writes them back.
+    await files.write('a.tex', 'draft');
+    sync.texts.set('a.tex', 'draft');
+    await expect(service.restore(project, ana, sha, 'a.tex')).resolves.toEqual({ sha: null });
+    expect(text(await files.repo.readFile('a.tex'))).toBe('one');
+    expect(sync.texts.get('a.tex')).toBe('one');
     expect(await service.log(project)).toHaveLength(3);
 
     // Over MAX_UPLOAD_MB: refused, not inflated whole.

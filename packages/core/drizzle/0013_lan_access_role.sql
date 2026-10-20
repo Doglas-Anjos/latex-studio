@@ -1,0 +1,1 @@
+ALTER TABLE "lan_access" ADD COLUMN "role" "project_role" DEFAULT 'editor' NOT NULL;

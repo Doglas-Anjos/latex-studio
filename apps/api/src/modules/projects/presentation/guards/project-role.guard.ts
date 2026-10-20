@@ -59,7 +59,7 @@ export class ProjectRoleGuard implements CanActivate {
     // missing project, so project ids cannot be probed.
     const validId = !!projectId && isUUID(projectId);
     const membership = validId && userId ? await this.projects.roleOf(projectId, userId) : null;
-    // A LAN peer (no membership row) gets editor while their access and the project's publish hold.
+    // A LAN peer (no membership row) gets their access's role while it and the publish hold.
     const lanRole =
       !membership && validId && userId && this.lan
         ? await this.lan.roleOf(projectId, userId)

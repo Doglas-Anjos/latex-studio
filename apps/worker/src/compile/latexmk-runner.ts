@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 import { APP_CONFIG, type WorkerConfig } from '@latex-studio/core';
 import { Inject, Injectable } from '@nestjs/common';
-import { Sandbox } from './sandbox';
+import { Sandbox, toolEnv } from './sandbox';
 
 export type Engine = 'pdflatex' | 'xelatex' | 'lualatex';
 
@@ -108,8 +108,7 @@ export class LatexmkRunner {
     const sandboxed = this.sandbox.enabled;
     const home = sandboxed ? '/tmp' : await mkdtemp(join(tmpdir(), 'ls-home-'));
     const env = {
-      PATH: process.env.PATH,
-      HOME: home,
+      ...toolEnv(home),
       // TeX Live honours these (MiKTeX ignores them): nothing is read from or written to a
       // shared texmf tree, and kpathsea refuses absolute and `..` paths (paranoid mode).
       TEXMFVAR: join(home, 'texmf-var'),

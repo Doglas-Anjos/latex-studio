@@ -15,7 +15,7 @@ import { projects } from '@latex-studio/core/schema';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Inject, type OnApplicationBootstrap } from '@nestjs/common';
 import type { Job } from 'bullmq';
-import { Sandbox } from '../compile/sandbox';
+import { Sandbox, toolEnv } from '../compile/sandbox';
 import { snapshotProject } from '../snapshot';
 
 const MAX_STDERR = 2048;
@@ -183,7 +183,7 @@ async function formatText(path: string, text: string, sandbox: Sandbox): Promise
       .run('latexindent', args, {
         cwd: dir,
         maxBuffer: 2 * MAX_FORMAT_BYTES,
-        env: { PATH: process.env.PATH, HOME: dir },
+        env: toolEnv(dir),
         timeout: 15_000,
       })
       .catch((e: { stderr?: string; message: string }) => {
@@ -243,7 +243,7 @@ export class ToolsProcessor extends WorkerHost implements OnApplicationBootstrap
       cwd: tmp,
       windowsHide: true,
       maxBuffer: 4 * 1024 * 1024,
-      env: { PATH: process.env.PATH, HOME: home },
+      env: toolEnv(home),
     };
     try {
       new SafePath(tmp).resolve(project.mainFile); // throws on `..`, absolute or odd names

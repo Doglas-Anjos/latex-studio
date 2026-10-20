@@ -1,13 +1,20 @@
 import { indentSelection } from '@codemirror/commands';
 import { syntaxHighlighting } from '@codemirror/language';
 import { diff } from '@codemirror/merge';
-import { Compartment, EditorSelection, EditorState, type Extension, Prec } from '@codemirror/state';
+import {
+  Compartment,
+  EditorSelection,
+  EditorState,
+  type Extension,
+  Prec,
+  Transaction,
+} from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { basicSetup } from 'codemirror';
 import { Heading, MessageSquarePlus, Rows, Type, X } from 'lucide-react';
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
+import { yCollab, ySyncAnnotation, yUndoManagerKeymap } from 'y-codemirror.next';
 import * as Y from 'yjs';
 import { useMe } from '../auth-hooks';
 import type { CommentScope } from '../comment-scope';
@@ -83,6 +90,33 @@ const SCOPE_ICON: Record<CommentScope, typeof Type> = {
 };
 
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+const yUndo = yUndoManagerKeymap.find((b) => b.key === 'Mod-z')?.run;
+const yRedo = yUndoManagerKeymap.find((b) => b.key === 'Mod-y')?.run;
+/**
+ * Undo belongs to Yjs, which only reverts this user's own edits. basicSetup's CodeMirror history
+ * also recorded the text collaborators type (it arrives as ySync transactions), so its other undo
+ * paths (Ctrl+U "undo selection"; the browser's own undo from the Edit or context menu or a phone
+ * keyboard) undid their work, and right after opening a file could empty it for everyone. Keep
+ * remote text out of that history, and hand the browser's undo to Yjs like Ctrl+Z and the toolbar
+ * so there is one undo stack (yCollab's own beforeinput handler never runs: basicSetup's wins).
+ */
+export const yjsOwnsUndo: Extension = [
+  EditorState.transactionExtender.of((tr) =>
+    tr.annotation(ySyncAnnotation) ? { annotations: Transaction.addToHistory.of(false) } : null,
+  ),
+  Prec.highest(
+    EditorView.domEventHandlers({
+      beforeinput(e, view) {
+        const run =
+          e.inputType === 'historyUndo' ? yUndo : e.inputType === 'historyRedo' ? yRedo : null;
+        if (!run) return false;
+        e.preventDefault();
+        return run(view);
+      },
+    }),
+  ),
+];
 
 /** Remote awareness states as peers, one per client (two tabs of one user are two peers). */
 /**
@@ -496,6 +530,7 @@ function CollabEditor({ projectId, path, role }: { projectId: string; path: stri
           // the server (y-codemirror does not mark it addToHistory: false), so Ctrl+Z right
           // after opening a file emptied it for every collaborator.
           Prec.high(keymap.of(yUndoManagerKeymap)),
+          yjsOwnsUndo,
           isTex && !readOnly
             ? Prec.high(
                 keymap.of([

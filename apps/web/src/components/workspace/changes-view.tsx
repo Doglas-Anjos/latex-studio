@@ -12,7 +12,11 @@ import {
 } from 'lucide-react';
 import { type FormEvent, Fragment, type KeyboardEvent, useMemo, useRef, useState } from 'react';
 import { useService } from '../../di/service-provider';
-import { HistoryServiceToken, type StatusChange } from '../../services/history.service';
+import {
+  HistoryServiceToken,
+  type StatusChange,
+  splitCommitMessage,
+} from '../../services/history.service';
 import { useSettingsStore } from '../../settings-store';
 import { useWorkspaceStore } from '../../workspace-store';
 import { Button } from '../button';
@@ -292,7 +296,9 @@ export function ChangesView({ projectId, canEdit }: { projectId: string; canEdit
                 : undefined
             }
           >
-            {baseline ? `· Base: ${baseline.message}` : '· Sem versão salva'}
+            {baseline
+              ? `· Base: ${splitCommitMessage(baseline.message).subject}`
+              : '· Sem versão salva'}
           </span>
         </div>
         <div className="changes-head-actions">

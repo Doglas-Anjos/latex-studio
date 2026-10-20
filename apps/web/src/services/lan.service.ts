@@ -1,10 +1,12 @@
 import { createToken } from '../di/container';
 import type { ApiClient } from './api-client';
+import type { AssignableRole } from './member.service';
 
 /** A person's LAN access as shown to the host (never the PIN hash). */
 export interface LanAccess {
   id: string;
   alias: string;
+  role: AssignableRole;
   createdAt: string;
   lastSeen: string | null;
 }
@@ -26,7 +28,8 @@ export interface LanService {
   createAccess(
     projectId: string,
     alias: string,
-  ): Promise<{ id: string; alias: string; pin: string }>;
+    role: AssignableRole,
+  ): Promise<{ id: string; alias: string; role: AssignableRole; pin: string }>;
   revoke(projectId: string, accessId: string): Promise<void>;
   /** A guest joins with a PIN; the returned token is the LAN session (stored by the caller). */
   join(projectId: string, pin: string): Promise<{ token: string; alias: string }>;
@@ -52,10 +55,10 @@ export class HttpLanService implements LanService {
     await this.api.post(`/projects/${projectId}/lan/unpublish`);
   }
 
-  createAccess(projectId: string, alias: string) {
-    return this.api.post<{ id: string; alias: string; pin: string }>(
+  createAccess(projectId: string, alias: string, role: AssignableRole) {
+    return this.api.post<{ id: string; alias: string; role: AssignableRole; pin: string }>(
       `/projects/${projectId}/lan/access`,
-      { alias },
+      { alias, role },
     );
   }
 

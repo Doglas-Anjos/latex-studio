@@ -111,7 +111,7 @@ export class LanController {
   @Post('access')
   @RequireProjectRole('owner')
   createAccess(@CurrentProject() project: Project, @Body() dto: CreateAccessDto) {
-    return this.lan.createAccess(project.id, dto.alias);
+    return this.lan.createAccess(project.id, dto.alias, dto.role);
   }
 
   @Delete('access/:accessId')

@@ -1,10 +1,34 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { APP_CONFIG, type WorkerConfig } from '@latex-studio/core';
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 
 const run = promisify(execFile);
+
+/**
+ * Moves MSYS directories (Git Bash's usr/bin, told apart by their runtime DLL) to the end of a
+ * Windows PATH. A worker started from Git Bash would otherwise run MiKTeX's latexmk under MSYS
+ * perl, which hands BibTeX a `/tmp/...` BIBINPUTS it cannot open. This way a native perl
+ * (Strawberry) wins, and MSYS perl stays as the fallback when it is the only one.
+ */
+export function msysLast(
+  path: string,
+  isMsys = (dir: string) => existsSync(join(dir, 'msys-2.0.dll')),
+): string {
+  const dirs = path.split(';');
+  return [...dirs.filter((d) => !isMsys(d)), ...dirs.filter(isMsys)].join(';');
+}
+
+const TOOL_PATH =
+  process.platform === 'win32' ? msysLast(process.env.PATH ?? '') : process.env.PATH;
+
+/** The environment every TeX or tool child starts from: PATH and a private HOME, nothing else. */
+export function toolEnv(home: string): Record<string, string | undefined> {
+  return { PATH: TOOL_PATH, HOME: home };
+}
 
 /**
  * bubblewrap arguments that confine a child to `workDir` (read-write) and the system read-only,

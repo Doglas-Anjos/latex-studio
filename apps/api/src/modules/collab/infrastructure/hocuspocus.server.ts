@@ -59,7 +59,8 @@ export function createHocuspocus(collab: CollabService): Hocuspocus<{ user: User
         throw new Error('Document too large');
       }
     },
-    // Type 0 (sync step 1) is only a state vector; a read-only connection's updates are dropped.
+    // Type 0 (sync step 1) is only a state vector; Hocuspocus itself discards a read-only
+    // connection's updates, so they are not counted.
     async beforeSync({ document, connection, type, payload }) {
       if (type === 0 || connection.readOnly) return;
       const bytes = (stateBytes.get(document) ?? 0) + payload.byteLength;

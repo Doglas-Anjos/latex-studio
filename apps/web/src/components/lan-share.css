@@ -27,13 +27,19 @@
   font-size: 0.85rem;
 }
 
+/* Name on its own row, role and the add button below: three controls don't fit a phone row. */
 .lan-share-add {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
   align-items: center;
 }
 
 .lan-share-add input {
+  flex: 1 1 100%;
+}
+
+.lan-share-add select {
   flex: 1;
 }
 

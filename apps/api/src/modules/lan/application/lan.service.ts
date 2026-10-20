@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { LAN_ISSUER, type User } from '../../users/domain/user';
 import { USER_REPOSITORY, type UserRepository } from '../../users/domain/user.repository';
-import { LAN_REPOSITORY, type LanRepository } from '../domain/lan.repository';
+import { LAN_REPOSITORY, type LanRepository, type LanRole } from '../domain/lan.repository';
 import { LanTokenService } from './lan-token.service';
 import { generatePin, hashPin, isPin, verifyPin } from './pin';
 
@@ -63,6 +63,7 @@ export interface LanAccessView {
   id: string;
   projectId: string;
   alias: string;
+  role: LanRole;
   createdAt: Date;
   lastSeen: Date | null;
 }
@@ -80,7 +81,7 @@ const MEMORY_MS = 60 * 60_000;
 /**
  * LAN share: publish a project to the local network and hand each friend an alias + a 4-digit PIN.
  * PIN verification, hashing and the brute-force lockout live here; LanController exposes them over
- * HTTP, and ProjectRoleGuard/CollabService consult `roleOf` for a guest's editor role. The reads on
+ * HTTP, and ProjectRoleGuard/CollabService consult `roleOf` for a guest's role. The reads on
  * every request (`roleOf`, `listPublished`, `projectsFor`) answer empty when LAN share is off, so
  * production never queries the LAN tables for them. Two gates: the host's side (publish, PINs)
  * needs LAN share configured; the guest's side (join, role) also needs remote access switched on.
@@ -165,11 +166,13 @@ export class LanService {
   /**
    * Creates a person's access and returns the one-time plaintext PIN for the host to share. Each
    * access is backed by a real user row (name = alias) so presence, blame and history credit it.
+   * `role` is what they may do: edit (the default), only comment (reviewer) or only read (viewer).
    */
   async createAccess(
     projectId: string,
     alias: string,
-  ): Promise<{ id: string; alias: string; pin: string }> {
+    role: LanRole = 'editor',
+  ): Promise<{ id: string; alias: string; role: LanRole; pin: string }> {
     if (!this.tokens.configured) throw new NotFoundException();
     const clean = alias.trim();
     if (clean.length < 1 || clean.length > 40 || /\p{Cc}/u.test(clean)) {
@@ -183,25 +186,26 @@ export class LanService {
       name: clean,
     });
     const pin = generatePin();
-    const { id } = await this.repo.createAccess(projectId, user.id, clean, await hashPin(pin));
-    return { id, alias: clean, pin };
+    const { id } = await this.repo.createAccess(
+      projectId,
+      user.id,
+      clean,
+      await hashPin(pin),
+      role,
+    );
+    return { id, alias: clean, role, pin };
   }
 
   /**
-   * The role a LAN user has on a project: `editor` when they hold an access and the project is still
+   * The role a LAN user has on a project: their access's role while the project is still
    * published, else null (always null when LAN share is off). ProjectRoleGuard and CollabService
    * consult this after a normal membership check. Argument order mirrors
    * `ProjectRepository.roleOf(projectId, userId)` so the two can't be swapped.
    */
-  async roleOf(projectId: string, userId: string): Promise<'editor' | null> {
+  async roleOf(projectId: string, userId: string): Promise<LanRole | null> {
     if (!this.tokens.enabled) return null;
-    if (
-      (await this.repo.hasAccess(projectId, userId)) &&
-      (await this.repo.isPublished(projectId))
-    ) {
-      return 'editor';
-    }
-    return null;
+    const role = await this.repo.accessRole(projectId, userId);
+    return role && (await this.repo.isPublished(projectId)) ? role : null;
   }
 
   async listAccess(projectId: string): Promise<LanAccessView[]> {
@@ -224,17 +228,20 @@ export class LanService {
   }
 
   /**
-   * The published projects a LAN user may edit, so a guest's dashboard shows what was shared with
-   * them. ponytail: scans the published set (few, local-only); a `lan_access` lookup by user id if
-   * that ever grows.
+   * The published projects shared with a LAN user and their role on each, so a guest's dashboard
+   * shows them. ponytail: scans the published set (few, local-only); a `lan_access` lookup by user
+   * id if that ever grows.
    */
-  async projectsFor(userId: string): Promise<string[]> {
+  async projectsFor(userId: string): Promise<{ id: string; role: LanRole }[]> {
     if (!this.tokens.enabled) return [];
     const published = await this.listPublished();
     const mine = await Promise.all(
-      published.map(async (id) => ((await this.repo.hasAccess(id, userId)) ? id : null)),
+      published.map(async (id) => {
+        const role = await this.repo.accessRole(id, userId);
+        return role ? { id, role } : null;
+      }),
     );
-    return mine.filter((id): id is string => id !== null);
+    return mine.filter((p) => p !== null);
   }
 
   /**

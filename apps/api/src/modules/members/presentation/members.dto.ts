@@ -1,7 +1,5 @@
 import { IsEmail, IsIn } from 'class-validator';
-import type { ProjectRole } from '../../projects/domain/project';
-
-const ASSIGNABLE = ['editor', 'reviewer', 'viewer'] as const;
+import { ASSIGNABLE, type ProjectRole } from '../../projects/domain/project';
 
 export class InviteDto {
   @IsEmail()
