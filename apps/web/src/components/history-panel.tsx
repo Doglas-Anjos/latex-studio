@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Columns2, Eye, FileDiff, FileText, GitCompare, RotateCcw } from 'lucide-react';
 import { type FormEvent, type ReactNode, useRef, useState } from 'react';
 import { useService } from '../di/service-provider';
-import { type HistoryEntry, HistoryServiceToken } from '../services/history.service';
+import {
+  type HistoryEntry,
+  HistoryServiceToken,
+  splitCommitMessage,
+} from '../services/history.service';
 import { useWorkspaceStore } from '../workspace-store';
 import { Button } from './button';
 import { Dialog } from './dialog';
@@ -83,11 +87,14 @@ function EntryRow({
   actions: ReactNode;
 }) {
   const named = !isAutosave(e.message);
+  const { subject, coAuthors } = splitCommitMessage(e.message);
   const body = (
     <>
-      <span className="hist-msg">{e.message}</span>
+      <span className="hist-msg" title={e.message}>
+        {subject}
+      </span>
       <small className="hist-meta">
-        {e.author.name} ·{' '}
+        {[e.author.name, ...coAuthors].join(', ')} ·{' '}
         <time dateTime={e.date} title={new Date(e.date).toLocaleString('pt-BR')}>
           {relativeTime(e.date)}
         </time>

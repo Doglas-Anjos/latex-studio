@@ -2460,7 +2460,7 @@ body:has(.workspace) .app-header {
   align-items: center;
   gap: 0.45rem;
   flex: 1;
-  min-width: 0;
+  min-width: 3.5rem;
   border: 0;
   background: none;
   padding: 0.2rem 0;
@@ -2552,8 +2552,11 @@ button.change-row-main:hover .change-name {
   font-weight: 600;
   color: var(--muted);
 }
+/* Shrinks first (4x the name), so a long "você + Ana, Bruno…" never squeezes the file name out of
+   a narrow sidebar; the full list stays in the title. */
 .change-authors {
-  flex: none;
+  flex: 0 4 auto;
+  min-width: 0;
   max-width: 9rem;
   overflow: hidden;
   color: var(--muted);
