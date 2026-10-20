@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { bwrapArgs, Sandbox } from './sandbox';
+import { bwrapArgs, msysLast, Sandbox } from './sandbox';
+
+describe('msysLast', () => {
+  it('puts Git Bash dirs after the native ones, so latexmk runs under a native perl', () => {
+    const isMsys = (dir: string) => dir.endsWith('\\usr\\bin');
+    const path = 'C:\\Git\\usr\\bin;C:\\Strawberry\\perl\\bin;C:\\MiKTeX\\bin';
+    expect(msysLast(path, isMsys)).toBe(
+      'C:\\Strawberry\\perl\\bin;C:\\MiKTeX\\bin;C:\\Git\\usr\\bin',
+    );
+  });
+});
 
 describe('bwrapArgs', () => {
   const args = bwrapArgs('/tmp/ls-build-x', { PATH: '/usr/bin', HOME: '/tmp', EMPTY: undefined });
