@@ -178,8 +178,17 @@ export class HistoryService {
     return this.commit(project, user, trimmed || `Update ${basename(path)}`.slice(0, 200), [path]);
   }
 
-  /** Writes the file as it was at `sha`, commits it and patches its open Y.Doc as a diff. */
-  async restore(project: Project, user: User, sha: string, path: string): Promise<{ sha: string }> {
+  /**
+   * Writes the file as it was at `sha`, commits it and patches its open Y.Doc as a diff. The new
+   * sha is null when nothing needed committing: restoring the latest version, i.e. discarding
+   * uncommitted edits.
+   */
+  async restore(
+    project: Project,
+    user: User,
+    sha: string,
+    path: string,
+  ): Promise<{ sha: string | null }> {
     const content = await this.fileAt(project, sha, path);
     return this.lock.run(project.id, async () => {
       const files = this.storage.open(project.id);
@@ -197,7 +206,8 @@ export class HistoryService {
         [path],
         false,
       );
-      if (!created) throw new ConflictException('File already matches that version');
+      // Even with nothing to commit the doc must take the text: it (or its yjs_docs row) still
+      // holds the discarded edits and its next store would write them back over the file.
       // Binary files have no doc; replaceText then only drops a missing yjs_docs row.
       await this.sync.replaceText(project.id, path, Buffer.from(content).toString('utf8'));
       return { sha: created };
