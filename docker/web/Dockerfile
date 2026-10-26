@@ -18,7 +18,7 @@ RUN pnpm --filter @latex-studio/web build
 # The stock caddy binary is built on a Go stdlib and x/net with open CVEs; rebuild it on a
 # patched Go. Drop this stage once caddy publishes an image built on it. Keep the xcaddy
 # version below in sync with the final FROM tag (Dependabot only bumps the FROM).
-FROM golang:1.27.2-alpine AS caddy
+FROM golang:1.27.3-alpine AS caddy
 RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.4.7
 RUN xcaddy build v2.11.7 --output /caddy --replace golang.org/x/net=golang.org/x/net@v0.60.0
 
