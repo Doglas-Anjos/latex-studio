@@ -23,6 +23,9 @@ RUN go install github.com/caddyserver/xcaddy/cmd/xcaddy@v0.4.7
 RUN xcaddy build v2.11.7 --output /caddy --replace golang.org/x/net=golang.org/x/net@v0.60.0
 
 FROM caddy:2.11.7-alpine
+# The base image ships brotli-libs and curl builds with HIGH CVEs fixed upstream; take the
+# patched packages until the caddy image is rebuilt on them.
+RUN apk upgrade --no-cache brotli-libs curl libcurl
 COPY --from=caddy /caddy /usr/bin/caddy
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY --from=builder /app/apps/web/dist /srv
