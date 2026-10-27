@@ -11,32 +11,32 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@codemirror/autocomplete": "^6.20.3",
+    "@codemirror/autocomplete": "^6.20.4",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/language": "^6.13.1",
-    "@codemirror/merge": "^6.12.2",
+    "@codemirror/merge": "^6.12.3",
     "@codemirror/search": "^6.7.2",
     "@codemirror/state": "^6.7.6",
-    "@codemirror/view": "^6.43.14",
+    "@codemirror/view": "^6.43.15",
     "@fontsource/fira-code": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@hocuspocus/provider": "^4.7.1",
     "@lezer/highlight": "^1.2.5",
-    "@tanstack/react-query": "^5.104.3",
+    "@tanstack/react-query": "^5.104.5",
     "codemirror": "^6.0.2",
     "codemirror-lang-latex": "^0.6.1",
     "d3-force": "^3.0.0",
-    "katex": "^0.19.0",
-    "lucide-react": "^1.57.0",
+    "katex": "^0.19.1",
+    "lucide-react": "^1.61.0",
     "pdfjs-dist": "^6.4.299",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router": "^8.4.0",
+    "react-router": "^8.5.0",
     "y-codemirror.next": "^0.3.6",
     "yjs": "^13.6.33",
-    "zustand": "^5.0.15"
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.3",
@@ -45,6 +45,6 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
-    "vite": "^8.3.4"
+    "vite": "^8.3.5"
   }
 }
