@@ -19,7 +19,7 @@ RUN pnpm --filter @latex-studio/worker deploy --prod --legacy /out
 # from Debian; node copied from the official image.
 # Pinned by digest (texlive/texlive:latest as of 2026-10-04, TeX Live 2026) so builds are
 # reproducible and don't silently track a moving tag. Bump deliberately.
-FROM texlive/texlive@sha256:a7ae4dfa9d521b5db14446872fa488b839021d1f604d0a3c74461784895f2a67
+FROM texlive/texlive@sha256:07e8062637249c4f780ca59f42cc2ed592bc2dc1db4320769406aee3f98aa70e
 RUN apt-get update && apt-get install -y --no-install-recommends pandoc bubblewrap \
     libyaml-tiny-perl libfile-homedir-perl liblog-log4perl-perl libunicode-linebreak-perl \
     && rm -rf /var/lib/apt/lists/*
