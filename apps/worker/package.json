@@ -13,15 +13,15 @@
     "@latex-studio/core": "workspace:*",
     "@latex-studio/git-store": "workspace:*",
     "@latex-studio/latex-tools": "workspace:*",
-    "@nestjs/bullmq": "^12.0.0",
-    "@nestjs/common": "^12.2.0",
-    "@nestjs/core": "^12.2.0",
-    "bullmq": "^6.4.1",
+    "@nestjs/bullmq": "^12.0.2",
+    "@nestjs/common": "^12.5.1",
+    "@nestjs/core": "^12.5.1",
+    "bullmq": "^6.7.8",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@nestjs/cli": "^12.0.10",
-    "@nestjs/testing": "^12.2.0"
+    "@nestjs/cli": "^12.0.13",
+    "@nestjs/testing": "^12.5.1"
   }
 }
